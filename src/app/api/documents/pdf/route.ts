@@ -25,8 +25,8 @@ export async function POST(req: NextRequest) {
     if (!name.toLowerCase().endsWith('.pdf') && file.type !== 'application/pdf') {
       return NextResponse.json({ error: 'Only PDF files are supported right now' }, { status: 400 })
     }
-    if (file.size > 30 * 1024 * 1024) {
-      return NextResponse.json({ error: 'PDF is larger than 30 MB' }, { status: 400 })
+    if (file.size > 100 * 1024 * 1024) {
+      return NextResponse.json({ error: 'PDF is larger than 100 MB — use the standard uploader, which streams files up to 200 MB' }, { status: 413 })
     }
 
     const buffer = Buffer.from(await file.arrayBuffer())

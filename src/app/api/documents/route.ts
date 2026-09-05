@@ -165,13 +165,13 @@ async function tryDownloadPdfFromUrl(rawUrl: string): Promise<{ buffer: Buffer; 
           Accept: 'application/pdf,text/html,*/*',
         },
         redirect: 'follow',
-        signal: AbortSignal.timeout(30000),
+        signal: AbortSignal.timeout(90000),
       })
       if (!res.ok) continue
       const ctype = (res.headers.get('content-type') || '').toLowerCase()
       if (!ctype.includes('pdf') && !looksPdf) continue
       const buffer = Buffer.from(await res.arrayBuffer())
-      if (buffer.length < 100 || buffer.length > 30 * 1024 * 1024) continue
+      if (buffer.length < 100 || buffer.length > 100 * 1024 * 1024) continue
       if (buffer.subarray(0, 5).toString('latin1') !== '%PDF-') continue
       const fileName = fileNameFromUrl(candidate, pathname)
       return { buffer, fileName }

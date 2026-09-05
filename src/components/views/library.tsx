@@ -390,20 +390,47 @@ function ImportDialog({ open, onOpenChange, onImported }: { open: boolean; onOpe
   const [tags, setTags] = useState('')
   const [content, setContent] = useState('')
   const [busy, setBusy] = useState(false)
+  const [uploadPct, setUploadPct] = useState<number | null>(null)
   const [file, setFile] = useState<File | null>(null)
   const [dragOver, setDragOver] = useState(false)
   const { toast } = useToast()
 
-  async function uploadPdf() {
-    if (!file) throw new Error('Choose a PDF first')
-    const form = new FormData()
-    form.append('file', file)
-    if (author.trim()) form.append('author', author.trim())
-    if (tags.trim()) form.append('tags', tags.trim())
-    const res = await fetch('/api/documents/pdf', { method: 'POST', body: form })
-    const data = await res.json().catch(() => ({}))
-    if (!res.ok) throw new Error(data.error || 'PDF extraction failed')
-    toast({ title: 'PDF imported', description: `${data.pages} pages — opens with its original layout in the viewer${data.chars ? ` · ${Math.round((data.chars ?? 0) / 1000)}k characters extracted for highlights & AI` : ''}.` })
+  // Large PDFs are sent as a raw streamed body (up to 200 MB) — the server
+  // pipes the bytes straight to disk, so nothing is buffered in memory. XHR is
+  // used instead of fetch because it exposes real upload progress events.
+  function uploadPdf(): Promise<void> {
+    if (!file) return Promise.reject(new Error('Choose a PDF first'))
+    return new Promise((resolve, reject) => {
+      setUploadPct(0)
+      const params = new URLSearchParams({ name: file.name })
+      if (author.trim()) params.set('author', author.trim())
+      if (tags.trim()) params.set('tags', tags.trim())
+      const xhr = new XMLHttpRequest()
+      xhr.open('POST', `/api/documents/pdf/stream?${params.toString()}`)
+      xhr.setRequestHeader('Content-Type', 'application/pdf')
+      xhr.responseType = 'json'
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) setUploadPct(Math.min(99, Math.round((e.loaded / e.total) * 100)))
+      }
+      xhr.upload.onload = () => setUploadPct(100)
+      xhr.onload = () => {
+        const data = (xhr.response ?? {}) as { pages?: number; chars?: number; warning?: string; error?: string }
+        if (xhr.status >= 200 && xhr.status < 300) {
+          toast({
+            title: 'PDF imported',
+            description: data.warning
+              ? data.warning
+              : `${data.pages} pages — opens with its original layout in the viewer${data.chars ? ` · ${Math.round((data.chars ?? 0) / 1000)}k characters extracted for highlights & AI` : ''}.`,
+          })
+          resolve()
+        } else {
+          reject(new Error(data.error || `Upload failed (${xhr.status})`))
+        }
+      }
+      xhr.onerror = () => reject(new Error('Upload failed — check your connection and try again'))
+      xhr.onabort = () => reject(new Error('Upload cancelled'))
+      xhr.send(file)
+    })
   }
 
   async function submit() {
@@ -429,6 +456,7 @@ function ImportDialog({ open, onOpenChange, onImported }: { open: boolean; onOpe
       toast({ title: 'Import failed', description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' })
     } finally {
       setBusy(false)
+      setUploadPct(null)
     }
   }
 
@@ -473,7 +501,7 @@ function ImportDialog({ open, onOpenChange, onImported }: { open: boolean; onOpe
                 ) : (
                   <>
                     <span className="text-sm font-medium">Drop a PDF here or click to browse</span>
-                    <span className="text-xs text-muted-foreground">Text is extracted server-side — scans without text are not supported</span>
+                    <span className="text-xs text-muted-foreground">Up to 200 MB — big files are streamed to disk, with live progress · scans without text open in the viewer</span>
                   </>
                 )}
                 <input
@@ -513,12 +541,26 @@ function ImportDialog({ open, onOpenChange, onImported }: { open: boolean; onOpe
             </div>
           )}
         </div>
+        {mode === 'pdf' && busy && uploadPct !== null && (
+          <div className="space-y-1.5">
+            <Progress value={uploadPct} aria-label="Upload progress" />
+            <p className="text-xs text-muted-foreground">
+              {uploadPct < 100
+                ? <>Uploading… {uploadPct}% <span className="opacity-60">(large files stream straight to disk)</span></>
+                : 'Upload complete — extracting text for highlights & AI…'}
+            </p>
+          </div>
+        )}
         <div className="flex justify-end gap-2">
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={busy && uploadPct !== null && uploadPct < 100}>Cancel</Button>
           <Button onClick={submit} disabled={busy || (mode === 'pdf' && !file)}>
             {busy && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
             <BookmarkPlus className="mr-1.5 h-4 w-4" />
-            {mode === 'pdf' ? (busy ? 'Extracting text…' : 'Upload & extract') : 'Add to library'}
+            {mode === 'pdf'
+              ? (busy
+                ? (uploadPct !== null && uploadPct < 100 ? `Uploading ${uploadPct}%` : 'Extracting text…')
+                : 'Upload & extract')
+              : 'Add to library'}
           </Button>
         </div>
       </DialogContent>
