@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { api } from '@/lib/client'
 import { useApi } from '@/lib/client'
 import { useMounted } from '@/components/shared'
@@ -14,7 +15,7 @@ import { cn } from '@/lib/utils'
 import type { GoogleStatus } from '@/lib/types'
 import {
   Sun, Moon, Monitor, Download, FileJson, FileText, CalendarDays, Mail, Info, Palette, User,
-  Chrome, RefreshCw, LogOut, Copy, CalendarPlus, Inbox, ShieldCheck, KeyRound,
+  Chrome, RefreshCw, LogOut, Copy, CalendarPlus, Inbox, ShieldCheck, KeyRound, AtSign, Loader2,
 } from 'lucide-react'
 
 interface SettingsData {
@@ -28,6 +29,7 @@ export function SettingsView() {
   const { toast } = useToast()
   const { theme, setTheme } = useTheme()
   const { data } = useApi<{ setting: SettingsData }>('/api/settings')
+  const { data: me } = useApi<{ user: { id: string; name: string; email: string } } | null>('/api/auth/me')
   const mounted = useMounted()
 
   async function save(patch: Record<string, string>) {
@@ -46,6 +48,7 @@ export function SettingsView() {
         <p className="text-sm text-muted-foreground">Profile, appearance, Google integrations and data ownership.</p>
       </div>
 
+      {me?.user && <AccountCard user={me.user} />}
       <ProfileCard data={data?.setting} save={save} />
       <AppearanceCard mounted={mounted} theme={theme} setTheme={setTheme} save={save} />
       <GoogleCard />
@@ -71,6 +74,50 @@ export function SettingsView() {
         <p>Cortex syncs across your laptop and phone with the same account. Offline edits queue locally and resolve on reconnect — last write wins per field, so nothing is lost silently.</p>
       </div>
     </div>
+  )
+}
+
+function AccountCard({ user }: { user: { id: string; name: string; email: string } }) {
+  const router = useRouter()
+  const { toast } = useToast()
+  const [busy, setBusy] = useState(false)
+
+  async function signOut() {
+    setBusy(true)
+    try {
+      await api.post('/api/auth/logout', {})
+      router.replace('/login')
+      router.refresh()
+    } catch {
+      toast({ title: 'Could not sign out', variant: 'destructive' })
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-sm"><ShieldCheck className="h-4 w-4 text-primary" /> Account</CardTitle>
+        <CardDescription>You are signed in as {user.name}.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground" aria-hidden>
+              {user.name.charAt(0).toUpperCase()}
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold">{user.name}</p>
+              <p className="flex items-center gap-1 truncate text-xs text-muted-foreground"><AtSign className="h-3 w-3" /> {user.email}</p>
+            </div>
+          </div>
+          <Button variant="outline" onClick={signOut} disabled={busy}>
+            {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <LogOut className="mr-1.5 h-4 w-4" />}
+            Sign out
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 

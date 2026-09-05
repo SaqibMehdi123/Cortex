@@ -62,7 +62,13 @@ npx prisma db push
 npm run dev        # or: bun run dev
 ```
 
-Then open http://localhost:3000. The app starts completely empty on purpose — no demo content, no "Welcome, John Doe". Create a goal, import a paper, and it builds up from there.
+Then open http://localhost:3000 — you'll land on a signup page. Create your account and the workspace is yours. It starts completely empty on purpose — no demo content, no "Welcome, John Doe". Create a goal, import a paper, and it builds up from there.
+
+Accounts are how the app knows who you are (session cookie, personalized greeting), not a multi-tenant wall: everyone who signs up on the same install shares that one workspace. That's by design for now — it's a personal tool.
+
+### Optional: session secret
+
+Development works without it, but if you deploy Cortex anywhere, set `AUTH_SECRET` in `.env` (e.g. `openssl rand -base64 32`) so session cookies are signed with your own key.
 
 ### Optional: Google integrations
 
@@ -95,8 +101,8 @@ src/
 
 ## Where it stands
 
-Working and used daily by me: PDF import (file + URL), the reader with Ask AI, plans/goals linking, news and paper fetching with real sources, flashcards with SM-2, mindmaps, analytics, export, dark mode.
+Working and used daily by me: PDF import (file + URL), the reader with Ask AI, plans/goals linking, news and paper fetching with real sources, the career Discover feed with live jobs and internships, flashcards with SM-2, mindmaps, analytics, accounts with login/signup, export, dark mode.
 
-Known rough edges, in the order I plan to fix them: the AI features assume the Z.ai SDK is available (news fetching itself is plain RSS and works regardless); calendar push is one-way; and the career module's email classification is only as good as its parsing. There's no auth yet — this is a single-user, localhost-first app by design for now.
+Known rough edges, in the order I plan to fix them: the AI features assume the Z.ai SDK is available (news and job fetching are plain HTTP and work regardless); calendar push is one-way; accounts gate the app but don't partition data per user yet; and the career module's email classification is only as good as its parsing.
 
 If you've read this far and something here sounds useful, fork it, break it, tell me what you find.

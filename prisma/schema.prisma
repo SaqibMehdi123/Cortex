@@ -294,6 +294,16 @@ model FocusSession {
   endedAt   DateTime?
 }
 
+// ─── Accounts & auth ────────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String // pbkdf2$iterations$salt$hash (Web Crypto, no native deps)
+  createdAt    DateTime @default(now())
+}
+
 // ─── Settings singleton ────────────────────────────────────────────
 
 model Setting {

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getSessionUser } from '@/lib/auth-server'
 
 function startOfToday() {
   const d = new Date()
@@ -166,8 +167,12 @@ export async function GET() {
     const focusMinutesToday = focusSessionsToday.reduce((acc, f) => acc + f.minutes, 0)
     const totalToday = todayTasks.length + doneTodayCount
 
+    // greeting prefers the signed-in account, falls back to the profile setting
+    const user = await getSessionUser()
+    const firstName = user?.name.split(' ')[0]
+
     return NextResponse.json({
-      greetingName: setting?.name ?? 'there',
+      greetingName: firstName ?? setting?.name ?? 'there',
       todayTasks,
       todayPlans,
       goals: goalsWithProgress,
