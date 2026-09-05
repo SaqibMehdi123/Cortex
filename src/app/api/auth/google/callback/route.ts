@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { getSetting, googleConfigured, googleRedirectUri } from '@/lib/google'
+import { getUserSetting, googleConfigured, googleRedirectUri } from '@/lib/google'
+import { getSessionUser } from '@/lib/auth-server'
 
 // GET /api/auth/google/callback — exchange the authorization code for
 // tokens, read the user's email, persist everything, then bounce to the app.
@@ -8,9 +9,23 @@ export async function GET(req: NextRequest) {
   const origin = new URL(req.url).origin
   const code = new URL(req.url).searchParams.get('code')
   const error = new URL(req.url).searchParams.get('error')
+  const state = new URL(req.url).searchParams.get('state') ?? ''
 
   if (error) return NextResponse.redirect(`${origin}/?google=denied:${encodeURIComponent(error)}`)
   if (!code) return NextResponse.redirect(`${origin}/?google=error:no_code`)
+
+  // The user id that started the flow rides in `state`; fall back to the
+  // current session cookie (same browser) if the state is malformed.
+  let stateUserId = state.split('.')[0]
+  if (stateUserId) {
+    const exists = await db.user.findUnique({ where: { id: stateUserId }, select: { id: true } })
+    if (!exists) stateUserId = ''
+  }
+  if (!stateUserId) {
+    const sessionUser = await getSessionUser()
+    if (!sessionUser) return NextResponse.redirect(`${origin}/?google=error:no_session`)
+    stateUserId = sessionUser.id
+  }
 
   try {
     const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
@@ -52,9 +67,9 @@ export async function GET(req: NextRequest) {
       }
     } catch {}
 
-    const setting = await getSetting()
+    const setting = await getUserSetting(stateUserId)
     await db.setting.update({
-      where: { id: setting.id },
+      where: { userId: stateUserId },
       data: {
         googleAuth: JSON.stringify({
           access_token: tokens.access_token,

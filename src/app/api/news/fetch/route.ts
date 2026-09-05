@@ -3,6 +3,7 @@ import Parser from 'rss-parser'
 import { db } from '@/lib/db'
 import ZAI from 'z-ai-web-dev-sdk'
 import { CURATED_FEEDS, stripHtml, type FeedSource } from '@/lib/feeds'
+import { getSessionUser, unauthorized } from '@/lib/auth-server'
 
 export const maxDuration = 120
 
@@ -27,10 +28,15 @@ interface RawItem {
 const MAX_PER_SOURCE = 12
 const MAX_AGE_DAYS = 90
 
-// POST /api/news/fetch — pull REAL stories from curated RSS feeds + custom sources
+// POST /api/news/fetch — pull REAL stories from curated RSS feeds + the user's
+// custom sources. Every account gets its own feed copy so read/saved state and
+// dedupe stay personal.
 export async function POST() {
   try {
-    const customSources = await db.customSource.findMany({ where: { enabled: true } })
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
+    const customSources = await db.customSource.findMany({ where: { userId: user.id, enabled: true } })
 
     const sources: FeedSource[] = [
       ...CURATED_FEEDS,
@@ -89,9 +95,9 @@ export async function POST() {
       return NextResponse.json({ ok: true, totalNew: 0, perSource, message: 'No new stories found in any feed.' })
     }
 
-    // Dedupe against DB in one query
+    // Dedupe against this user's existing feed in one query
     const existing = await db.newsArticle.findMany({
-      where: { url: { in: collected.map((c) => c.url) } },
+      where: { userId: user.id, url: { in: collected.map((c) => c.url) } },
       select: { url: true },
     })
     const existingSet = new Set(existing.map((e) => e.url))
@@ -140,6 +146,7 @@ export async function POST() {
     for (const a of fresh) {
       await db.newsArticle.create({
         data: {
+          userId: user.id,
           title: a.title,
           url: a.url,
           source: a.source,
@@ -150,7 +157,7 @@ export async function POST() {
       })
     }
 
-    const unreadCount = await db.newsArticle.count({ where: { read: false } })
+    const unreadCount = await db.newsArticle.count({ where: { userId: user.id, read: false } })
     return NextResponse.json({ ok: true, totalNew: fresh.length, perSource, unreadCount })
   } catch (e) {
     console.error('POST /api/news/fetch error', e)

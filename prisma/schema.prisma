@@ -11,6 +11,8 @@ datasource db {
 
 model Document {
   id             String           @id @default(cuid())
+  userId         String
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   title          String
   author         String?
   type           String           @default("article") // article | paper | book | url | text | newsletter | other
@@ -37,6 +39,8 @@ model Document {
 
 model Highlight {
   id         String      @id @default(cuid())
+  userId     String
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   documentId String
   document   Document    @relation(fields: [documentId], references: [id], onDelete: Cascade)
   text       String
@@ -49,6 +53,8 @@ model Highlight {
 
 model ChatMessage {
   id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   documentId String?
   document   Document? @relation(fields: [documentId], references: [id], onDelete: Cascade)
   thread     String    @default("copilot") // "copilot" | "doc:<documentId>"
@@ -60,6 +66,8 @@ model ChatMessage {
 
 model Note {
   id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   title     String?
   content   String
   source    String   @default("typed") // typed | voice | url | capture
@@ -72,6 +80,8 @@ model Note {
 
 model Goal {
   id              String         @id @default(cuid())
+  userId          String
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   title           String
   description     String?
   category        String         @default("learning") // career | learning | health | personal | project
@@ -92,6 +102,8 @@ model Goal {
 
 model Milestone {
   id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   goalId      String
   goal        Goal      @relation(fields: [goalId], references: [id], onDelete: Cascade)
   title       String
@@ -105,6 +117,8 @@ model Milestone {
 
 model Task {
   id           String         @id @default(cuid())
+  userId       String
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   title        String
   status       String         @default("todo") // todo | doing | done
   priority     String         @default("med") // low | med | high
@@ -126,6 +140,8 @@ model Task {
 
 model Plan {
   id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   timeframe String    @default("day") // year | quarter | month | week | day
   title     String
   notes     String?
@@ -146,19 +162,25 @@ model Plan {
 
 model NewsArticle {
   id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   title       String
   source      String?
-  url         String    @unique
+  url         String
   summary     String?
   category    String    @default("company") // company | research | lab | newsletter | blog
   publishedAt DateTime?
   read        Boolean   @default(false)
   saved       Boolean   @default(false)
   createdAt   DateTime  @default(now())
+
+  @@unique([userId, url])
 }
 
 model CustomSource {
   id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   name      String
   url       String
   type      String   @default("blog") // blog | newsletter | x | company | lab
@@ -169,7 +191,9 @@ model CustomSource {
 // Research papers tracked from Hugging Face Daily Papers & arXiv
 model Paper {
   id          String    @id @default(cuid())
-  arxivId     String    @unique
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  arxivId     String
   title       String
   authors     String? // comma separated
   abstract    String?
@@ -188,12 +212,16 @@ model Paper {
   saved       Boolean   @default(false)
   documentId  String? // set when saved into the Library
   createdAt   DateTime  @default(now())
+
+  @@unique([userId, arxivId])
 }
 
 // ─── Career Command Center ─────────────────────────────────────────
 
 model Opportunity {
   id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   company     String
   role        String
   type        String    @default("internship") // internship | job | research | scholarship | event | referral
@@ -207,9 +235,11 @@ model Opportunity {
   nextAction  String?
   resume      String? // resume/CV version linked to this application
   notes       String?
-  gmailId     String? @unique // Gmail message id when imported via OAuth
+  gmailId     String? // Gmail message id when imported via OAuth
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+
+  @@unique([userId, gmailId])
 }
 
 // ─── Mindmap Studio ────────────────────────────────────────────────
@@ -218,23 +248,28 @@ model Opportunity {
 // Saved listings get copied into the Opportunity pipeline.
 model JobListing {
   id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   company     String
   role        String
   type        String    @default("job") // job | internship | research
   location    String?
   source      String
-  url         String    @unique
+  url         String
   externalId  String?
   publishedAt DateTime?
   saved       Boolean   @default(false)
   fetchedAt   DateTime  @default(now())
 
+  @@unique([userId, url])
   @@index([type])
   @@index([source])
 }
 
 model MindMap {
   id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   title     String
   goalId    String?
   goal      Goal?    @relation(fields: [goalId], references: [id], onDelete: SetNull)
@@ -247,6 +282,8 @@ model MindMap {
 
 model Flashcard {
   id             String      @id @default(cuid())
+  userId         String
+  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   front          String
   back           String
   documentId     String?
@@ -266,6 +303,8 @@ model Flashcard {
 
 model ReviewLog {
   id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   flashcardId String
   flashcard  Flashcard @relation(fields: [flashcardId], references: [id], onDelete: Cascade)
   grade      String // again | hard | good | easy
@@ -276,6 +315,8 @@ model ReviewLog {
 
 model ReadingSession {
   id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   documentId String
   document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
   minutes    Int
@@ -285,6 +326,8 @@ model ReadingSession {
 
 model FocusSession {
   id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   taskId    String?
   task      Task?     @relation(fields: [taskId], references: [id], onDelete: SetNull)
   goalId    String?
@@ -302,12 +345,35 @@ model User {
   name         String
   passwordHash String // pbkdf2$iterations$salt$hash (Web Crypto, no native deps)
   createdAt    DateTime @default(now())
+
+  documents       Document[]
+  highlights      Highlight[]
+  chatMessages    ChatMessage[]
+  notes           Note[]
+  goals           Goal[]
+  milestones      Milestone[]
+  tasks           Task[]
+  plans           Plan[]
+  newsArticles    NewsArticle[]
+  customSources   CustomSource[]
+  papers          Paper[]
+  opportunities   Opportunity[]
+  jobListings     JobListing[]
+  mindmaps        MindMap[]
+  flashcards      Flashcard[]
+  reviewLogs      ReviewLog[]
+  readingSessions ReadingSession[]
+  focusSessions   FocusSession[]
+  setting         Setting?
 }
 
-// ─── Settings singleton ────────────────────────────────────────────
+// ─── Workspace settings ────────────────────────────────────────────
 
+// Per-user workspace preferences (one row per account).
 model Setting {
-  id          String   @id @default("user")
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   name        String   @default("there")
   theme       String   @default("system") // light | dark | system
   digestTime  String   @default("08:00") // daily digest delivery time

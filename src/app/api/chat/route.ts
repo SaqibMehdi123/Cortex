@@ -1,16 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import ZAI from 'z-ai-web-dev-sdk'
+import { getSessionUser, unauthorized } from '@/lib/auth-server'
 
-// GET /api/chat?documentId= — conversation for a document
+// GET /api/chat?documentId= — conversation for one of the user's documents
 export async function GET(req: NextRequest) {
   try {
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
     const { searchParams } = new URL(req.url)
     const documentId = searchParams.get('documentId')
     if (!documentId) return NextResponse.json({ messages: [] })
 
+    const document = await db.document.findFirst({ where: { id: documentId, userId: user.id }, select: { id: true } })
+    if (!document) return NextResponse.json({ error: 'Document not found' }, { status: 404 })
+
     const messages = await db.chatMessage.findMany({
-      where: { thread: `doc:${documentId}` },
+      where: { userId: user.id, thread: `doc:${documentId}` },
       orderBy: { createdAt: 'asc' },
       take: 200,
     })
@@ -24,9 +31,12 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST /api/chat — ask AI about a document, with cited answers
+// POST /api/chat — ask AI about one of the user's documents, with cited answers
 export async function POST(req: NextRequest) {
   try {
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
     const body = await req.json()
     const { documentId, message } = body
 
@@ -34,7 +44,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Message is required' }, { status: 400 })
     }
 
-    const document = documentId ? await db.document.findUnique({ where: { id: documentId } }) : null
+    const document = documentId ? await db.document.findFirst({ where: { id: documentId, userId: user.id } }) : null
     if (documentId && !document) {
       return NextResponse.json({ error: 'Document not found' }, { status: 404 })
     }
@@ -42,11 +52,11 @@ export async function POST(req: NextRequest) {
     const thread = document ? `doc:${document.id}` : 'copilot'
 
     const userMsg = await db.chatMessage.create({
-      data: { documentId: document?.id ?? null, thread, role: 'user', content: message.trim() },
+      data: { userId: user.id, documentId: document?.id ?? null, thread, role: 'user', content: message.trim() },
     })
 
     const highlights = document
-      ? await db.highlight.findMany({ where: { documentId: document.id }, orderBy: { createdAt: 'desc' }, take: 20 })
+      ? await db.highlight.findMany({ where: { userId: user.id, documentId: document.id }, orderBy: { createdAt: 'desc' }, take: 20 })
       : []
 
     // Split content into paragraphs for citation targeting
@@ -101,7 +111,7 @@ export async function POST(req: NextRequest) {
       .join('\n\n')
 
     const history = await db.chatMessage.findMany({
-      where: { thread },
+      where: { userId: user.id, thread },
       orderBy: { createdAt: 'asc' },
       take: 30,
     })
@@ -134,6 +144,7 @@ export async function POST(req: NextRequest) {
 
     const assistantMsg = await db.chatMessage.create({
       data: {
+        userId: user.id,
         documentId: document?.id ?? null,
         thread,
         role: 'assistant',
@@ -152,13 +163,20 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// DELETE /api/chat?documentId= — clear a conversation
+// DELETE /api/chat?documentId= — clear one of the user's conversations
 export async function DELETE(req: NextRequest) {
   try {
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
     const { searchParams } = new URL(req.url)
     const documentId = searchParams.get('documentId')
     if (!documentId) return NextResponse.json({ error: 'documentId required' }, { status: 400 })
-    await db.chatMessage.deleteMany({ where: { thread: `doc:${documentId}` } })
+
+    const document = await db.document.findFirst({ where: { id: documentId, userId: user.id }, select: { id: true } })
+    if (!document) return NextResponse.json({ error: 'Document not found' }, { status: 404 })
+
+    await db.chatMessage.deleteMany({ where: { userId: user.id, thread: `doc:${documentId}` } })
     return NextResponse.json({ ok: true })
   } catch (e) {
     console.error('DELETE /api/chat error', e)

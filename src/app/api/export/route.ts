@@ -1,27 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getSessionUser, unauthorized } from '@/lib/auth-server'
 
-// GET /api/export?format=json|md — privacy-first full data export
+// GET /api/export?format=json|md — privacy-first export of the signed-in user's data
 export async function GET(req: NextRequest) {
   try {
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
     const { searchParams } = new URL(req.url)
     const format = searchParams.get('format') === 'md' ? 'md' : 'json'
 
     const [documents, highlights, notes, goals, plans, tasks, news, opportunities, mindmaps, flashcards] = await Promise.all([
-      db.document.findMany({ include: { highlights: true } }),
-      db.highlight.findMany(),
-      db.note.findMany(),
-      db.goal.findMany({ include: { milestones: true } }),
-      db.plan.findMany(),
-      db.task.findMany(),
-      db.newsArticle.findMany({ where: { saved: true } }),
-      db.opportunity.findMany(),
-      db.mindMap.findMany(),
-      db.flashcard.findMany(),
+      db.document.findMany({ where: { userId: user.id }, include: { highlights: true } }),
+      db.highlight.findMany({ where: { userId: user.id } }),
+      db.note.findMany({ where: { userId: user.id } }),
+      db.goal.findMany({ where: { userId: user.id }, include: { milestones: true } }),
+      db.plan.findMany({ where: { userId: user.id } }),
+      db.task.findMany({ where: { userId: user.id } }),
+      db.newsArticle.findMany({ where: { userId: user.id, saved: true } }),
+      db.opportunity.findMany({ where: { userId: user.id } }),
+      db.mindMap.findMany({ where: { userId: user.id } }),
+      db.flashcard.findMany({ where: { userId: user.id } }),
     ])
 
     if (format === 'json') {
-      const payload = { exportedAt: new Date().toISOString(), app: 'Cortex', documents, highlights, notes, goals, plans, tasks, savedArticles: news, opportunities, mindmaps, flashcards }
+      const payload = { exportedAt: new Date().toISOString(), app: 'Cortex', account: user.email, documents, highlights, notes, goals, plans, tasks, savedArticles: news, opportunities, mindmaps, flashcards }
       return new NextResponse(JSON.stringify(payload, null, 2), {
         headers: {
           'Content-Type': 'application/json',

@@ -1,10 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getSessionUser, unauthorized } from '@/lib/auth-server'
 
 // PATCH /api/opportunities/[id] — move stage / edit / set deadline / resume
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
     const { id } = await params
+    const existing = await db.opportunity.findFirst({ where: { id, userId: user.id }, select: { id: true } })
+    if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
     const body = await req.json()
     const data: Record<string, unknown> = {}
     for (const key of ['company', 'role', 'type', 'classification', 'status', 'nextAction', 'resume', 'notes'] as const) {
@@ -22,7 +29,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 // DELETE /api/opportunities/[id]
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
     const { id } = await params
+    const existing = await db.opportunity.findFirst({ where: { id, userId: user.id }, select: { id: true } })
+    if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     await db.opportunity.delete({ where: { id } })
     return NextResponse.json({ ok: true })
   } catch (e) {

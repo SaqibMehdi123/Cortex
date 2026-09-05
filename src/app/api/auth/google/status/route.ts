@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSetting, googleConfigured, googleRedirectUri } from '@/lib/google'
+import { getUserSetting, googleConfigured, googleRedirectUri } from '@/lib/google'
+import { getSessionUser, unauthorized } from '@/lib/auth-server'
 
 // GET /api/auth/google/status — what the Settings UI needs to render the
-// Google account card: are credentials present, is an account connected,
-// and which redirect URI must be registered in Google Cloud Console.
+// Google account card for the signed-in user: are credentials present, is an
+// account connected, and which redirect URI must be registered in Google
+// Cloud Console.
 export async function GET(req: NextRequest) {
   try {
-    const setting = await getSetting()
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
+    const setting = await getUserSetting(user.id)
     const configured = googleConfigured()
     const connected = Boolean(setting.googleAuth)
     return NextResponse.json({

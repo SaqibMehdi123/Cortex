@@ -3,8 +3,8 @@ import { db } from '@/lib/db'
 import { createSessionToken, hashPassword, SESSION_COOKIE, SESSION_COOKIE_OPTIONS } from '@/lib/auth'
 
 // POST /api/auth/register — create an account and start a session.
-// The first account also adopts the local workspace: if the owner name in
-// Settings is still the default, it takes the user's first name.
+// Every account gets its own private workspace: a fresh Settings row is
+// created for the new user and no existing data is shared or adopted.
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
@@ -31,11 +31,10 @@ export async function POST(req: NextRequest) {
       data: { name, email, passwordHash: await hashPassword(password) },
     })
 
-    // personalize the workspace greeting if it was never customized
-    const setting = await db.setting.findUnique({ where: { id: 'user' } })
-    if (setting && setting.name === 'there') {
-      await db.setting.update({ where: { id: 'user' }, data: { name: name.split(' ')[0] } })
-    }
+    // each account starts with its own private workspace preferences
+    await db.setting.create({
+      data: { userId: user.id, name: name.split(' ')[0] },
+    })
 
     const res = NextResponse.json({ user: { id: user.id, name: user.name, email: user.email } }, { status: 201 })
     res.cookies.set(SESSION_COOKIE, await createSessionToken(user.id), SESSION_COOKIE_OPTIONS)

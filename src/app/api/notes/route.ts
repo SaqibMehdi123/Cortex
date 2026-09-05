@@ -1,10 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getSessionUser, unauthorized } from '@/lib/auth-server'
 
-// GET /api/notes — quick-capture notes
+// GET /api/notes — the signed-in user's quick-capture notes
 export async function GET() {
   try {
-    const notes = await db.note.findMany({ orderBy: [{ pinned: 'desc' }, { createdAt: 'desc' }], take: 200 })
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
+    const notes = await db.note.findMany({
+      where: { userId: user.id },
+      orderBy: [{ pinned: 'desc' }, { createdAt: 'desc' }],
+      take: 200,
+    })
     return NextResponse.json({ notes })
   } catch (e) {
     console.error('GET /api/notes error', e)
@@ -15,11 +23,15 @@ export async function GET() {
 // POST /api/notes
 export async function POST(req: NextRequest) {
   try {
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
     const body = await req.json()
     const { title, content, source, pinned } = body
     if (!content?.trim()) return NextResponse.json({ error: 'Content is required' }, { status: 400 })
     const note = await db.note.create({
       data: {
+        userId: user.id,
         title: title?.trim() || null,
         content: content.trim().slice(0, 20000),
         source: ['typed', 'voice', 'url', 'capture'].includes(source) ? source : 'typed',

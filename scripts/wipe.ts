@@ -1,6 +1,6 @@
 import { PrismaClient } from '@prisma/client'
 
-// Wipes ALL data — the user wants a clean slate (no demo/dummy content).
+// Wipes ALL workspace data (every account) — the user wants a clean slate.
 const db = new PrismaClient()
 
 async function main() {
@@ -21,8 +21,9 @@ async function main() {
   await db.note.deleteMany()
   await db.document.deleteMany()
   await db.paper.deleteMany()
+  await db.jobListing.deleteMany()
   await db.setting.deleteMany()
-  await db.setting.create({ data: { id: 'user' } })
+  // Accounts survive the wipe; each will get a fresh settings row on next use.
   const counts = {
     documents: await db.document.count(),
     news: await db.newsArticle.count(),

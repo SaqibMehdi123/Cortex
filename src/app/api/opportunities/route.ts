@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getSessionUser, unauthorized } from '@/lib/auth-server'
 
-// GET /api/opportunities — application pipeline
+// GET /api/opportunities — the signed-in user's application pipeline
 export async function GET() {
   try {
-    const opportunities = await db.opportunity.findMany({ orderBy: { updatedAt: 'desc' } })
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
+    const opportunities = await db.opportunity.findMany({ where: { userId: user.id }, orderBy: { updatedAt: 'desc' } })
     return NextResponse.json({ opportunities })
   } catch (e) {
     console.error('GET /api/opportunities error', e)
@@ -15,6 +19,9 @@ export async function GET() {
 // POST /api/opportunities — add application
 export async function POST(req: NextRequest) {
   try {
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
     const body = await req.json()
     const { company, role, type, classification, sender, source, url, status, deadline, nextAction, resume, notes } = body
     if (!company?.trim() || !role?.trim()) {
@@ -22,6 +29,7 @@ export async function POST(req: NextRequest) {
     }
     const opportunity = await db.opportunity.create({
       data: {
+        userId: user.id,
         company: company.trim(),
         role: role.trim(),
         type: type || 'internship',

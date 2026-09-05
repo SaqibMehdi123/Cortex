@@ -1,13 +1,18 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getAccessToken } from '@/lib/google'
+import { getSessionUser, unauthorized } from '@/lib/auth-server'
 
-// POST /api/calendar/push — create Google Calendar events for open tasks
-// that have a due date. Skips tasks whose title already matches an event in
-// the next 60 days, so pressing the button twice never duplicates.
+// POST /api/calendar/push — create Google Calendar events for the signed-in
+// user's open tasks that have a due date. Skips tasks whose title already
+// matches an event in the next 60 days, so pressing the button twice never
+// duplicates.
 export async function POST() {
   try {
-    const token = await getAccessToken()
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
+    const token = await getAccessToken(user.id)
     if (!token) {
       return NextResponse.json(
         { error: 'Google Calendar is not connected. Reconnect your account in Settings.', needsReconnect: true },
@@ -16,7 +21,7 @@ export async function POST() {
     }
 
     const tasks = await db.task.findMany({
-      where: { dueDate: { not: null }, status: { not: 'done' } },
+      where: { userId: user.id, dueDate: { not: null }, status: { not: 'done' } },
       orderBy: { dueDate: 'asc' },
       take: 25,
       include: { goal: { select: { title: true } } },

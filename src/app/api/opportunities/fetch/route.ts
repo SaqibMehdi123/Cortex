@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getSessionUser, unauthorized } from '@/lib/auth-server'
 
 // POST /api/opportunities/fetch — pull jobs, internships and research positions
 // from authentic, keyless public sources:
@@ -8,7 +9,8 @@ import { db } from '@/lib/db'
 //   - Lever boards (official ATS API): Mistral AI
 //   - RemoteOK public job API (AI/ML-relevant only)
 //   - Remotive public job API (data category)
-// Listings are de-duplicated by URL, so re-fetching is safe.
+// Listings are de-duplicated per account by URL, so re-fetching is safe and
+// every user keeps their own discover feed + saved state.
 
 const UA = 'Mozilla/5.0 (X11; Linux x86_64) Cortex/1.0'
 
@@ -164,6 +166,9 @@ async function fetchRemotive(): Promise<Listing[]> {
 
 export async function POST() {
   try {
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
     const tasks: Array<{ name: string; run: () => Promise<Listing[]> }> = [
       ...GREENHOUSE_BOARDS.map((b) => ({ name: b.company, run: () => fetchGreenhouse(b.board, b.company) })),
       ...LEVER_BOARDS.map((b) => ({ name: b.company, run: () => fetchLever(b.board, b.company) })),
@@ -189,13 +194,13 @@ export async function POST() {
     let added = 0
     if (all.length > 0) {
       // SQLite createMany has no skipDuplicates — dedupe here instead:
-      // first within the batch, then against what's already stored.
+      // first within the batch, then against this user's stored listings.
       const batch = new Map<string, Listing>()
       for (const l of all) {
         if (l.url && !batch.has(l.url)) batch.set(l.url, l)
       }
       const existing = await db.jobListing.findMany({
-        where: { url: { in: [...batch.keys()] } },
+        where: { userId: user.id, url: { in: [...batch.keys()] } },
         select: { url: true },
       })
       const seen = new Set(existing.map((r) => r.url))
@@ -203,6 +208,7 @@ export async function POST() {
       if (fresh.length > 0) {
         const res = await db.jobListing.createMany({
           data: fresh.map((l) => ({
+            userId: user.id,
             company: l.company,
             role: l.role,
             type: l.type,
@@ -217,7 +223,7 @@ export async function POST() {
       }
     }
 
-    const total = await db.jobListing.count()
+    const total = await db.jobListing.count({ where: { userId: user.id } })
     return NextResponse.json({ added, total, sources })
   } catch (e) {
     console.error('POST /api/opportunities/fetch error', e)

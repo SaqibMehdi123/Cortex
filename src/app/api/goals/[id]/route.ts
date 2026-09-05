@@ -1,10 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getSessionUser, unauthorized } from '@/lib/auth-server'
 
 // PATCH /api/goals/[id] — edit or complete/pause
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
     const { id } = await params
+    const existing = await db.goal.findFirst({ where: { id, userId: user.id }, select: { id: true } })
+    if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
     const body = await req.json()
     const data: Record<string, unknown> = {}
     for (const key of ['title', 'description', 'category', 'status', 'color'] as const) {
@@ -24,7 +31,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 // DELETE /api/goals/[id]
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
     const { id } = await params
+    const existing = await db.goal.findFirst({ where: { id, userId: user.id }, select: { id: true } })
+    if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     await db.goal.delete({ where: { id } })
     return NextResponse.json({ ok: true })
   } catch (e) {

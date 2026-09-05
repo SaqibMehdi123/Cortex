@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getSessionUser, unauthorized } from '@/lib/auth-server'
 
-// GET /api/analytics?range=week|month — reading, tasks, focus, goal velocity
+// GET /api/analytics?range=week|month — the user's reading, tasks, focus, goal velocity
 export async function GET(req: NextRequest) {
   try {
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
     const { searchParams } = new URL(req.url)
     const range = searchParams.get('range') === 'month' ? 'month' : 'week'
     const days = range === 'week' ? 7 : 30
@@ -13,12 +17,12 @@ export async function GET(req: NextRequest) {
     start.setHours(0, 0, 0, 0)
 
     const [readingSessions, doneTasks, focusSessions, reviews, activeGoals, finishedDocs] = await Promise.all([
-      db.readingSession.findMany({ where: { day: { gte: start } } }),
-      db.task.findMany({ where: { status: 'done', completedAt: { gte: start } }, select: { completedAt: true } }),
-      db.focusSession.findMany({ where: { startedAt: { gte: start } } }),
-      db.reviewLog.findMany({ where: { reviewedAt: { gte: start } }, select: { id: true } }),
-      db.goal.count({ where: { status: 'active' } }),
-      db.document.count({ where: { status: 'finished' } }),
+      db.readingSession.findMany({ where: { userId: user.id, day: { gte: start } } }),
+      db.task.findMany({ where: { userId: user.id, status: 'done', completedAt: { gte: start } }, select: { completedAt: true } }),
+      db.focusSession.findMany({ where: { userId: user.id, startedAt: { gte: start } } }),
+      db.reviewLog.findMany({ where: { userId: user.id, reviewedAt: { gte: start } }, select: { id: true } }),
+      db.goal.count({ where: { userId: user.id, status: 'active' } }),
+      db.document.count({ where: { userId: user.id, status: 'finished' } }),
     ])
 
     const dayKeys: string[] = []
@@ -36,7 +40,7 @@ export async function GET(req: NextRequest) {
     }))
 
     // goal velocity: milestones completed per week over last 8 weeks
-    const milestones = await db.milestone.findMany({ where: { completedAt: { not: null } }, select: { completedAt: true } })
+    const milestones = await db.milestone.findMany({ where: { userId: user.id, completedAt: { not: null } }, select: { completedAt: true } })
     const velocity: { week: string; completed: number }[] = []
     const now = new Date()
     for (let w = 7; w >= 0; w--) {

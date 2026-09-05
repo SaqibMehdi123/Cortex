@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import ZAI from 'z-ai-web-dev-sdk'
+import { getSessionUser, unauthorized } from '@/lib/auth-server'
 
 interface GenNode {
   id: string
@@ -11,9 +12,12 @@ interface GenNode {
   color?: string
 }
 
-// POST /api/mindmaps/generate — AI-generate a mindmap from a document, a topic, or notes
+// POST /api/mindmaps/generate — AI-generate a mindmap from one of the user's documents, a topic, or their notes
 export async function POST(req: NextRequest) {
   try {
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
     const body = await req.json()
     const { documentId, topic, source } = body as { documentId?: string; topic?: string; source?: string }
 
@@ -21,12 +25,12 @@ export async function POST(req: NextRequest) {
     let title = topic?.trim() || 'New mindmap'
 
     if (documentId) {
-      const doc = await db.document.findUnique({ where: { id: documentId } })
+      const doc = await db.document.findFirst({ where: { id: documentId, userId: user.id } })
       if (!doc) return NextResponse.json({ error: 'Document not found' }, { status: 404 })
       material = `Title: ${doc.title}\n\n${(doc.content ?? doc.summary ?? '').slice(0, 14000)}`
       title = doc.title
     } else if (source === 'notes') {
-      const notes = await db.note.findMany({ orderBy: { updatedAt: 'desc' }, take: 20 })
+      const notes = await db.note.findMany({ where: { userId: user.id }, orderBy: { updatedAt: 'desc' }, take: 20 })
       material = notes.map((n) => `- ${n.title ?? '(untitled)'}: ${n.content.slice(0, 300)}`).join('\n')
       title = 'My notes overview'
     } else if (topic?.trim()) {
@@ -99,7 +103,7 @@ export async function POST(req: NextRequest) {
     void maxDepth
 
     const map = await db.mindMap.create({
-      data: { title, nodes: JSON.stringify(nodes) },
+      data: { userId: user.id, title, nodes: JSON.stringify(nodes) },
       include: { goal: { select: { id: true, title: true, color: true } } },
     })
 

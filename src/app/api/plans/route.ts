@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getSessionUser, unauthorized } from '@/lib/auth-server'
 
 type PlanWithChildren = {
   id: string
@@ -71,10 +72,14 @@ type FlatPlan = {
   }[]
 }
 
-// GET /api/plans — nested plan tree with tasks
+// GET /api/plans — the signed-in user's nested plan tree with tasks
 export async function GET() {
   try {
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
     const plans = (await db.plan.findMany({
+      where: { userId: user.id },
       orderBy: { createdAt: 'asc' },
       include: {
         goal: { select: { id: true, title: true, color: true } },
@@ -94,19 +99,36 @@ export async function GET() {
 // POST /api/plans — create plan (optionally nested under a parent)
 export async function POST(req: NextRequest) {
   try {
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
     const body = await req.json()
     const { title, timeframe, notes, startDate, endDate, goalId, parentId, done } = body
     if (!title?.trim()) return NextResponse.json({ error: 'Title is required' }, { status: 400 })
 
+    let safeGoalId: string | null = null
+    if (goalId) {
+      const goal = await db.goal.findFirst({ where: { id: goalId, userId: user.id } })
+      if (!goal) return NextResponse.json({ error: 'Goal not found' }, { status: 400 })
+      safeGoalId = goal.id
+    }
+    let safeParentId: string | null = null
+    if (parentId) {
+      const parent = await db.plan.findFirst({ where: { id: parentId, userId: user.id } })
+      if (!parent) return NextResponse.json({ error: 'Parent plan not found' }, { status: 400 })
+      safeParentId = parent.id
+    }
+
     const plan = await db.plan.create({
       data: {
+        userId: user.id,
         title: title.trim(),
         timeframe: ['year', 'quarter', 'month', 'week', 'day'].includes(timeframe) ? timeframe : 'day',
         notes: notes || null,
         startDate: startDate ? new Date(startDate) : null,
         endDate: endDate ? new Date(endDate) : null,
-        goalId: goalId || null,
-        parentId: parentId || null,
+        goalId: safeGoalId,
+        parentId: safeParentId,
         done: Boolean(done),
       },
       include: { goal: { select: { id: true, title: true, color: true } }, tasks: true },

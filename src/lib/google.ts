@@ -1,6 +1,5 @@
 import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
-
 // ─── Google OAuth 2.0 + Gmail + Calendar helpers ─────────────────────
 // Credentials come from env: GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET.
 // Redirect URI is derived from the request origin (overridable via
@@ -36,10 +35,11 @@ export function googleRedirectUri(req: NextRequest): string {
   return `${origin}/api/auth/google/callback`
 }
 
-export async function getSetting() {
-  const existing = await db.setting.findUnique({ where: { id: 'user' } })
+// ─── Per-user settings row (created on demand) ──────────────────────────
+export async function getUserSetting(userId: string) {
+  const existing = await db.setting.findUnique({ where: { userId } })
   if (existing) return existing
-  return db.setting.create({ data: { id: 'user' } })
+  return db.setting.create({ data: { userId } })
 }
 
 function parseTokens(raw: string | null): GoogleTokens | null {
@@ -51,10 +51,10 @@ function parseTokens(raw: string | null): GoogleTokens | null {
   }
 }
 
-// Returns a valid access token, refreshing via the stored refresh_token when
-// needed. Returns null when the account is not connected.
-export async function getAccessToken(): Promise<string | null> {
-  const setting = await getSetting()
+// Returns a valid access token for the given user, refreshing via the stored
+// refresh_token when needed. Returns null when the account is not connected.
+export async function getAccessToken(userId: string): Promise<string | null> {
+  const setting = await getUserSetting(userId)
   const tokens = parseTokens(setting.googleAuth)
   if (!tokens?.access_token) return null
 
@@ -79,14 +79,14 @@ export async function getAccessToken(): Promise<string | null> {
       signal: AbortSignal.timeout(15000),
     })
     if (!res.ok) return null
-    const refreshed = (await res.json()) as GoogleTokens
+    const refreshed = (await res.json()) as GoogleTokens & { expires_in?: number }
     const merged: GoogleTokens = {
       ...tokens,
       access_token: refreshed.access_token,
       expiry_date: Date.now() + (refreshed.expires_in ?? 3600) * 1000,
       refresh_token: refreshed.refresh_token ?? tokens.refresh_token,
     }
-    await db.setting.update({ where: { id: 'user' }, data: { googleAuth: JSON.stringify(merged) } })
+    await db.setting.update({ where: { userId }, data: { googleAuth: JSON.stringify(merged) } })
     return merged.access_token
   } catch (e) {
     console.error('google token refresh failed', e)
@@ -94,8 +94,8 @@ export async function getAccessToken(): Promise<string | null> {
   }
 }
 
-export async function googleGet<T>(url: string): Promise<T | null> {
-  const token = await getAccessToken()
+export async function googleGet<T>(url: string, userId: string): Promise<T | null> {
+  const token = await getAccessToken(userId)
   if (!token) return null
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${token}` },

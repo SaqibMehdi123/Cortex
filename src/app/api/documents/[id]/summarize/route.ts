@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import ZAI from 'z-ai-web-dev-sdk'
+import { getSessionUser, unauthorized } from '@/lib/auth-server'
 
 // POST /api/documents/[id]/summarize — AI summary + key takeaways
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
     const { id } = await params
-    const document = await db.document.findUnique({ where: { id } })
+    const document = await db.document.findFirst({ where: { id, userId: user.id } })
     if (!document) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
     const content = document.content?.slice(0, 18000)

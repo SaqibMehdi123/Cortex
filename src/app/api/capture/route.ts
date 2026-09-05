@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getSessionUser, unauthorized } from '@/lib/auth-server'
 
 // POST /api/capture — quick capture router: note | voice | url | task
 export async function POST(req: NextRequest) {
   try {
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
     const body = await req.json()
     const type: string = body?.type
     const content: string = body?.content?.trim()
@@ -15,6 +19,7 @@ export async function POST(req: NextRequest) {
     if (type === 'task') {
       const task = await db.task.create({
         data: {
+          userId: user.id,
           title: content.slice(0, 300),
           dueDate: dueDate ? new Date(dueDate) : null,
           priority: 'med',
@@ -48,6 +53,7 @@ export async function POST(req: NextRequest) {
       }
       const document = await db.document.create({
         data: {
+          userId: user.id,
           title: extractedTitle,
           type: 'url',
           source: url,
@@ -61,6 +67,7 @@ export async function POST(req: NextRequest) {
     // note | voice
     const note = await db.note.create({
       data: {
+        userId: user.id,
         title: title?.trim() || null,
         content: content.slice(0, 20000),
         source: type === 'voice' ? 'voice' : 'capture',

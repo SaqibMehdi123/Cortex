@@ -1,17 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { schedule, type Grade } from '@/lib/sm2'
+import { getSessionUser, unauthorized } from '@/lib/auth-server'
 
-// POST /api/flashcards/review — grade a card with SM-2 scheduling
+// POST /api/flashcards/review — grade one of the user's cards with SM-2 scheduling
 export async function POST(req: NextRequest) {
   try {
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
     const body = await req.json()
     const { flashcardId, grade } = body
     if (!flashcardId || !['again', 'hard', 'good', 'easy'].includes(grade)) {
       return NextResponse.json({ error: 'flashcardId and valid grade required' }, { status: 400 })
     }
 
-    const card = await db.flashcard.findUnique({ where: { id: flashcardId } })
+    const card = await db.flashcard.findFirst({ where: { id: flashcardId, userId: user.id } })
     if (!card) return NextResponse.json({ error: 'Card not found' }, { status: 404 })
 
     const next = schedule(
@@ -31,7 +35,7 @@ export async function POST(req: NextRequest) {
           lastReviewedAt: next.lastReviewedAt,
         },
       }),
-      db.reviewLog.create({ data: { flashcardId, grade } }),
+      db.reviewLog.create({ data: { userId: user.id, flashcardId, grade } }),
     ])
 
     return NextResponse.json({ card: updated })

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { promises as fs } from 'fs'
 import path from 'path'
 import { db } from '@/lib/db'
+import { getSessionUser, unauthorized } from '@/lib/auth-server'
 
 export const maxDuration = 120
 
@@ -12,6 +13,9 @@ export const maxDuration = 120
 // highlighting, AI summaries and doc Q&A.
 export async function POST(req: NextRequest) {
   try {
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
     const form = await req.formData()
     const file = form.get('file')
     if (!(file instanceof File)) {
@@ -57,7 +61,7 @@ export async function POST(req: NextRequest) {
     if (cleaned.length < 40) {
       // Still accept the PDF — the original renders fine in the viewer — but
       // warn that AI features will be limited without extractable text.
-      const doc = await createDocument(buffer, name, {
+      const doc = await createDocument(user.id, buffer, name, {
         title: ((form.get('title') as string | null)?.trim() || name.replace(/\.pdf$/i, '').replace(/[_-]+/g, ' ').trim()).slice(0, 300),
         author: (form.get('author') as string | null)?.trim() || null,
         tags: (form.get('tags') as string | null)?.trim() || null,
@@ -75,7 +79,7 @@ export async function POST(req: NextRequest) {
     const fallbackTitle = name.replace(/\.pdf$/i, '').replace(/[_-]+/g, ' ').trim()
     const title = ((form.get('title') as string | null)?.trim() || metaTitle || fallbackTitle).slice(0, 300)
 
-    const document = await createDocument(buffer, name, {
+    const document = await createDocument(user.id, buffer, name, {
       title,
       author,
       tags,
@@ -93,6 +97,7 @@ export async function POST(req: NextRequest) {
 // Store the original bytes + create the DB row. Files live in <project>/uploads
 // keyed by document id, so they can be streamed back exactly as uploaded.
 async function createDocument(
+  userId: string,
   buffer: Buffer,
   fileName: string,
   opts: { title: string; author: string | null; tags: string | null; content: string | null; pageCount: number }
@@ -102,6 +107,7 @@ async function createDocument(
 
   const document = await db.document.create({
     data: {
+      userId,
       title: opts.title,
       author: opts.author,
       type: 'paper',

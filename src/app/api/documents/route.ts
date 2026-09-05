@@ -2,18 +2,22 @@ import { NextRequest, NextResponse } from 'next/server'
 import { promises as fs } from 'fs'
 import path from 'path'
 import { db } from '@/lib/db'
+import { getSessionUser, unauthorized } from '@/lib/auth-server'
 
 export const maxDuration = 120
 
-// GET /api/documents?q=&status=&tag= — library list
+// GET /api/documents?q=&status=&tag= — the signed-in user's library
 export async function GET(req: NextRequest) {
   try {
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
     const { searchParams } = new URL(req.url)
     const q = searchParams.get('q')?.trim()
     const status = searchParams.get('status')?.trim()
     const tag = searchParams.get('tag')?.trim()
 
-    const where: Record<string, unknown> = {}
+    const where: Record<string, unknown> = { userId: user.id }
     if (status && status !== 'all') where.status = status
     if (tag) where.tags = { contains: tag }
     if (q) {
@@ -50,6 +54,9 @@ export async function GET(req: NextRequest) {
 // extracted (pdf-parse) to power highlights, summaries and doc Q&A.
 export async function POST(req: NextRequest) {
   try {
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
     const body = await req.json()
     const { title, author, type, source, notes, content, status, progress, tags, autoExtract } = body
 
@@ -61,7 +68,7 @@ export async function POST(req: NextRequest) {
     if (autoExtract && source && /^https?:\/\//.test(source) && !content) {
       const pdf = await tryDownloadPdfFromUrl(source.trim())
       if (pdf) {
-        const document = await createPdfDocument(pdf.buffer, pdf.fileName, {
+        const document = await createPdfDocument(user.id, pdf.buffer, pdf.fileName, {
           requestedTitle: title.trim() !== source.trim() ? title.trim() : null,
           author: author?.trim() || null,
           tags: tags?.trim() || null,
@@ -107,6 +114,7 @@ export async function POST(req: NextRequest) {
 
     const document = await db.document.create({
       data: {
+        userId: user.id,
         title: (extracted.title || title).trim(),
         author: author?.trim() || null,
         type: type || (source ? 'url' : 'text'),
@@ -213,6 +221,7 @@ async function fetchArxivTitle(arxivId: string): Promise<string | null> {
 // Store the original bytes + create the DB row (same pipeline as the
 // /api/documents/pdf upload route, so URL imports get the embedded viewer).
 async function createPdfDocument(
+  userId: string,
   buffer: Buffer,
   fileName: string,
   opts: { requestedTitle: string | null; author: string | null; tags: string | null; sourceUrl: string | null }
@@ -262,6 +271,7 @@ async function createPdfDocument(
 
   const document = await db.document.create({
     data: {
+      userId,
       title,
       author: opts.author,
       type: 'paper',

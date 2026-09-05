@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getSessionUser, unauthorized } from '@/lib/auth-server'
 
 function computeVelocity(milestones: { completedAt: Date | null }[]): number[] {
   // milestones completed per week, last 8 weeks (oldest → newest)
@@ -13,10 +14,14 @@ function computeVelocity(milestones: { completedAt: Date | null }[]): number[] {
   return weeks
 }
 
-// GET /api/goals — all goals with milestones + velocity
+// GET /api/goals — the signed-in user's goals with milestones + velocity
 export async function GET() {
   try {
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
     const goals = await db.goal.findMany({
+      where: { userId: user.id },
       orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
       include: {
         milestones: { orderBy: { order: 'asc' }, include: { _count: { select: { tasks: true } } } },
@@ -34,6 +39,9 @@ export async function GET() {
 // POST /api/goals — create goal (optionally with initial milestones)
 export async function POST(req: NextRequest) {
   try {
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
     const body = await req.json()
     const { title, description, category, deadline, color, milestones } = body
 
@@ -43,6 +51,7 @@ export async function POST(req: NextRequest) {
 
     const goal = await db.goal.create({
       data: {
+        userId: user.id,
         title: title.trim(),
         description: description?.trim() || null,
         category: category || 'learning',
@@ -52,6 +61,7 @@ export async function POST(req: NextRequest) {
           create: (Array.isArray(milestones) ? milestones : [])
             .filter((m: { title?: string }) => m?.title?.trim())
             .map((m: { title: string; dueDate?: string }, i: number) => ({
+              userId: user.id,
               title: m.title.trim(),
               order: i,
               dueDate: m.dueDate ? new Date(m.dueDate) : null,

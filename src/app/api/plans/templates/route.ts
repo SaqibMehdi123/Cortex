@@ -1,5 +1,6 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getSessionUser, unauthorized } from '@/lib/auth-server'
 
 const TEMPLATES: {
   id: string
@@ -52,9 +53,12 @@ export async function GET() {
   return NextResponse.json({ templates: TEMPLATES })
 }
 
-// POST /api/plans/templates — apply a template: creates goal + milestones + plans + tasks
+// POST /api/plans/templates — apply a template: creates goal + milestones + plans + tasks for the signed-in user
 export async function POST(req: NextRequest) {
   try {
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
     const body = await req.json()
     const templateId: string = body?.templateId
     const template = TEMPLATES.find((t) => t.id === templateId)
@@ -62,15 +66,17 @@ export async function POST(req: NextRequest) {
 
     const goal = await db.goal.create({
       data: {
+        userId: user.id,
         title: template.goalTitle,
         category: template.category,
         color: template.color,
         description: `Created from the "${template.name}" template.`,
         milestones: {
           create: template.milestones.map((m, i) => ({
+            userId: user.id,
             title: m.title,
             order: i,
-            tasks: { create: m.tasks.map((t, j) => ({ title: t, order: j })) },
+            tasks: { create: m.tasks.map((t, j) => ({ userId: user.id, title: t, order: j })) },
           })),
         },
       },
@@ -81,11 +87,12 @@ export async function POST(req: NextRequest) {
     for (const p of template.plans) {
       const plan = await db.plan.create({
         data: {
+          userId: user.id,
           title: p.title,
           timeframe: p.timeframe,
           goalId: goal.id,
           parentId: p.timeframe === 'week' && monthPlanId ? monthPlanId : null,
-          tasks: { create: p.tasks.map((t, j) => ({ title: t, order: j, goalId: goal.id })) },
+          tasks: { create: p.tasks.map((t, j) => ({ userId: user.id, title: t, order: j, goalId: goal.id })) },
         },
       })
       if (p.timeframe === 'month') monthPlanId = plan.id

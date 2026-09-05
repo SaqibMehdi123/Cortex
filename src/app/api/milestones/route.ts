@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getSessionUser, unauthorized } from '@/lib/auth-server'
 
-async function refreshGoalStreak(goalId: string) {
+// Recompute a goal's streak from its milestones. Callers must have already
+// verified the goal belongs to the signed-in user.
+export async function refreshGoalStreak(goalId: string) {
   // Streak = consecutive days (ending today or yesterday) with >=1 milestone completed
   const goal = await db.goal.findUnique({ where: { id: goalId }, include: { milestones: true } })
   if (!goal) return
@@ -20,17 +23,24 @@ async function refreshGoalStreak(goalId: string) {
   await db.goal.update({ where: { id: goalId }, data: { streak, lastCompletedAt: new Date() } })
 }
 
-// POST /api/milestones — add milestone to a goal
+// POST /api/milestones — add milestone to one of the user's goals
 export async function POST(req: NextRequest) {
   try {
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
     const body = await req.json()
     const { goalId, title, dueDate } = body
     if (!goalId || !title?.trim()) {
       return NextResponse.json({ error: 'goalId and title are required' }, { status: 400 })
     }
+    const goal = await db.goal.findFirst({ where: { id: goalId, userId: user.id }, select: { id: true } })
+    if (!goal) return NextResponse.json({ error: 'Goal not found' }, { status: 404 })
+
     const count = await db.milestone.count({ where: { goalId } })
     const milestone = await db.milestone.create({
       data: {
+        userId: user.id,
         goalId,
         title: title.trim(),
         dueDate: dueDate ? new Date(dueDate) : null,
@@ -43,6 +53,3 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Failed to create milestone' }, { status: 500 })
   }
 }
-
-// PATCH handled in [id]; export helper for tasks route reuse
-export { refreshGoalStreak }

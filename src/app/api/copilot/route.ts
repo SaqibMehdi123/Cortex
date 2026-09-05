@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import ZAI from 'z-ai-web-dev-sdk'
+import { getSessionUser, unauthorized } from '@/lib/auth-server'
 
 interface Cite {
   n: number
@@ -9,11 +10,14 @@ interface Cite {
   url?: string | null
 }
 
-// GET /api/copilot — persisted copilot conversation
+// GET /api/copilot — the user's persisted copilot conversation
 export async function GET() {
   try {
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
     const messages = await db.chatMessage.findMany({
-      where: { thread: 'copilot' },
+      where: { userId: user.id, thread: 'copilot' },
       orderBy: { createdAt: 'asc' },
       take: 200,
     })
@@ -29,23 +33,26 @@ export async function GET() {
 // POST /api/copilot — "Ask my second brain": cross-module grounded answer with citations
 export async function POST(req: NextRequest) {
   try {
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
     const body = await req.json()
     const message: string = body?.message?.trim()
     if (!message) return NextResponse.json({ error: 'Message is required' }, { status: 400 })
 
     const now = new Date()
 
-    // Gather cross-module context in parallel
+    // Gather cross-module context in parallel (all scoped to this user)
     const [documents, notes, goals, tasks, plans, highlights, opportunities, news, flashcardsDue] = await Promise.all([
-      db.document.findMany({ orderBy: { updatedAt: 'desc' }, take: 25, select: { id: true, title: true, summary: true, content: true, status: true } }),
-      db.note.findMany({ orderBy: { updatedAt: 'desc' }, take: 20 }),
-      db.goal.findMany({ where: { status: 'active' }, include: { milestones: true }, take: 15 }),
-      db.task.findMany({ where: { status: { not: 'done' } }, orderBy: [{ dueDate: 'asc' }], take: 15, include: { goal: { select: { title: true } } } }),
-      db.plan.findMany({ where: { done: false }, orderBy: { updatedAt: 'desc' }, take: 10 }),
-      db.highlight.findMany({ orderBy: { createdAt: 'desc' }, take: 15, include: { document: { select: { title: true } } } }),
-      db.opportunity.findMany({ where: { status: { in: ['saved', 'applied', 'interview'] } }, take: 8 }),
-      db.newsArticle.findMany({ orderBy: { publishedAt: 'desc' }, take: 5 }),
-      db.flashcard.count({ where: { dueAt: { lte: now } } }),
+      db.document.findMany({ where: { userId: user.id }, orderBy: { updatedAt: 'desc' }, take: 25, select: { id: true, title: true, summary: true, content: true, status: true } }),
+      db.note.findMany({ where: { userId: user.id }, orderBy: { updatedAt: 'desc' }, take: 20 }),
+      db.goal.findMany({ where: { userId: user.id, status: 'active' }, include: { milestones: true }, take: 15 }),
+      db.task.findMany({ where: { userId: user.id, status: { not: 'done' } }, orderBy: [{ dueDate: 'asc' }], take: 15, include: { goal: { select: { title: true } } } }),
+      db.plan.findMany({ where: { userId: user.id, done: false }, orderBy: { updatedAt: 'desc' }, take: 10 }),
+      db.highlight.findMany({ where: { userId: user.id }, orderBy: { createdAt: 'desc' }, take: 15, include: { document: { select: { title: true } } } }),
+      db.opportunity.findMany({ where: { userId: user.id, status: { in: ['saved', 'applied', 'interview'] } }, take: 8 }),
+      db.newsArticle.findMany({ where: { userId: user.id }, orderBy: { publishedAt: 'desc' }, take: 5 }),
+      db.flashcard.count({ where: { userId: user.id, dueAt: { lte: now } } }),
     ])
 
     // Keyword search across doc content for RAG chunks
@@ -99,11 +106,11 @@ export async function POST(req: NextRequest) {
     ]
 
     const userMsg = await db.chatMessage.create({
-      data: { thread: 'copilot', role: 'user', content: message },
+      data: { userId: user.id, thread: 'copilot', role: 'user', content: message },
     })
 
     const history = await db.chatMessage.findMany({
-      where: { thread: 'copilot' },
+      where: { userId: user.id, thread: 'copilot' },
       orderBy: { createdAt: 'asc' },
       take: 30,
     })
@@ -135,6 +142,7 @@ export async function POST(req: NextRequest) {
 
     const assistantMsg = await db.chatMessage.create({
       data: {
+        userId: user.id,
         thread: 'copilot',
         role: 'assistant',
         content: reply,
@@ -149,10 +157,13 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// DELETE /api/copilot — clear copilot conversation
+// DELETE /api/copilot — clear the user's copilot conversation
 export async function DELETE() {
   try {
-    await db.chatMessage.deleteMany({ where: { thread: 'copilot' } })
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
+    await db.chatMessage.deleteMany({ where: { userId: user.id, thread: 'copilot' } })
     return NextResponse.json({ ok: true })
   } catch (e) {
     console.error('DELETE /api/copilot error', e)

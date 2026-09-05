@@ -1,17 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import ZAI from 'z-ai-web-dev-sdk'
+import { getSessionUser, unauthorized } from '@/lib/auth-server'
 
-// GET /api/flashcards?mode=due|all
+// GET /api/flashcards?mode=due|all — the signed-in user's cards
 export async function GET(req: NextRequest) {
   try {
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
     const { searchParams } = new URL(req.url)
     const mode = searchParams.get('mode') ?? 'all'
     const now = new Date()
 
     if (mode === 'due') {
       const cards = await db.flashcard.findMany({
-        where: { dueAt: { lte: now } },
+        where: { userId: user.id, dueAt: { lte: now } },
         orderBy: { dueAt: 'asc' },
         include: { document: { select: { id: true, title: true } } },
       })
@@ -19,11 +23,12 @@ export async function GET(req: NextRequest) {
     }
 
     const cards = await db.flashcard.findMany({
+      where: { userId: user.id },
       orderBy: { dueAt: 'asc' },
       include: { document: { select: { id: true, title: true } } },
       take: 500,
     })
-    const dueCount = await db.flashcard.count({ where: { dueAt: { lte: now } } })
+    const dueCount = await db.flashcard.count({ where: { userId: user.id, dueAt: { lte: now } } })
     return NextResponse.json({ cards, dueCount })
   } catch (e) {
     console.error('GET /api/flashcards error', e)
@@ -34,11 +39,17 @@ export async function GET(req: NextRequest) {
 // POST /api/flashcards — create manually, or {generate:true, highlightId} to AI-generate Q/A from a highlight
 export async function POST(req: NextRequest) {
   try {
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
     const body = await req.json()
     const { front, back, documentId, highlightId, generate } = body
 
     if (generate && highlightId) {
-      const highlight = await db.highlight.findUnique({ where: { id: highlightId }, include: { document: { select: { title: true } } } })
+      const highlight = await db.highlight.findFirst({
+        where: { id: highlightId, userId: user.id },
+        include: { document: { select: { title: true } } },
+      })
       if (!highlight) return NextResponse.json({ error: 'Highlight not found' }, { status: 404 })
 
       const zai = await ZAI.create()
@@ -61,6 +72,7 @@ export async function POST(req: NextRequest) {
 
       const card = await db.flashcard.create({
         data: {
+          userId: user.id,
           front: String(parsed.front ?? highlight.text.slice(0, 200)),
           back: String(parsed.back ?? highlight.text.slice(0, 500)),
           documentId: highlight.documentId,
@@ -74,11 +86,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Front and back are required' }, { status: 400 })
     }
 
+    // document links are validated so cards can't be pinned to another user's doc
+    let safeDocumentId: string | null = null
+    if (documentId) {
+      const document = await db.document.findFirst({ where: { id: documentId, userId: user.id } })
+      if (!document) return NextResponse.json({ error: 'Document not found' }, { status: 400 })
+      safeDocumentId = document.id
+    }
+
     const card = await db.flashcard.create({
       data: {
+        userId: user.id,
         front: front.trim(),
         back: back.trim(),
-        documentId: documentId || null,
+        documentId: safeDocumentId,
         highlightId: highlightId || null,
       },
     })

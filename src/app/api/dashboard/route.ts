@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { getSessionUser } from '@/lib/auth-server'
+import { getSessionUser, unauthorized } from '@/lib/auth-server'
 
 function startOfToday() {
   const d = new Date()
@@ -13,53 +13,57 @@ function endOfToday() {
   return d
 }
 
-// GET /api/dashboard — everything the "Today" screen needs, including the Copilot briefing
+// GET /api/dashboard — everything the "Today" screen needs for the signed-in
+// user, including the Copilot briefing. Every query is scoped to the account.
 export async function GET() {
   try {
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
     const now = new Date()
     const today = startOfToday()
     const in7 = new Date(now.getTime() + 7 * 86_400_000)
 
-    const setting = await db.setting.findUnique({ where: { id: 'user' } })
+    const setting = await db.setting.findUnique({ where: { userId: user.id } })
 
     const [todayTasks, todayPlans, goals, newsDigest, documents, flashcardsDue, focusSessionsToday, readingToday, opportunities, doneTodayCount] =
       await Promise.all([
         db.task.findMany({
-          where: { dueDate: { gte: today, lte: endOfToday() }, status: { not: 'done' } },
+          where: { userId: user.id, dueDate: { gte: today, lte: endOfToday() }, status: { not: 'done' } },
           orderBy: [{ priority: 'desc' }, { dueDate: 'asc' }],
           include: { goal: { select: { id: true, title: true, color: true } } },
           take: 20,
         }),
         db.plan.findMany({
-          where: { timeframe: 'day', done: false, startDate: { gte: today, lte: endOfToday() } },
+          where: { userId: user.id, timeframe: 'day', done: false, startDate: { gte: today, lte: endOfToday() } },
           orderBy: { createdAt: 'asc' },
           take: 10,
         }),
         db.goal.findMany({
-          where: { status: 'active' },
+          where: { userId: user.id, status: 'active' },
           include: { milestones: { orderBy: { order: 'asc' } } },
         }),
-        db.newsArticle.findMany({ orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }], take: 5 }),
-        db.document.findMany({ where: { status: 'reading' }, orderBy: { lastReadAt: 'desc' }, take: 4 }),
-        db.flashcard.count({ where: { dueAt: { lte: now } } }),
-        db.focusSession.findMany({ where: { startedAt: { gte: today } } }),
-        db.readingSession.aggregate({ where: { day: { gte: today } }, _sum: { minutes: true } }),
+        db.newsArticle.findMany({ where: { userId: user.id }, orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }], take: 5 }),
+        db.document.findMany({ where: { userId: user.id, status: 'reading' }, orderBy: { lastReadAt: 'desc' }, take: 4 }),
+        db.flashcard.count({ where: { userId: user.id, dueAt: { lte: now } } }),
+        db.focusSession.findMany({ where: { userId: user.id, startedAt: { gte: today } } }),
+        db.readingSession.aggregate({ where: { userId: user.id, day: { gte: today } }, _sum: { minutes: true } }),
         db.opportunity.findMany({
-          where: { status: { in: ['saved', 'applied', 'interview'] }, deadline: { not: null } },
+          where: { userId: user.id, status: { in: ['saved', 'applied', 'interview'] }, deadline: { not: null } },
           orderBy: { deadline: 'asc' },
           take: 6,
         }),
-        db.task.count({ where: { status: 'done', completedAt: { gte: today, lte: endOfToday() } } }),
+        db.task.count({ where: { userId: user.id, status: 'done', completedAt: { gte: today, lte: endOfToday() } } }),
       ])
 
     // deadlines: tasks + opportunity deadlines + goal deadlines in next 7 days
     const upcomingTasks = await db.task.findMany({
-      where: { status: { not: 'done' }, dueDate: { gte: endOfToday(), lte: in7 } },
+      where: { userId: user.id, status: { not: 'done' }, dueDate: { gte: endOfToday(), lte: in7 } },
       orderBy: { dueDate: 'asc' },
       take: 8,
     })
     const overdueTasks = await db.task.findMany({
-      where: { status: { not: 'done' }, dueDate: { lt: today } },
+      where: { userId: user.id, status: { not: 'done' }, dueDate: { lt: today } },
       orderBy: { dueDate: 'asc' },
       take: 8,
     })
@@ -133,7 +137,7 @@ export async function GET() {
 
     // Briefing: next best task = open task soonest due, prefer high priority
     const allOpen = await db.task.findMany({
-      where: { status: { not: 'done' } },
+      where: { userId: user.id, status: { not: 'done' } },
       orderBy: [{ dueDate: 'asc' }],
       take: 50,
     })
@@ -168,8 +172,7 @@ export async function GET() {
     const totalToday = todayTasks.length + doneTodayCount
 
     // greeting prefers the signed-in account, falls back to the profile setting
-    const user = await getSessionUser()
-    const firstName = user?.name.split(' ')[0]
+    const firstName = user.name.split(' ')[0]
 
     return NextResponse.json({
       greetingName: firstName ?? setting?.name ?? 'there',
@@ -185,7 +188,7 @@ export async function GET() {
         atRiskGoals: atRisk,
         focusMinutesToday,
         readMinutesToday: readingToday._sum.minutes ?? 0,
-        unreadNews: await db.newsArticle.count({ where: { read: false } }),
+        unreadNews: await db.newsArticle.count({ where: { userId: user.id, read: false } }),
         tasksDoneToday: doneTodayCount,
         tasksTotalToday: totalToday,
         streakBest: goals.reduce((max, g) => Math.max(max, g.streak), 0),

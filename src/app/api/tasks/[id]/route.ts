@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getSessionUser, unauthorized } from '@/lib/auth-server'
 
 // PATCH /api/tasks/[id] — update / complete / snooze / reschedule / log focus
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
     const { id } = await params
     const body = await req.json()
     const data: Record<string, unknown> = {}
@@ -16,7 +20,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
     if ('estimate' in body) data.estimate = body.estimate
     if ('order' in body) data.order = body.order
-    if ('planId' in body) data.planId = body.planId
+    if ('planId' in body) {
+      // re-assigning to a plan requires that plan to belong to the user
+      if (body.planId) {
+        const plan = await db.plan.findFirst({ where: { id: body.planId, userId: user.id } })
+        if (!plan) return NextResponse.json({ error: 'Plan not found' }, { status: 400 })
+      }
+      data.planId = body.planId
+    }
     if ('snooze' in body) {
       // snooze: push dueDate to tomorrow (or by N days)
       const days = typeof body.snooze === 'number' ? body.snooze : 1
@@ -26,9 +37,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
     if ('dueDate' in body) data.dueDate = body.dueDate ? new Date(body.dueDate) : null
     if ('focusDelta' in body) {
-      const task = await db.task.findUnique({ where: { id } })
+      const task = await db.task.findFirst({ where: { id, userId: user.id } })
       data.focusMinutes = (task?.focusMinutes ?? 0) + Number(body.focusDelta || 0)
     }
+
+    const existing = await db.task.findFirst({ where: { id, userId: user.id }, select: { id: true } })
+    if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
     const task = await db.task.update({
       where: { id },
@@ -45,7 +59,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 // DELETE /api/tasks/[id]
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
     const { id } = await params
+    const existing = await db.task.findFirst({ where: { id, userId: user.id }, select: { id: true } })
+    if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     await db.task.delete({ where: { id } })
     return NextResponse.json({ ok: true })
   } catch (e) {

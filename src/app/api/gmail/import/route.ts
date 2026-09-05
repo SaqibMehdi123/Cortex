@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getAccessToken, googleGet } from '@/lib/google'
+import { getSessionUser, unauthorized } from '@/lib/auth-server'
 
 export const maxDuration = 120
 
@@ -18,13 +19,16 @@ interface GmailMessage {
   }
 }
 
-// POST /api/gmail/import — read recent emails via Gmail API, let the AI
-// classify the career-related ones (opportunity / rejection / interview /
-// offer / deadline) and upsert them as Opportunities. Re-importing is safe:
-// Gmail message ids are stored on each opportunity for dedupe.
+// POST /api/gmail/import — read recent emails via Gmail API for the signed-in
+// user's connected Google account, let the AI classify the career-related ones
+// (opportunity / rejection / interview / offer / deadline) and upsert them as
+// Opportunities. Re-importing is safe: Gmail message ids are stored per user.
 export async function POST() {
   try {
-    const token = await getAccessToken()
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
+    const token = await getAccessToken(user.id)
     if (!token) {
       return NextResponse.json(
         { error: 'Gmail is not connected (or the token expired). Reconnect your Google account in Settings.', needsReconnect: true },
@@ -34,7 +38,8 @@ export async function POST() {
 
     // 1) List the last 25 inbox messages from the past 60 days
     const list = await googleGet<GmailListResponse>(
-      'https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=25&q=in%3Ainbox%20newer_than%3A60d'
+      'https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=25&q=in%3Ainbox%20newer_than%3A60d',
+      user.id
     )
     const ids = list?.messages?.map((m) => m.id) ?? []
     if (ids.length === 0) {
@@ -45,7 +50,8 @@ export async function POST() {
     const messages = await Promise.all(
       ids.map((id) =>
         googleGet<GmailMessage>(
-          `https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`
+          `https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`,
+          user.id
         )
       )
     )
@@ -64,8 +70,11 @@ export async function POST() {
       })
       .filter((e) => e.from)
 
-    // Skip anything already imported (by gmailId)
-    const existing = await db.opportunity.findMany({ where: { gmailId: { in: emails.map((e) => e.id) } }, select: { gmailId: true } })
+    // Skip anything this user already imported (by gmailId)
+    const existing = await db.opportunity.findMany({
+      where: { userId: user.id, gmailId: { in: emails.map((e) => e.id) } },
+      select: { gmailId: true },
+    })
     const existingSet = new Set(existing.map((e) => e.gmailId))
     const candidates = emails.filter((e) => !existingSet.has(e.id))
     if (candidates.length === 0) {
@@ -116,22 +125,29 @@ export async function POST() {
       if (!c?.relevant) continue
       const email = candidates[Number(c.n) - 1]
       if (!email) continue
-      await db.opportunity.upsert({
-        where: { gmailId: email.id },
-        update: { classification: c.classification ?? 'opportunity', nextAction: c.nextAction || null },
-        create: {
-          company: (c.company || email.from || 'Unknown').slice(0, 120),
-          role: (c.role || email.subject).slice(0, 160),
-          type: c.type || 'job',
-          classification: c.classification || 'opportunity',
-          sender: email.from,
-          source: 'gmail',
-          url: null,
-          status: c.classification === 'interview' ? 'interview' : c.classification === 'offer' ? 'offer' : c.classification === 'rejection' ? 'rejected' : 'saved',
-          nextAction: c.nextAction || null,
-          gmailId: email.id,
-        },
-      })
+      const prior = await db.opportunity.findFirst({ where: { userId: user.id, gmailId: email.id } })
+      if (prior) {
+        await db.opportunity.update({
+          where: { id: prior.id },
+          data: { classification: c.classification ?? 'opportunity', nextAction: c.nextAction || null },
+        })
+      } else {
+        await db.opportunity.create({
+          data: {
+            userId: user.id,
+            company: (c.company || email.from || 'Unknown').slice(0, 120),
+            role: (c.role || email.subject).slice(0, 160),
+            type: c.type || 'job',
+            classification: c.classification || 'opportunity',
+            sender: email.from,
+            source: 'gmail',
+            url: null,
+            status: c.classification === 'interview' ? 'interview' : c.classification === 'offer' ? 'offer' : c.classification === 'rejection' ? 'rejected' : 'saved',
+            nextAction: c.nextAction || null,
+            gmailId: email.id,
+          },
+        })
+      }
       imported++
     }
 

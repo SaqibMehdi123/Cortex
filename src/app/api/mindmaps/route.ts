@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getSessionUser, unauthorized } from '@/lib/auth-server'
 
-// GET /api/mindmaps — all maps with parsed nodes
+// GET /api/mindmaps — the signed-in user's maps with parsed nodes
 export async function GET() {
   try {
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
     const maps = await db.mindMap.findMany({
+      where: { userId: user.id },
       orderBy: { updatedAt: 'desc' },
       include: { goal: { select: { id: true, title: true, color: true } } },
     })
@@ -20,12 +25,22 @@ export async function GET() {
 // POST /api/mindmaps — create map
 export async function POST(req: NextRequest) {
   try {
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
     const body = await req.json()
     const { title, goalId, nodes } = body
+    let safeGoalId: string | null = null
+    if (goalId) {
+      const goal = await db.goal.findFirst({ where: { id: goalId, userId: user.id } })
+      if (!goal) return NextResponse.json({ error: 'Goal not found' }, { status: 400 })
+      safeGoalId = goal.id
+    }
     const map = await db.mindMap.create({
       data: {
+        userId: user.id,
         title: title?.trim() || 'Untitled map',
-        goalId: goalId || null,
+        goalId: safeGoalId,
         nodes: JSON.stringify(Array.isArray(nodes) ? nodes : []),
       },
       include: { goal: { select: { id: true, title: true, color: true } } },

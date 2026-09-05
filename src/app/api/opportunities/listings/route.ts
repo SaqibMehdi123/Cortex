@@ -1,17 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getSessionUser, unauthorized } from '@/lib/auth-server'
 
 // GET /api/opportunities/listings?type=&source=&q=&saved=1
-// Fetched listings from external sources, with filters + counts for the Discover tab.
+// The signed-in user's fetched listings, with filters + counts for the Discover tab.
 export async function GET(req: NextRequest) {
   try {
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
     const { searchParams } = new URL(req.url)
     const type = searchParams.get('type')
     const source = searchParams.get('source')
     const q = searchParams.get('q')?.trim()
     const saved = searchParams.get('saved')
 
-    const where: Record<string, unknown> = {}
+    const where: Record<string, unknown> = { userId: user.id }
     if (type && ['job', 'internship', 'research'].includes(type)) where.type = type
     if (source) where.source = source
     if (saved === '1' || saved === '0') where.saved = saved === '1'
@@ -29,9 +33,9 @@ export async function GET(req: NextRequest) {
         orderBy: [{ saved: 'desc' }, { publishedAt: 'desc' }, { fetchedAt: 'desc' }],
         take: 300,
       }),
-      db.jobListing.count(),
-      db.jobListing.groupBy({ by: ['type'], _count: { _all: true } }),
-      db.jobListing.groupBy({ by: ['source'], _count: { _all: true } }),
+      db.jobListing.count({ where: { userId: user.id } }),
+      db.jobListing.groupBy({ by: ['type'], where: { userId: user.id }, _count: { _all: true } }),
+      db.jobListing.groupBy({ by: ['source'], where: { userId: user.id }, _count: { _all: true } }),
     ])
 
     return NextResponse.json({

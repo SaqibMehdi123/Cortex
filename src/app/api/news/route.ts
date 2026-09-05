@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getSessionUser, unauthorized } from '@/lib/auth-server'
 
-// GET /api/news?category=&saved=&source=&q=&range=day|week|month|year
+// GET /api/news?category=&saved=&source=&q=&range=day|week|month|year — the user's feed
 export async function GET(req: NextRequest) {
   try {
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
     const { searchParams } = new URL(req.url)
     const category = searchParams.get('category')
     const saved = searchParams.get('saved')
@@ -11,7 +15,7 @@ export async function GET(req: NextRequest) {
     const q = searchParams.get('q')?.trim()
     const range = searchParams.get('range')
 
-    const where: Record<string, unknown> = {}
+    const where: Record<string, unknown> = { userId: user.id }
     if (category && category !== 'all') where.category = category
     if (saved === '1') where.saved = true
     if (source && source !== 'all') where.source = source
@@ -30,7 +34,7 @@ export async function GET(req: NextRequest) {
         orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
         take: 150,
       }),
-      db.newsArticle.groupBy({ by: ['source'], _count: { _all: true } }),
+      db.newsArticle.groupBy({ by: ['source'], where: { userId: user.id }, _count: { _all: true } }),
     ])
 
     return NextResponse.json({

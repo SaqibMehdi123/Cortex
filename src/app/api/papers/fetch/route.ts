@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import Parser from 'rss-parser'
 import { db } from '@/lib/db'
 import { analyzePaper } from '@/lib/paper-analysis'
+import { getSessionUser, unauthorized } from '@/lib/auth-server'
 
 export const maxDuration = 60
 
@@ -20,13 +21,17 @@ const MAX_AGE_DAYS = 30
 // POST /api/papers/fetch — pull REAL research papers from Hugging Face Daily
 // Papers + the arXiv announcement API (paperswithcode.com was sunset in 2025
 // and redirects to Hugging Face, which now hosts the paper+code index).
+// Each account keeps its own paper feed (per-user dedupe + saved state).
 export async function POST() {
   try {
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
     const collected = new Map<string, {
       arxivId: string
       title: string
-      authors: string
-      abstract: string
+      authors: string | null
+      abstract: string | null
       url: string
       pdfUrl: string
       source: string
@@ -114,9 +119,9 @@ export async function POST() {
       return NextResponse.json({ ok: true, totalNew: 0, message: 'No papers returned from Hugging Face or arXiv right now.' })
     }
 
-    // Dedupe against DB
+    // Dedupe against this user's existing feed
     const existing = await db.paper.findMany({
-      where: { arxivId: { in: Array.from(collected.keys()) } },
+      where: { userId: user.id, arxivId: { in: Array.from(collected.keys()) } },
       select: { arxivId: true },
     })
     const existingSet = new Set(existing.map((e) => e.arxivId))
@@ -126,7 +131,7 @@ export async function POST() {
     fresh.sort((a, b) => b.upvotes - a.upvotes)
 
     for (const p of fresh) {
-      await db.paper.create({ data: p })
+      await db.paper.create({ data: { ...p, userId: user.id } })
     }
 
     // Auto-analyze top 3 papers so the "what problem / what innovation" cards
@@ -134,7 +139,7 @@ export async function POST() {
     let analyzed = 0
     for (const p of fresh.slice(0, 3)) {
       try {
-        const stored = await db.paper.findUnique({ where: { arxivId: p.arxivId } })
+        const stored = await db.paper.findFirst({ where: { userId: user.id, arxivId: p.arxivId } })
         if (stored) {
           await analyzePaper(stored.id)
           analyzed++

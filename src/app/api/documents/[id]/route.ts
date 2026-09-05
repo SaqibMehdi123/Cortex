@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getSessionUser, unauthorized } from '@/lib/auth-server'
 
 // GET /api/documents/[id] — full document with highlights and chat
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
     const { id } = await params
-    const document = await db.document.findUnique({
-      where: { id },
+    const document = await db.document.findFirst({
+      where: { id, userId: user.id },
       include: {
         highlights: { orderBy: { position: 'asc' } },
       },
@@ -22,7 +26,13 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 // PATCH /api/documents/[id] — update fields
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
     const { id } = await params
+    const existing = await db.document.findFirst({ where: { id, userId: user.id }, select: { id: true } })
+    if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
     const body = await req.json()
     const allowed = ['title', 'author', 'type', 'source', 'notes', 'content', 'status', 'progress', 'tags', 'summary', 'takeaways'] as const
 
@@ -44,8 +54,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 // DELETE /api/documents/[id]
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
     const { id } = await params
-    const existing = await db.document.findUnique({ where: { id }, select: { filePath: true } })
+    const existing = await db.document.findFirst({
+      where: { id, userId: user.id },
+      select: { filePath: true },
+    })
+    if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     await db.document.delete({ where: { id } })
     // clean up the stored PDF from disk
     if (existing?.filePath) {

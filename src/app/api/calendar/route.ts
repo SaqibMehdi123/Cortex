@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { googleGet } from '@/lib/google'
+import { getSessionUser, unauthorized } from '@/lib/auth-server'
 
 interface GEvent {
   id: string
@@ -10,12 +11,16 @@ interface GEvent {
   location?: string
 }
 
-// GET /api/calendar — upcoming Google Calendar events (next 30 days).
+// GET /api/calendar — the signed-in user's upcoming Google Calendar events (next 30 days).
 export async function GET() {
   try {
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
     const timeMin = new Date().toISOString()
     const events = await googleGet<{ items?: GEvent[] }>(
-      `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(timeMin)}&maxResults=20&singleEvents=true&orderBy=startTime`
+      `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(timeMin)}&maxResults=20&singleEvents=true&orderBy=startTime`,
+      user.id
     )
     if (events === null) {
       return NextResponse.json(

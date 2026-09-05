@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { promises as fs } from 'fs'
 import path from 'path'
 import { db } from '@/lib/db'
+import { getSessionUser, unauthorized } from '@/lib/auth-server'
 
 // GET /api/documents/[id]/file — stream the ORIGINAL uploaded PDF back to the
 // browser so it can be rendered by the native PDF viewer inside an iframe
@@ -9,8 +10,14 @@ import { db } from '@/lib/db'
 // viewer renders without any CORS or X-Frame-Options trouble.
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
     const { id } = await params
-    const doc = await db.document.findUnique({ where: { id }, select: { filePath: true, fileName: true, fileSize: true } })
+    const doc = await db.document.findFirst({
+      where: { id, userId: user.id },
+      select: { filePath: true, fileName: true, fileSize: true },
+    })
     if (!doc?.filePath) {
       return NextResponse.json({ error: 'No file attached to this document' }, { status: 404 })
     }

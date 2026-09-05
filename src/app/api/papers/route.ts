@@ -1,16 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getSessionUser, unauthorized } from '@/lib/auth-server'
 
-// GET /api/papers?range=day|week|month|year&q=&saved=&sort=upvotes|date
+// GET /api/papers?range=day|week|month|year&q=&saved=&sort=upvotes|date — the user's paper feed
 export async function GET(req: NextRequest) {
   try {
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
     const { searchParams } = new URL(req.url)
     const q = searchParams.get('q')?.trim()
     const range = searchParams.get('range')
     const saved = searchParams.get('saved')
     const sort = searchParams.get('sort') ?? 'date'
 
-    const where: Record<string, unknown> = {}
+    const where: Record<string, unknown> = { userId: user.id }
     if (saved === '1') where.saved = true
     if (q) where.OR = [{ title: { contains: q } }, { abstract: { contains: q } }, { authors: { contains: q } }]
     if (range && range !== 'all') {
