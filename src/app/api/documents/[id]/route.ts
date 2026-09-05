@@ -1,22 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
-// PATCH /api/documents/[id] — update reading item
-export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+// GET /api/documents/[id] — full document with highlights and chat
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = await ctx.params
+    const { id } = await params
+    const document = await db.document.findUnique({
+      where: { id },
+      include: {
+        highlights: { orderBy: { position: 'asc' } },
+      },
+    })
+    if (!document) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    return NextResponse.json({ document })
+  } catch (e) {
+    console.error('GET /api/documents/[id] error', e)
+    return NextResponse.json({ error: 'Failed to load document' }, { status: 500 })
+  }
+}
+
+// PATCH /api/documents/[id] — update fields
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params
     const body = await req.json()
+    const allowed = ['title', 'author', 'type', 'source', 'notes', 'content', 'status', 'progress', 'tags', 'summary', 'takeaways'] as const
 
     const data: Record<string, unknown> = {}
-    const allowed = ['title', 'author', 'type', 'source', 'notes', 'content', 'status', 'tags'] as const
     for (const key of allowed) {
-      if (key in body) data[key] = body[key] === '' ? null : body[key]
+      if (key in body) data[key] = body[key]
     }
-    if ('progress' in body) {
-      data.progress = Math.min(100, Math.max(0, Math.round(Number(body.progress) || 0)))
-    }
-    // keep progress consistent with status
-    if (body.status === 'finished') data.progress = 100
+    if (typeof data.progress === 'number') data.progress = Math.min(100, Math.max(0, Math.round(data.progress)))
+    if (data.status === 'reading') data.lastReadAt = new Date()
 
     const document = await db.document.update({ where: { id }, data })
     return NextResponse.json({ document })
@@ -27,9 +42,9 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
 }
 
 // DELETE /api/documents/[id]
-export async function DELETE(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = await ctx.params
+    const { id } = await params
     await db.document.delete({ where: { id } })
     return NextResponse.json({ ok: true })
   } catch (e) {

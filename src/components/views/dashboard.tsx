@@ -1,225 +1,343 @@
 'use client'
 
-import { useApi, fmtDate, daysUntil } from '@/lib/client'
-import type { DashboardData } from '@/lib/types'
-import type { ViewKey } from '@/components/app-shell'
-import { PageHeader, StatCard, LabeledProgress, EmptyState, LoadingBlock, ErrorBlock, paletteOf, Tone } from '@/components/shared'
+import { useState } from 'react'
+import { api, todayISO, fmtDate } from '@/lib/client'
+import { useUI } from '@/lib/nav-config'
+import type { DashboardData, Task } from '@/lib/types'
+import { useApi } from '@/lib/client'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { ProgressRing, SwipeTaskRow, PriorityDot, EmptyState, SkeletonCard, colorHex } from '@/components/shared'
+import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
-import { api } from '@/lib/client'
-import { BookOpen, Newspaper, Briefcase, ListTodo, ArrowRight, CheckCircle2 } from 'lucide-react'
+import { Progress } from '@/components/ui/progress'
+import { Sparkles, BookOpen, Newspaper, CalendarClock, Layers, Flame, Zap, AlertTriangle, Clock3, Sun, Moon as MoonIcon, Sunset, Target, ChevronRight, Timer } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useToast } from '@/hooks/use-toast'
+import { fireConfetti } from '@/lib/confetti'
 
-export function DashboardView({ onNavigate }: { onNavigate: (v: ViewKey) => void }) {
-  const { data, loading, error, reload } = useApi<DashboardData>('/api/dashboard')
+function greeting() {
+  const h = new Date().getHours()
+  if (h < 5) return { text: 'Burning the midnight oil', icon: <MoonIcon className="h-4 w-4" /> }
+  if (h < 12) return { text: 'Good morning', icon: <Sun className="h-4 w-4" /> }
+  if (h < 18) return { text: 'Good afternoon', icon: <Sun className="h-4 w-4" /> }
+  return { text: 'Good evening', icon: <Sunset className="h-4 w-4" /> }
+}
 
-  if (loading) {
+export function DashboardView() {
+  const setView = useUI((s) => s.setView)
+  const openReader = useUI((s) => s.openReader)
+  const setCopilotOpen = useUI((s) => s.setCopilotOpen)
+  const setFocusTask = useUI((s) => s.setFocusTask)
+  const { toast } = useToast()
+  const { data, loading, setData } = useApi<DashboardData>('/api/dashboard')
+  const [completingIds, setCompletingIds] = useState<Set<string>>(new Set())
+
+  const g = greeting()
+
+  async function toggleTask(t: Task) {
+    const done = t.status === 'done'
+    try {
+      const { task } = await api.patch<{ task: Task }>(`/api/tasks/${t.id}`, { status: done ? 'todo' : 'done' })
+      if (data) {
+        if (!done) {
+          // completed — remove from today list
+          setData({ ...data, briefing: { ...data.briefing, tasksDoneToday: data.briefing.tasksDoneToday + 1 }, todayTasks: data.todayTasks.filter((x) => x.id !== t.id) })
+          if (data.briefing.nextBestTask?.id === t.id) fireConfetti(50)
+        }
+      }
+      setCompletingIds((prev) => new Set(prev).add(t.id))
+      void task
+    } catch {
+      toast({ title: 'Could not update task', variant: 'destructive' })
+    }
+  }
+
+  async function snoozeTask(t: Task) {
+    try {
+      await api.patch(`/api/tasks/${t.id}`, { snooze: 1, baseDue: t.dueDate ?? todayISO() })
+      if (data) setData({ ...data, todayTasks: data.todayTasks.filter((x) => x.id !== t.id) })
+      toast({ title: 'Snoozed to tomorrow' })
+    } catch {
+      toast({ title: 'Could not snooze task', variant: 'destructive' })
+    }
+  }
+
+  if (loading || !data) {
     return (
-      <div className="space-y-6">
-        <PageHeader title="Dashboard" subtitle="Your day at a glance" />
-        <LoadingBlock rows={5} />
+      <div className="space-y-4">
+        <SkeletonCard className="h-28" />
+        <div className="grid gap-4 md:grid-cols-2">
+          <SkeletonCard className="h-64" />
+          <SkeletonCard className="h-64" />
+        </div>
+        <SkeletonCard className="h-48" />
       </div>
     )
   }
-  if (error) return <ErrorBlock message={error} />
-  if (!data) return null
 
-  const now = new Date()
-  const dateLabel = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
-  const hours = now.getHours()
-  const greeting = hours < 12 ? 'Good morning' : hours < 18 ? 'Good afternoon' : 'Good evening'
-
-  async function togglePlan(id: string, done: boolean) {
-    await api.patch(`/api/plans/${id}`, { done })
-    reload()
-  }
+  const b = data.briefing
 
   return (
-    <div className="space-y-6">
-      <PageHeader title={`${greeting} 👋`} subtitle={`${dateLabel} — here is where things stand`}>
-        <Button variant="outline" size="sm" onClick={() => onNavigate('news')}>
-          <Newspaper className="mr-1.5 h-4 w-4" /> AI News
-        </Button>
-        <Button size="sm" onClick={() => onNavigate('goals')}>
-          <ListTodo className="mr-1.5 h-4 w-4" /> Plan your day
-        </Button>
-      </PageHeader>
-
-      {/* Stats row */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard
-          label="Reading now"
-          value={data.stats.totalDocs - data.stats.finishedDocs}
-          hint={`${data.stats.finishedDocs} finished`}
-          icon={<BookOpen className="h-4 w-4" />}
-        />
-        <StatCard label="Open plans" value={data.stats.openPlans} hint="across day / week / month" icon={<ListTodo className="h-4 w-4" />} />
-        <StatCard label="Unread AI news" value={data.stats.unreadNews} hint="from labs & companies" icon={<Newspaper className="h-4 w-4" />} />
-        <StatCard label="Active applications" value={data.stats.activeOpportunities} hint="internships & jobs" icon={<Briefcase className="h-4 w-4" />} />
+    <div className="anim-fade-up space-y-5 pb-8">
+      {/* Greeting */}
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            {g.icon}
+            {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+          </div>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">
+            {g.text}, {data.greetingName}
+          </h1>
+        </div>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Clock3 className="h-3.5 w-3.5" /> {b.readMinutesToday}m read · {b.focusMinutesToday}m focused today
+        </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Today's focus */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Today&apos;s focus</CardTitle>
-            <CardDescription>Daily plan items — check them off as you go</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {data.todayPlans.length === 0 ? (
-              <EmptyState
-                title="No open tasks for today"
-                hint="Add a few daily plans in Goals & Plans, and they will show up here."
-              />
-            ) : (
-              <ul className="space-y-2">
-                {data.todayPlans.slice(0, 6).map((p) => (
-                  <li key={p.id} className="flex items-start gap-3 rounded-lg border p-3">
-                    <Checkbox checked={p.done} onCheckedChange={() => togglePlan(p.id, !p.done)} className="mt-0.5" />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm">{p.title}</p>
-                      {p.goal && (
-                        <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
-                          <span className={cn('h-1.5 w-1.5 rounded-full', paletteOf(p.goal.color).dot)} />
-                          {p.goal.title}
-                        </p>
-                      )}
-                    </div>
-                  </li>
-                ))}
-              </ul>
+      {/* Copilot briefing card */}
+      <Card className="border-primary/25 bg-gradient-to-br from-sidebar-accent/60 to-card transition-shadow hover:shadow-soft">
+        <CardHeader className="flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <Sparkles className="h-4 w-4 text-primary" /> Daily briefing
+          </CardTitle>
+          <Button variant="ghost" size="sm" className="h-7 text-xs text-primary" onClick={() => setCopilotOpen(true)}>
+            Ask Copilot <ChevronRight className="h-3.5 w-3.5" />
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm">
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => setView('flashcards')} className="flex items-center gap-1.5 rounded-full border bg-card px-3 py-1.5 text-xs font-medium transition-colors hover:bg-muted">
+              <Layers className="h-3.5 w-3.5 text-primary" /> {b.dueFlashcards} flashcards due
+            </button>
+            <button onClick={() => setView('news')} className="flex items-center gap-1.5 rounded-full border bg-card px-3 py-1.5 text-xs font-medium transition-colors hover:bg-muted">
+              <Newspaper className="h-3.5 w-3.5 text-primary" /> {b.unreadNews} unread stories
+            </button>
+            {b.streakBest > 0 && (
+              <span className="flex items-center gap-1.5 rounded-full border bg-card px-3 py-1.5 text-xs font-medium">
+                <Flame className="h-3.5 w-3.5 text-warning" /> {b.streakBest}-day best streak
+              </span>
             )}
-            <Button variant="ghost" size="sm" className="mt-3" onClick={() => onNavigate('goals')}>
-              View all plans <ArrowRight className="ml-1 h-3.5 w-3.5" />
+            <span className="flex items-center gap-1.5 rounded-full border bg-card px-3 py-1.5 text-xs font-medium">
+              <Zap className="h-3.5 w-3.5 text-primary" /> {b.tasksDoneToday}/{b.tasksTotalToday} tasks today
+            </span>
+          </div>
+          {b.nextBestTask && (
+            <div className="flex items-start gap-2 rounded-lg bg-card p-3">
+              <Zap className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-muted-foreground">Next best task</p>
+                <p className="truncate font-medium">{b.nextBestTask.title}</p>
+              </div>
+            </div>
+          )}
+          {b.atRiskGoals.map((gr) => (
+            <button key={gr.id} onClick={() => setView('goals')} className="flex w-full items-start gap-2 rounded-lg bg-danger/5 p-3 text-left transition-colors hover:bg-danger/10">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-danger" />
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-danger">At-risk goal: {gr.title}</p>
+                <p className="text-xs text-muted-foreground">{gr.reason}</p>
+              </div>
+            </button>
+          ))}
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-5 lg:grid-cols-2">
+        {/* Today's timeline */}
+        <Card className="transition-shadow hover:shadow-soft">
+          <CardHeader className="flex-row items-center justify-between space-y-0 pb-3">
+            <CardTitle className="text-sm">Today&apos;s timeline</CardTitle>
+            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setView('plans')}>
+              Plans <ChevronRight className="h-3.5 w-3.5" />
             </Button>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {data.todayTasks.length === 0 && data.todayPlans.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">Nothing scheduled today. Enjoy the calm — or plan something.</p>
+            ) : (
+              <>
+                {data.todayPlans.map((p) => (
+                  <div key={p.id} className="flex items-center gap-2.5 rounded-lg border bg-muted/40 px-3 py-2 text-sm">
+                    <CalendarClock className="h-4 w-4 text-primary" />
+                    <span className="font-medium">{p.title}</span>
+                    <Badge variant="outline" className="ml-auto text-[10px]">plan</Badge>
+                  </div>
+                ))}
+                {data.todayTasks.map((t) => (
+                  <SwipeTaskRow key={t.id} task={t} onToggle={toggleTask} onSnooze={snoozeTask}>
+                    <div className={cn('flex items-start gap-3 px-3 py-2.5', completingIds.has(t.id) && 'opacity-40')}>
+                      <Checkbox
+                        checked={false}
+                        onCheckedChange={() => toggleTask(t)}
+                        aria-label={`Complete ${t.title}`}
+                        className="mt-0.5"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium">{t.title}</p>
+                        <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
+                          <PriorityDot priority={t.priority} />
+                          {t.dueDate && <span>{fmtDate(t.dueDate, { hour: 'numeric', minute: '2-digit' })}</span>}
+                          <span>~{t.estimate}m</span>
+                          {t.goal && (
+                            <span className="inline-flex items-center gap-1">
+                              <Target className="h-3 w-3" style={{ color: colorHex(t.goal.color) }} /> {t.goal.title}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setFocusTask({ id: t.id, title: t.title, goalId: t.goalId })}
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-primary"
+                        aria-label={`Focus on ${t.title}`}
+                      >
+                        <Timer className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </SwipeTaskRow>
+                ))}
+                <p className="hidden pt-1 text-center text-[10px] text-muted-foreground sm:block lg:hidden xl:block">
+                  Swipe right to complete, left to snooze (touch devices)
+                </p>
+              </>
+            )}
           </CardContent>
         </Card>
 
-        {/* Goal progress */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Goal progress</CardTitle>
-            <CardDescription>
-              {data.stats.totalSteps > 0
-                ? `${data.stats.totalStepsDone}/${data.stats.totalSteps} milestone steps completed`
-                : 'Set a goal with steps to start tracking progress'}
-            </CardDescription>
+        {/* Progress rings */}
+        <Card className="transition-shadow hover:shadow-soft">
+          <CardHeader className="flex-row items-center justify-between space-y-0 pb-3">
+            <CardTitle className="text-sm">Active goals</CardTitle>
+            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setView('goals')}>
+              Goals <ChevronRight className="h-3.5 w-3.5" />
+            </Button>
           </CardHeader>
           <CardContent>
             {data.goals.length === 0 ? (
               <EmptyState
-                title="No active goals yet"
-                hint="Create a goal, break it into intermediary steps, and watch the progress bar move."
+                icon={<Target className="h-5 w-5" />}
+                title="No goals yet"
+                description="Set a goal with milestones and watch the rings fill as you progress."
+                action={{ label: 'Create your first goal', onClick: () => setView('goals') }}
               />
             ) : (
-              <div className="space-y-4">
-                {data.goals.slice(0, 4).map((g) => {
-                  const pal = paletteOf(g.color)
-                  return (
-                    <div key={g.id}>
-                      <div className="mb-1.5 flex items-center justify-between gap-2">
-                        <p className="flex items-center gap-2 truncate text-sm font-medium">
-                          <span className={cn('h-2 w-2 shrink-0 rounded-full', pal.dot)} />
-                          {g.title}
-                        </p>
-                        <Tone>{g.category}</Tone>
-                      </div>
-                      <LabeledProgress value={g.progress} />
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {g.stepsTotal > 0
-                          ? g.nextStep
-                            ? `Next: ${g.nextStep}`
-                            : 'All steps done 🎉'
-                          : 'No steps yet — add intermediary steps'}
-                        {g.deadline ? ` · due ${fmtDate(g.deadline, { month: 'short', day: 'numeric' })}` : ''}
-                      </p>
-                    </div>
-                  )
-                })}
+              <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-3 xl:grid-cols-4">
+                {data.goals.map((goal) => (
+                  <button key={goal.id} onClick={() => setView('goals')} className="group rounded-xl p-1 transition-transform active:scale-95">
+                    <ProgressRing
+                      value={goal.progress}
+                      color={colorHex(goal.color)}
+                      sublabel={
+                        <span className="inline-flex items-center gap-1">
+                          {goal.streak > 0 && <Flame className="h-3 w-3 text-warning" />}
+                          {goal.title}
+                        </span>
+                      }
+                    />
+                  </button>
+                ))}
               </div>
             )}
-            <Button variant="ghost" size="sm" className="mt-3" onClick={() => onNavigate('goals')}>
-              Manage goals <ArrowRight className="ml-1 h-3.5 w-3.5" />
-            </Button>
           </CardContent>
         </Card>
 
-        {/* Continue reading */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Continue reading</CardTitle>
-            <CardDescription>Pick up where you left off</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {data.documents.length === 0 ? (
-              <EmptyState
-                title="Nothing in progress"
-                hint="Add books, papers, articles or newsletters to your library and track reading progress."
-              />
-            ) : (
-              <ul className="space-y-3">
-                {data.documents.map((d) => (
-                  <li key={d.id}>
-                    <div className="mb-1 flex items-center justify-between gap-2">
-                      <p className="truncate text-sm font-medium">{d.title}</p>
-                      <Tone>{d.type}</Tone>
-                    </div>
-                    <LabeledProgress value={d.progress} />
-                  </li>
-                ))}
-              </ul>
-            )}
-            <Button variant="ghost" size="sm" className="mt-3" onClick={() => onNavigate('library')}>
-              Open library <ArrowRight className="ml-1 h-3.5 w-3.5" />
+        {/* News digest */}
+        <Card className="transition-shadow hover:shadow-soft">
+          <CardHeader className="flex-row items-center justify-between space-y-0 pb-3">
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <Newspaper className="h-4 w-4 text-primary" /> News digest
+            </CardTitle>
+            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setView('news')}>
+              Radar <ChevronRight className="h-3.5 w-3.5" />
             </Button>
+          </CardHeader>
+          <CardContent className="space-y-2.5">
+            {data.newsDigest.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">No stories yet — fetch the latest AI news.</p>
+            ) : (
+              data.newsDigest.map((n) => (
+                <a key={n.id} href={n.url} target="_blank" rel="noreferrer" className="group block rounded-lg p-2 transition-colors hover:bg-muted">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span className="font-semibold text-foreground">{n.source ?? 'Web'}</span>
+                    · {n.category}
+                  </div>
+                  <p className="mt-0.5 line-clamp-1 text-sm font-medium group-hover:text-primary">{n.title}</p>
+                  {n.summary && <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{n.summary}</p>}
+                </a>
+              ))
+            )}
           </CardContent>
         </Card>
 
-        {/* Opportunities */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Opportunities to act on</CardTitle>
-            <CardDescription>Internship & job updates that need attention</CardDescription>
+        {/* Deadlines */}
+        <Card className="transition-shadow hover:shadow-soft">
+          <CardHeader className="flex-row items-center justify-between space-y-0 pb-3">
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <CalendarClock className="h-4 w-4 text-primary" /> Deadlines
+            </CardTitle>
           </CardHeader>
-          <CardContent>
-            {data.opportunities.length === 0 ? (
-              <EmptyState
-                title="Nothing pending"
-                hint="Log emails about internships or jobs here so deadlines never slip by."
-              />
+          <CardContent className="space-y-2">
+            {data.deadlines.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">No deadlines in the next 7 days.</p>
             ) : (
-              <ul className="space-y-2">
-                {data.opportunities.map((o) => {
-                  const dLeft = daysUntil(o.deadline)
-                  const soon = dLeft !== null && dLeft >= 0 && dLeft <= 7
-                  return (
-                    <li key={o.id} className="flex items-center justify-between gap-3 rounded-lg border p-3">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium">
-                          {o.company} · {o.role}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          <Tone className="mr-1.5">{o.status}</Tone>
-                          {o.deadline ? `deadline ${fmtDate(o.deadline, { month: 'short', day: 'numeric' })}` : 'no deadline'}
-                        </p>
-                      </div>
-                      {soon && (
-                        <span className="flex items-center gap-1 rounded-md bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
-                          <CheckCircle2 className="h-3 w-3" /> {dLeft}d left
-                        </span>
-                      )}
-                    </li>
-                  )
-                })}
-              </ul>
+              data.deadlines.map((d) => (
+                <div key={d.kind + d.id} className="flex items-center gap-3 rounded-lg border px-3 py-2.5">
+                  <span
+                    className={cn(
+                      'h-2 w-2 shrink-0 rounded-full',
+                      d.daysLeft < 0 ? 'bg-danger' : d.daysLeft <= 2 ? 'bg-warning' : 'bg-success'
+                    )}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{d.title}</p>
+                    <p className="text-xs text-muted-foreground">{d.subtitle ?? (d.kind === 'task' ? 'Task' : d.kind === 'goal' ? 'Goal' : 'Application')}</p>
+                  </div>
+                  <Badge variant="outline" className={cn('shrink-0 text-[10px]', d.daysLeft < 0 && 'border-danger/50 text-danger', d.daysLeft >= 0 && d.daysLeft <= 2 && 'border-warning/50 text-warning')}>
+                    {d.daysLeft < 0 ? `${-d.daysLeft}d overdue` : d.daysLeft === 0 ? 'today' : `${d.daysLeft}d`}
+                  </Badge>
+                </div>
+              ))
             )}
-            <Button variant="ghost" size="sm" className="mt-3" onClick={() => onNavigate('opportunities')}>
-              Open tracker <ArrowRight className="ml-1 h-3.5 w-3.5" />
-            </Button>
           </CardContent>
         </Card>
       </div>
+
+      {/* Continue reading */}
+      {data.continueReading.length > 0 && (
+        <Card className="transition-shadow hover:shadow-soft">
+          <CardHeader className="flex-row items-center justify-between space-y-0 pb-3">
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <BookOpen className="h-4 w-4 text-primary" /> Continue reading
+            </CardTitle>
+            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setView('library')}>
+              Library <ChevronRight className="h-3.5 w-3.5" />
+            </Button>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {data.continueReading.map((doc) => (
+                <button
+                  key={doc.id}
+                  onClick={() => openReader(doc.id)}
+                  className="flex items-center gap-3 rounded-xl border p-3 text-left transition-all hover:shadow-soft active:scale-[0.99]"
+                >
+                  <div className="flex h-12 w-9 shrink-0 items-center justify-center rounded-md bg-gradient-to-br from-primary/70 to-teal-500/60 text-primary-foreground">
+                    <BookOpen className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{doc.title}</p>
+                    <div className="mt-1.5 flex items-center gap-2">
+                      <Progress value={doc.progress} className="h-1.5 w-full" />
+                      <span className="shrink-0 text-[10px] text-muted-foreground">{doc.progress}%</span>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }

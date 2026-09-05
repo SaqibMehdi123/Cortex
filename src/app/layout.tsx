@@ -1,7 +1,8 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Literata } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
+import { ThemeProvider } from "@/components/theme-provider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -13,20 +14,30 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const literata = Literata({
+  variable: "--font-literata",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  style: ["normal", "italic"],
+});
+
 export const metadata: Metadata = {
-  title: "Second Brain — Personal Knowledge Hub",
+  title: "Cortex — Personal Knowledge & Productivity Workspace",
   description:
-    "One coherent platform for everything you read, your goals and plans (day/week/month), fresh AI news, internship & job opportunities, and mindmaps — on laptop and mobile.",
-  keywords: ["Second Brain", "knowledge hub", "reading tracker", "AI news", "goals", "mindmap", "internship tracker"],
+    "One coherent workspace for your reading, documents, plans and goals, AI news radar, career pipeline, mindmaps, flashcards and an AI copilot — synced across laptop and mobile.",
+  keywords: ["Cortex", "second brain", "knowledge hub", "reading tracker", "AI news", "goals", "mindmap", "flashcards", "internship tracker"],
   icons: {
     icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
   },
-}
+};
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#10b981",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#6366F1" },
+    { media: "(prefers-color-scheme: dark)", color: "#0F0F10" },
+  ],
 };
 
 export default function RootLayout({
@@ -37,10 +48,12 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
+        className={`${geistSans.variable} ${geistMono.variable} ${literata.variable} antialiased bg-background text-foreground`}
       >
-        {children}
-        <Toaster />
+        <ThemeProvider>
+          {children}
+          <Toaster />
+        </ThemeProvider>
       </body>
     </html>
   );

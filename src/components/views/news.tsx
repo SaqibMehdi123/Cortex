@@ -1,280 +1,285 @@
 'use client'
 
-import { useState } from 'react'
-import { api, useApi, fmtDate } from '@/lib/client'
+import { useMemo, useState } from 'react'
+import { api, fmtDate } from '@/lib/client'
 import type { NewsArticle } from '@/lib/types'
-import { PageHeader, EmptyState, LoadingBlock, ErrorBlock, Tone } from '@/components/shared'
+import { useApi } from '@/lib/client'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
-import { toast } from '@/hooks/use-toast'
+import { EmptyState, SkeletonCard } from '@/components/shared'
+import { timeAgo } from '@/lib/timeago'
 import {
-  RefreshCw,
-  Newspaper,
-  ExternalLink,
-  Bookmark,
-  BookmarkCheck,
-  Trash2,
-  Plus,
-  Loader2,
-  Sparkles,
+  Radar, RefreshCw, BookmarkPlus, BookmarkCheck, ExternalLink, Settings2, Loader2, Plus, Trash2, Newspaper,
 } from 'lucide-react'
 
-const CATEGORIES = ['company', 'research', 'lab', 'newsletter', 'blog']
-const CATEGORY_TONE: Record<string, string> = {
-  company: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300',
-  research: 'bg-violet-100 text-violet-800 dark:bg-violet-950/60 dark:text-violet-300',
-  lab: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-950/60 dark:text-cyan-300',
-  newsletter: 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300',
-  blog: 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300',
+const CATEGORIES = [
+  { key: 'all', label: 'All' },
+  { key: 'company', label: 'Companies' },
+  { key: 'research', label: 'Research' },
+  { key: 'lab', label: 'Labs' },
+  { key: 'newsletter', label: 'Newsletters' },
+  { key: 'blog', label: 'Blogs' },
+]
+
+const SOURCE_HUES = [230, 173, 43, 142, 350, 262, 190, 20]
+
+function sourceAvatar(source: string | null) {
+  const name = source ?? 'Web'
+  let hash = 0
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0
+  const hue = SOURCE_HUES[hash % SOURCE_HUES.length]
+  return (
+    <span
+      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-bold text-white"
+      style={{ background: `hsl(${hue} 65% 55%)` }}
+      aria-hidden
+    >
+      {name.replace(/^www\./, '').charAt(0).toUpperCase()}
+    </span>
+  )
 }
 
 export function NewsView() {
-  const [filter, setFilter] = useState('all')
+  const { toast } = useToast()
   const [category, setCategory] = useState('all')
+  const [savedOnly, setSavedOnly] = useState(false)
+  const [recency, setRecency] = useState('all')
   const [fetching, setFetching] = useState(false)
-  const [addOpen, setAddOpen] = useState(false)
+  const [sourcesOpen, setSourcesOpen] = useState(false)
 
-  const { data, loading, error, reload } = useApi<{ articles: NewsArticle[] }>(
-    `/api/news?filter=${filter}`,
-    [filter]
+  const { data, loading, reload, setData } = useApi<{ articles: NewsArticle[] }>(
+    `/api/news?category=${category}${savedOnly ? '&saved=1' : ''}`
   )
-  const articles = data?.articles ?? []
-  const filtered = category === 'all' ? articles : articles.filter((a) => a.category === category)
-  const unread = articles.filter((a) => !a.read).length
+
+  const articles = useMemo(() => {
+    if (!data) return []
+    if (recency === 'all') return data.articles
+    const cutoff = Date.now() - (recency === '24h' ? 1 : recency === '3d' ? 3 : 7) * 86_400_000
+    return data.articles.filter((a) => !a.publishedAt || new Date(a.publishedAt).getTime() >= cutoff)
+  }, [data, recency])
 
   async function fetchNews() {
     setFetching(true)
     try {
-      const res = await api.post<{ totalNew: number }>('/api/news/fetch')
-      await reload()
-      toast({
-        title: res.totalNew > 0 ? `Found ${res.totalNew} new articles` : 'You are all caught up',
-        description: 'Fresh from AI labs, companies and researchers.',
-      })
-    } catch (e) {
-      toast({ title: e instanceof Error ? e.message : 'Fetch failed', variant: 'destructive' })
+      const r = await api.post<{ totalNew: number }>('/api/news/fetch')
+      toast({ title: `Fetched ${r.totalNew} new stories`, description: 'Summaries are attached to each article.' })
+      reload()
+    } catch {
+      toast({ title: 'News fetch failed', description: 'Try again in a moment.', variant: 'destructive' })
     } finally {
       setFetching(false)
     }
   }
 
-  async function markRead(a: NewsArticle) {
-    await api.patch(`/api/news/${a.id}`, { read: true })
-    reload()
-  }
-
   async function toggleSave(a: NewsArticle) {
-    await api.patch(`/api/news/${a.id}`, { saved: !a.saved })
-    reload()
+    const saved = !a.saved
+    setData({ articles: articles.map((x) => (x.id === a.id ? { ...x, saved } : x)) })
+    try {
+      await api.patch(`/api/news/${a.id}`, { saved })
+    } catch {
+      setData({ articles: articles.map((x) => (x.id === a.id ? { ...x, saved: !saved } : x)) })
+    }
   }
 
-  async function remove(id: string) {
-    await api.del(`/api/news/${id}`)
-    reload()
-  }
-
-  async function clearUnsaved() {
-    await api.del('/api/news')
-    reload()
-    toast({ title: 'Cleared feed (kept saved items)' })
+  async function markRead(a: NewsArticle) {
+    try {
+      await api.patch(`/api/news/${a.id}`, { read: true })
+      setData({ articles: articles.map((x) => (x.id === a.id ? { ...x, read: true } : x)) })
+    } catch {}
   }
 
   return (
-    <div className="space-y-5">
-      <PageHeader title="AI News" subtitle="What OpenAI, DeepMind, Anthropic, researchers & labs just shipped">
-        <Button variant="outline" size="sm" onClick={() => setAddOpen(true)}>
-          <Plus className="mr-1.5 h-4 w-4" /> Add article
-        </Button>
-        <Button size="sm" onClick={fetchNews} disabled={fetching}>
-          {fetching ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-1.5 h-4 w-4" />}
-          {fetching ? 'Scanning the web…' : 'Fetch latest news'}
-        </Button>
-      </PageHeader>
-
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <Tabs value={filter} onValueChange={setFilter}>
-          <TabsList>
-            <TabsTrigger value="all">
-              All
-            </TabsTrigger>
-            <TabsTrigger value="unread">
-              Unread {unread > 0 && <span className="ml-1 rounded-full bg-primary px-1.5 text-[10px] text-primary-foreground">{unread}</span>}
-            </TabsTrigger>
-            <TabsTrigger value="saved">Saved</TabsTrigger>
-          </TabsList>
-        </Tabs>
+    <div className="anim-fade-up space-y-4 pb-8">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
+            <Radar className="h-6 w-6 text-primary" /> News Radar
+          </h1>
+          <p className="text-sm text-muted-foreground">Labs, companies, researchers & newsletters — summarized in 3 lines.</p>
+        </div>
         <div className="flex items-center gap-2">
-          <Select value={category} onValueChange={setCategory}>
-            <SelectTrigger className="w-[140px]">
-              <SelectValue placeholder="Category" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All categories</SelectItem>
-              {CATEGORIES.map((c) => (
-                <SelectItem key={c} value={c} className="capitalize">{c}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {articles.length > 0 && (
-            <Button variant="ghost" size="sm" onClick={clearUnsaved} className="text-muted-foreground">
-              Clear feed
-            </Button>
-          )}
+          <Button variant="outline" size="sm" className="h-9" onClick={() => setSourcesOpen(true)}>
+            <Settings2 className="mr-1.5 h-4 w-4" /> Sources
+          </Button>
+          <Button size="sm" className="h-9" onClick={fetchNews} disabled={fetching}>
+            {fetching ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-1.5 h-4 w-4" />}
+            Fetch latest
+          </Button>
         </div>
       </div>
 
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-2">
+        {CATEGORIES.map((c) => (
+          <button
+            key={c.key}
+            onClick={() => setCategory(c.key)}
+            className={cn(
+              'min-h-[36px] rounded-full border px-3.5 text-xs font-medium transition-colors',
+              category === c.key ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted'
+            )}
+          >
+            {c.label}
+          </button>
+        ))}
+        <span className="mx-1 h-5 w-px bg-border" />
+        <button
+          onClick={() => setSavedOnly((v) => !v)}
+          className={cn(
+            'min-h-[36px] rounded-full border px-3.5 text-xs font-medium transition-colors',
+            savedOnly ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted'
+          )}
+        >
+          <BookmarkCheck className="mr-1 inline h-3.5 w-3.5" /> Saved
+        </button>
+        <div className="ml-auto">
+          <Select value={recency} onValueChange={setRecency}>
+            <SelectTrigger className="h-9 w-[130px] text-xs" aria-label="Recency filter">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Any time</SelectItem>
+              <SelectItem value="24h">Last 24h</SelectItem>
+              <SelectItem value="3d">Last 3 days</SelectItem>
+              <SelectItem value="7d">Last week</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* Feed */}
       {loading ? (
-        <LoadingBlock rows={5} />
-      ) : error ? (
-        <ErrorBlock message={error} />
-      ) : filtered.length === 0 ? (
+        <div className="space-y-3">
+          {[1, 2, 3].map((i) => <SkeletonCard key={i} className="h-32" />)}
+        </div>
+      ) : articles.length === 0 ? (
         <EmptyState
-          icon={<Newspaper className="h-8 w-8" />}
-          title={filter === 'saved' ? 'No saved articles' : 'Feed is empty'}
-          hint='Click "Fetch latest news" to scan the web for fresh AI announcements, papers and lab posts. Articles you save are kept.'
+          icon={<Newspaper className="h-5 w-5" />}
+          title="No stories here yet"
+          description="Hit “Fetch latest” to pull fresh AI news from OpenAI, DeepMind, Anthropic, arXiv and top newsletters — each comes with a 3-line summary."
+          action={{ label: 'Fetch latest now', onClick: fetchNews }}
         />
       ) : (
-        <div className="space-y-3">
-          {filtered.map((a) => (
-            <article
-              key={a.id}
-              className={cn(
-                'group rounded-xl border bg-card p-4 transition-colors hover:bg-muted/40',
-                !a.read && 'border-l-4 border-l-primary'
-              )}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <Tone className={cn('capitalize', CATEGORY_TONE[a.category] ?? '')}>
-                      {a.category}
-                    </Tone>
-                    {a.source && <span className="truncate text-xs text-muted-foreground">{a.source}</span>}
-                    {a.publishedAt && (
-                      <span className="text-xs text-muted-foreground">· {fmtDate(a.publishedAt, { month: 'short', day: 'numeric' })}</span>
-                    )}
+        <div className="grid gap-3 lg:grid-cols-2">
+          {articles.map((a) => (
+            <Card key={a.id} className={cn('group transition-all hover:shadow-soft', a.read && 'opacity-75')}>
+              <CardContent className="flex gap-3 p-4">
+                {sourceAvatar(a.source)}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span className="font-semibold text-foreground">{a.source ?? 'Web'}</span>
+                    <span>·</span>
+                    <span>{a.publishedAt ? timeAgo(a.publishedAt) : fmtDate(a.createdAt, { month: 'short', day: 'numeric' })}</span>
+                    {!a.read && <span className="h-1.5 w-1.5 rounded-full bg-primary" aria-label="Unread" />}
                   </div>
-                  <h3 className={cn('mt-1.5 text-sm font-medium leading-snug', a.read && 'text-muted-foreground')}>
-                    <a href={a.url} target="_blank" rel="noreferrer" className="hover:underline" onClick={() => markRead(a)}>
-                      {a.title}
-                    </a>
-                  </h3>
-                  {a.summary && <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{a.summary}</p>}
-                </div>
-                <div className="flex shrink-0 items-center gap-1">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 w-8 p-0"
-                    onClick={() => toggleSave(a)}
-                    aria-label={a.saved ? 'Unsave' : 'Save'}
+                  <a
+                    href={a.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={() => markRead(a)}
+                    className="mt-1 block text-sm font-semibold leading-snug transition-colors group-hover:text-primary"
                   >
-                    {a.saved ? <BookmarkCheck className="h-4 w-4 text-primary" /> : <Bookmark className="h-4 w-4" />}
-                  </Button>
-                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0" asChild>
-                    <a href={a.url} target="_blank" rel="noreferrer" aria-label="Open article">
-                      <ExternalLink className="h-4 w-4" />
-                    </a>
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 w-8 p-0 opacity-0 transition-opacity group-hover:opacity-100"
-                    onClick={() => remove(a.id)}
-                    aria-label="Delete"
-                  >
-                    <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
-                  </Button>
+                    {a.title}
+                  </a>
+                  {a.summary && <p className="mt-1.5 line-clamp-3 whitespace-pre-line text-xs leading-relaxed text-muted-foreground">{a.summary}</p>}
+                  <div className="mt-2.5 flex items-center gap-2">
+                    <Badge variant="outline" className="text-[10px] capitalize">{a.category}</Badge>
+                    <div className="ml-auto flex gap-1">
+                      <Button variant="ghost" size="icon" className="h-7 w-7" aria-label={a.saved ? 'Unsave' : 'Save to reading queue'} onClick={() => toggleSave(a)}>
+                        {a.saved ? <BookmarkCheck className="h-4 w-4 text-primary" /> : <BookmarkPlus className="h-4 w-4" />}
+                      </Button>
+                      <a href={a.url} target="_blank" rel="noreferrer" onClick={() => markRead(a)} aria-label="Open article">
+                        <Button variant="ghost" size="icon" className="h-7 w-7">
+                          <ExternalLink className="h-4 w-4" />
+                        </Button>
+                      </a>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </article>
+              </CardContent>
+            </Card>
           ))}
         </div>
       )}
 
-      <AddArticleDialog open={addOpen} onOpenChange={setAddOpen} onSaved={reload} />
+      <SourcesDialog open={sourcesOpen} onOpenChange={setSourcesOpen} />
     </div>
   )
 }
 
-function AddArticleDialog({
-  open,
-  onOpenChange,
-  onSaved,
-}: {
-  open: boolean
-  onOpenChange: (v: boolean) => void
-  onSaved: () => void
-}) {
-  const [form, setForm] = useState({ title: '', url: '', source: '', category: 'blog' })
-  const [saving, setSaving] = useState(false)
-
-  async function save() {
-    if (!form.title.trim() || !form.url.trim()) {
-      toast({ title: 'Title and URL are required', variant: 'destructive' })
-      return
-    }
-    setSaving(true)
-    try {
-      await api.post('/api/news', form)
-      onOpenChange(false)
-      setForm({ title: '', url: '', source: '', category: 'blog' })
-      onSaved()
-      toast({ title: 'Article saved' })
-    } catch (e) {
-      toast({ title: e instanceof Error ? e.message : 'Failed to save', variant: 'destructive' })
-    } finally {
-      setSaving(false)
-    }
-  }
+function SourcesDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+  const { data, reload } = useApi<{ sources: { id: string; name: string; url: string; type: string }[] }>(open ? '/api/sources' : null)
+  const [name, setName] = useState('')
+  const [url, setUrl] = useState('')
+  const [type, setType] = useState('blog')
+  const { toast } = useToast()
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Save an article</DialogTitle>
+          <DialogTitle>Custom sources</DialogTitle>
+          <DialogDescription>Add any blog, newsletter or X/Twitter account. The next fetch will include it.</DialogDescription>
         </DialogHeader>
-        <div className="grid gap-3 py-1">
-          <div className="grid gap-1.5">
-            <Label>Title *</Label>
-            <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
-          </div>
-          <div className="grid gap-1.5">
-            <Label>URL *</Label>
-            <Input value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} placeholder="https://…" />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="grid gap-1.5">
-              <Label>Source</Label>
-              <Input value={form.source} onChange={(e) => setForm({ ...form, source: e.target.value })} placeholder="e.g. OpenAI" />
-            </div>
-            <div className="grid gap-1.5">
-              <Label>Category</Label>
-              <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {CATEGORIES.map((c) => (
-                    <SelectItem key={c} value={c} className="capitalize">{c}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <p className="flex items-center gap-1.5 rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-            <Sparkles className="h-3.5 w-3.5 shrink-0" /> Tip: paste interesting articles here so they stay in your hub even if the feed moves on.
-          </p>
+        <div className="grid grid-cols-2 gap-2">
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name e.g. Simon Willison" aria-label="Source name" />
+          <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://…" aria-label="Source URL" />
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={save} disabled={saving}>
-            {saving && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />} Save
+        <div className="flex gap-2">
+          <Select value={type} onValueChange={setType}>
+            <SelectTrigger className="w-[140px]" aria-label="Source type">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="blog">Blog</SelectItem>
+              <SelectItem value="newsletter">Newsletter</SelectItem>
+              <SelectItem value="x">X / Twitter</SelectItem>
+              <SelectItem value="company">Company</SelectItem>
+              <SelectItem value="lab">Lab</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button
+            className="flex-1"
+            onClick={async () => {
+              if (!name.trim() || !url.trim()) return
+              try {
+                await api.post('/api/sources', { name: name.trim(), url: url.trim(), type })
+                setName(''); setUrl('')
+                reload()
+                toast({ title: 'Source added' })
+              } catch {
+                toast({ title: 'Failed to add source', variant: 'destructive' })
+              }
+            }}
+          >
+            <Plus className="mr-1.5 h-4 w-4" /> Add source
           </Button>
-        </DialogFooter>
+        </div>
+        <div className="max-h-[240px] space-y-1.5 overflow-y-auto scroll-thin">
+          {data?.sources.map((s) => (
+            <div key={s.id} className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
+              <span className="min-w-0 flex-1 truncate">
+                <b>{s.name}</b> <span className="text-xs text-muted-foreground">({s.type})</span>
+              </span>
+              <button
+                onClick={async () => {
+                  await api.del(`/api/sources/${s.id}`)
+                  reload()
+                }}
+                className="text-muted-foreground hover:text-danger"
+                aria-label="Remove source"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+          ))}
+        </div>
       </DialogContent>
     </Dialog>
   )

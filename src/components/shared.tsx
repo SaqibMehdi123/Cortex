@@ -1,122 +1,207 @@
 'use client'
 
 import { cn } from '@/lib/utils'
-import { Progress } from '@/components/ui/progress'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Button } from '@/components/ui/button'
+import { useRef, useState, useEffect, useSyncExternalStore, type ReactNode } from 'react'
+import { motion, useMotionValue, animate } from 'framer-motion'
+import { Check, Clock } from 'lucide-react'
+import { toast } from '@/hooks/use-toast'
+import type { Task } from '@/lib/types'
 
-// Goal / accent palette (no indigo/blue)
-export const PALETTE: Record<string, { dot: string; soft: string; text: string; bar: string }> = {
-  emerald: { dot: 'bg-emerald-500', soft: 'bg-emerald-100 dark:bg-emerald-950/60', text: 'text-emerald-700 dark:text-emerald-300', bar: 'bg-emerald-500' },
-  amber: { dot: 'bg-amber-500', soft: 'bg-amber-100 dark:bg-amber-950/60', text: 'text-amber-700 dark:text-amber-300', bar: 'bg-amber-500' },
-  rose: { dot: 'bg-rose-500', soft: 'bg-rose-100 dark:bg-rose-950/60', text: 'text-rose-700 dark:text-rose-300', bar: 'bg-rose-500' },
-  violet: { dot: 'bg-violet-500', soft: 'bg-violet-100 dark:bg-violet-950/60', text: 'text-violet-700 dark:text-violet-300', bar: 'bg-violet-500' },
-  cyan: { dot: 'bg-cyan-500', soft: 'bg-cyan-100 dark:bg-cyan-950/60', text: 'text-cyan-700 dark:text-cyan-300', bar: 'bg-cyan-500' },
-  orange: { dot: 'bg-orange-500', soft: 'bg-orange-100 dark:bg-orange-950/60', text: 'text-orange-700 dark:text-orange-300', bar: 'bg-orange-500' },
+// ─── Goal color palette ────────────────────────────────────────────
+export const GOAL_COLORS: Record<string, string> = {
+  indigo: '#6366F1',
+  teal: '#14B8A6',
+  emerald: '#22C55E',
+  amber: '#F59E0B',
+  rose: '#F43F5E',
+  violet: '#8B5CF6',
+  cyan: '#06B6D4',
+  zinc: '#71717A',
 }
 
-export function paletteOf(color?: string | null) {
-  return PALETTE[color ?? 'emerald'] ?? PALETTE.emerald
+export function colorHex(color?: string | null) {
+  return GOAL_COLORS[color ?? 'indigo'] ?? GOAL_COLORS.indigo
 }
 
-export function PageHeader({
-  title,
-  subtitle,
-  children,
-}: {
-  title: string
-  subtitle?: string
-  children?: React.ReactNode
-}) {
-  return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{title}</h1>
-        {subtitle && <p className="mt-0.5 text-sm text-muted-foreground">{subtitle}</p>}
-      </div>
-      {children && <div className="flex flex-wrap items-center gap-2">{children}</div>}
-    </div>
-  )
-}
-
-export function StatCard({
-  label,
+// ─── Progress ring (SVG) ───────────────────────────────────────────
+export function ProgressRing({
   value,
-  hint,
-  icon,
+  size = 64,
+  stroke = 6,
+  color = '#6366F1',
+  label,
+  sublabel,
 }: {
-  label: string
-  value: string | number
-  hint?: string
-  icon?: React.ReactNode
+  value: number
+  size?: number
+  stroke?: number
+  color?: string
+  label?: ReactNode
+  sublabel?: ReactNode
 }) {
+  const r = (size - stroke) / 2
+  const c = 2 * Math.PI * r
+  const pct = Math.min(100, Math.max(0, value))
   return (
-    <div className="rounded-xl border bg-card p-4">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-        {icon && <span className="text-muted-foreground">{icon}</span>}
+    <div className="flex flex-col items-center gap-1.5">
+      <div className="relative" style={{ width: size, height: size }}>
+        <svg width={size} height={size} className="-rotate-90" role="img" aria-label={`Progress ${pct}%`}>
+          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--muted)" strokeWidth={stroke} />
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={r}
+            fill="none"
+            stroke={color}
+            strokeWidth={stroke}
+            strokeLinecap="round"
+            strokeDasharray={c}
+            strokeDashoffset={c - (pct / 100) * c}
+            style={{ transition: 'stroke-dashoffset 500ms ease' }}
+          />
+        </svg>
+        <div className="absolute inset-0 flex items-center justify-center">
+          {label ?? <span className="text-sm font-semibold">{pct}%</span>}
+        </div>
       </div>
-      <p className="mt-1.5 text-2xl font-semibold tabular-nums">{value}</p>
-      {hint && <p className="mt-0.5 truncate text-xs text-muted-foreground">{hint}</p>}
+      {sublabel && <div className="max-w-[96px] truncate text-center text-xs text-muted-foreground">{sublabel}</div>}
     </div>
   )
 }
 
-export function LabeledProgress({ value, className }: { value: number; className?: string }) {
-  return (
-    <div className={cn('flex items-center gap-2', className)}>
-      <Progress value={value} className="h-2" />
-      <span className="w-9 text-right text-xs font-medium tabular-nums text-muted-foreground">{value}%</span>
-    </div>
-  )
-}
-
+// ─── Empty state that teaches ──────────────────────────────────────
 export function EmptyState({
   icon,
   title,
-  hint,
+  description,
+  action,
 }: {
-  icon?: React.ReactNode
+  icon: ReactNode
   title: string
-  hint?: string
+  description: string
+  action?: { label: string; onClick: () => void }
 }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed px-6 py-12 text-center">
-      {icon && <div className="mb-3 text-muted-foreground/60">{icon}</div>}
-      <p className="text-sm font-medium">{title}</p>
-      {hint && <p className="mt-1 max-w-sm text-xs text-muted-foreground">{hint}</p>}
+    <div className="anim-fade-up flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed bg-card/50 px-6 py-14 text-center">
+      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-sidebar-accent text-primary">{icon}</div>
+      <div>
+        <p className="font-semibold">{title}</p>
+        <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">{description}</p>
+      </div>
+      {action && (
+        <Button size="sm" onClick={action.onClick} className="mt-1">
+          {action.label}
+        </Button>
+      )}
     </div>
   )
 }
 
-export function LoadingBlock({ rows = 3 }: { rows?: number }) {
+// ─── Skeleton card ─────────────────────────────────────────────────
+export function SkeletonCard({ className }: { className?: string }) {
   return (
-    <div className="space-y-3">
-      {Array.from({ length: rows }).map((_, i) => (
-        <Skeleton key={i} className="h-16 w-full rounded-xl" />
-      ))}
+    <div className={cn('rounded-xl border bg-card p-5 space-y-3', className)}>
+      <Skeleton className="h-4 w-1/3" />
+      <Skeleton className="h-3 w-2/3" />
+      <Skeleton className="h-3 w-1/2" />
     </div>
   )
 }
 
-export function ErrorBlock({ message }: { message: string }) {
+// ─── Swipeable task row (mobile: right=complete, left=snooze) ─────
+export function SwipeTaskRow({
+  task,
+  onToggle,
+  onSnooze,
+  children,
+}: {
+  task: Task
+  onToggle: (t: Task) => void
+  onSnooze: (t: Task) => void
+  children: ReactNode
+}) {
+  const x = useMotionValue(0)
+  const [hint, setHint] = useState<'none' | 'done' | 'snooze'>('none')
+  const dragging = useRef(false)
+
   return (
-    <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-      {message}
+    <div className="relative overflow-hidden rounded-lg">
+      {/* action backgrounds */}
+      <div className="absolute inset-y-0 right-0 flex w-1/2 items-center justify-end bg-success/15 pr-4 text-success">
+        <Check className="h-5 w-5" />
+      </div>
+      <div className="absolute inset-y-0 left-0 flex w-1/2 items-center bg-warning/15 pl-4 text-warning">
+        <Clock className="h-5 w-5" />
+      </div>
+      <motion.div
+        drag="x"
+        dragConstraints={{ left: 0, right: 0 }}
+        dragElastic={0.35}
+        dragMomentum={false}
+        style={{ x }}
+        onDragStart={() => (dragging.current = true)}
+        onDrag={(_, info) => setHint(info.offset.x > 44 ? 'done' : info.offset.x < -44 ? 'snooze' : 'none')}
+        onDragEnd={(_, info) => {
+          dragging.current = false
+          setHint('none')
+          if (info.offset.x > 64 && task.status !== 'done') {
+            animate(x, 0, { duration: 0.15 })
+            onToggle(task)
+          } else if (info.offset.x < -64) {
+            animate(x, 0, { duration: 0.15 })
+            onSnooze(task)
+          } else {
+            animate(x, 0, { type: 'spring', stiffness: 400, damping: 30 })
+          }
+        }}
+        className={cn('relative rounded-lg border bg-card', hint === 'done' && 'ring-2 ring-success/50', hint === 'snooze' && 'ring-2 ring-warning/50')}
+      >
+        {children}
+      </motion.div>
     </div>
   )
 }
 
-// Small badge with consistent tone
-export function Tone({ children, className }: { children: React.ReactNode; className?: string }) {
+// ─── Priority dot & status helpers ─────────────────────────────────
+export function PriorityDot({ priority }: { priority: string }) {
   return (
     <span
-      className={cn(
-        'inline-flex items-center rounded-md px-1.5 py-0.5 text-[11px] font-medium capitalize',
-        'bg-muted text-muted-foreground',
-        className
-      )}
-    >
-      {children}
-    </span>
+      aria-label={`Priority ${priority}`}
+      className={cn('inline-block h-2 w-2 shrink-0 rounded-full', priority === 'high' ? 'bg-danger' : priority === 'med' ? 'bg-warning' : 'bg-muted-foreground/40')}
+    />
   )
+}
+
+// ─── Toast helper ──────────────────────────────────────────────────
+export function useToastHelper() {
+  return {
+    success: (title: string, description?: string) => toast({ title, description }),
+    error: (title: string, description?: string) => toast({ title, description, variant: 'destructive' }),
+  }
+}
+
+// ─── Keyboard shortcut hint chip ───────────────────────────────────
+export function Kbd({ children }: { children: ReactNode }) {
+  return <kbd className="rounded border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">{children}</kbd>
+}
+
+// hook: mounted (SSR-safe, no setState-in-effect)
+const emptySubscribe = () => () => {}
+export function useMounted() {
+  return useSyncExternalStore(emptySubscribe, () => true, () => false)
+}
+
+// hook: media query
+export function useMediaQuery(query: string) {
+  const [matches, setMatches] = useState(false)
+  useEffect(() => {
+    const mq = window.matchMedia(query)
+    const update = () => setMatches(mq.matches)
+    update()
+    mq.addEventListener('change', update)
+    return () => mq.removeEventListener('change', update)
+  }, [query])
+  return matches
 }

@@ -1,47 +1,115 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
-// GET /api/plans?timeframe=day|week|month — list plans
-export async function GET(req: NextRequest) {
+type PlanWithChildren = {
+  id: string
+  timeframe: string
+  title: string
+  notes: string | null
+  startDate: Date | null
+  endDate: Date | null
+  done: boolean
+  goalId: string | null
+  goal: { id: string; title: string; color: string } | null
+  parentId: string | null
+  tasks: {
+    id: string
+    title: string
+    status: string
+    priority: string
+    dueDate: Date | null
+    estimate: number
+    order: number
+    goalId: string | null
+    completedAt: Date | null
+  }[]
+  children: PlanWithChildren[]
+}
+
+function buildTree(plans: FlatPlan[]): PlanWithChildren[] {
+  const byId = new Map<string, PlanWithChildren>()
+  for (const p of plans) {
+    byId.set(p.id, { ...p, children: [] })
+  }
+  const roots: PlanWithChildren[] = []
+  for (const node of byId.values()) {
+    if (node.parentId && byId.has(node.parentId)) {
+      byId.get(node.parentId)!.children.push(node)
+    } else {
+      roots.push(node)
+    }
+  }
+  const sortRec = (nodes: PlanWithChildren[]) => {
+    nodes.sort((a, b) => a.timeframe.localeCompare(b.timeframe) || a.title.localeCompare(b.title))
+    nodes.forEach((n) => sortRec(n.children))
+  }
+  sortRec(roots)
+  return roots
+}
+
+type FlatPlan = {
+  id: string
+  timeframe: string
+  title: string
+  notes: string | null
+  startDate: Date | null
+  endDate: Date | null
+  done: boolean
+  goalId: string | null
+  goal: { id: string; title: string; color: string } | null
+  parentId: string | null
+  tasks: {
+    id: string
+    title: string
+    status: string
+    priority: string
+    dueDate: Date | null
+    estimate: number
+    order: number
+    goalId: string | null
+    completedAt: Date | null
+  }[]
+}
+
+// GET /api/plans — nested plan tree with tasks
+export async function GET() {
   try {
-    const { searchParams } = new URL(req.url)
-    const timeframe = searchParams.get('timeframe')
+    const plans = (await db.plan.findMany({
+      orderBy: { createdAt: 'asc' },
+      include: {
+        goal: { select: { id: true, title: true, color: true } },
+        tasks: {
+          orderBy: [{ dueDate: 'asc' }, { order: 'asc' }],
+        },
+      },
+    })) as unknown as FlatPlan[]
 
-    const where: Record<string, unknown> = {}
-    if (timeframe && timeframe !== 'all') where.timeframe = timeframe
-
-    const plans = await db.plan.findMany({
-      where,
-      orderBy: [{ done: 'asc' }, { createdAt: 'desc' }],
-      include: { goal: { select: { id: true, title: true, color: true } } },
-    })
-
-    return NextResponse.json({ plans })
+    return NextResponse.json({ plans: buildTree(plans) })
   } catch (e) {
     console.error('GET /api/plans error', e)
     return NextResponse.json({ error: 'Failed to load plans' }, { status: 500 })
   }
 }
 
-// POST /api/plans — create a plan item
+// POST /api/plans — create plan (optionally nested under a parent)
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { timeframe, title, notes, dueDate, goalId } = body
-
-    if (!title?.trim()) {
-      return NextResponse.json({ error: 'Title is required' }, { status: 400 })
-    }
+    const { title, timeframe, notes, startDate, endDate, goalId, parentId, done } = body
+    if (!title?.trim()) return NextResponse.json({ error: 'Title is required' }, { status: 400 })
 
     const plan = await db.plan.create({
       data: {
-        timeframe: timeframe || 'day',
         title: title.trim(),
-        notes: notes?.trim() || null,
-        dueDate: dueDate ? new Date(dueDate) : null,
+        timeframe: ['year', 'month', 'week', 'day'].includes(timeframe) ? timeframe : 'day',
+        notes: notes || null,
+        startDate: startDate ? new Date(startDate) : null,
+        endDate: endDate ? new Date(endDate) : null,
         goalId: goalId || null,
+        parentId: parentId || null,
+        done: Boolean(done),
       },
-      include: { goal: { select: { id: true, title: true, color: true } } },
+      include: { goal: { select: { id: true, title: true, color: true } }, tasks: true },
     })
 
     return NextResponse.json({ plan }, { status: 201 })

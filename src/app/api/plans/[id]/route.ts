@@ -1,24 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
-// PATCH /api/plans/[id]
-export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+// PATCH /api/plans/[id] — edit plan
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = await ctx.params
+    const { id } = await params
     const body = await req.json()
-
     const data: Record<string, unknown> = {}
-    for (const key of ['title', 'notes', 'timeframe'] as const) {
-      if (key in body) data[key] = body[key] === '' ? null : body[key]
+    for (const key of ['title', 'notes', 'timeframe', 'done'] as const) {
+      if (key in body) data[key] = body[key]
     }
-    if ('done' in body) data.done = Boolean(body.done)
-    if ('dueDate' in body) data.dueDate = body.dueDate ? new Date(body.dueDate) : null
+    if ('startDate' in body) data.startDate = body.startDate ? new Date(body.startDate) : null
+    if ('endDate' in body) data.endDate = body.endDate ? new Date(body.endDate) : null
     if ('goalId' in body) data.goalId = body.goalId || null
+    if ('parentId' in body) data.parentId = body.parentId || null
 
     const plan = await db.plan.update({
       where: { id },
       data,
-      include: { goal: { select: { id: true, title: true, color: true } } },
+      include: { goal: { select: { id: true, title: true, color: true } }, tasks: true },
     })
     return NextResponse.json({ plan })
   } catch (e) {
@@ -27,10 +27,10 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   }
 }
 
-// DELETE /api/plans/[id]
-export async function DELETE(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+// DELETE /api/plans/[id] — deletes subtree (children cascade)
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = await ctx.params
+    const { id } = await params
     await db.plan.delete({ where: { id } })
     return NextResponse.json({ ok: true })
   } catch (e) {

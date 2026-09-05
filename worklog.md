@@ -33,3 +33,23 @@ Stage Summary:
 - Cortex v2 spec persisted at /home/z/my-project/CORTEX_SPEC.md; it supersedes v1 scope
 - Current codebase remains the runnable v1 "Second Brain" app — untouched
 - NEXT STEP (pending user input): receive the design prompt, then rebuild/extend v1 to full Cortex scope strictly following that design (desktop + mobile breakpoints)
+
+---
+Task ID: 3
+Agent: Main agent (Super Z)
+Task: Build "Cortex" v2 — full rebuild of the app per CORTEX_SPEC.md, strictly following DESIGN_SPEC.md (Linear/Notion/Readwise-inspired design system)
+
+Work Log:
+- Saved design brief verbatim to /home/z/my-project/DESIGN_SPEC.md
+- Prisma schema v2: Document(+summary/takeaways/lastReadAt), Highlight, ChatMessage(+thread/citations), Note, Goal(+streak), Milestone (replaces Step), Task(+status/priority/estimate/focusMinutes), Plan (self-nested year/month/week/day), NewsArticle, CustomSource, Opportunity(+classification/resume/nextAction), MindMap(+node links), Flashcard(+SM-2 fields), ReviewLog, ReadingSession, FocusSession, Setting; pushed to SQLite
+- Design system in globals.css: indigo #6366F1 accent, 12px radius, OLED dark #0F0F10, semantic success/warning/danger, Literata reading-prose (1.6 line-height), 150-200ms motion, confetti keyframes, prefers-reduced-motion respected, WCAG focus rings, highlight mark colors
+- 30+ API routes: documents(+URL import/summarize AI), highlights, chat (doc RAG w/ citation paragraphs), copilot (cross-module RAG w/ citations), goals/milestones (streak recompute), tasks (swipe complete/snooze/focus), plans (nested tree) + templates (Internship prep, One paper per week), news fetch (13 curated sources + custom sources + batched 3-line AI summaries), opportunities (+AI email parse & classification), mindmaps (+AI generate + tree layout), flashcards (+SM-2 review via lib/sm2), notes, capture (note/voice/url/task router), search (7 models), dashboard v2 (timeline/rings/digest/deadlines/briefing w/ at-risk goals & next-best-task), analytics (reading/tasks/focus/velocity), focus, reading-sessions, export (JSON/Markdown), settings
+- Frontend: collapsible sidebar (11 items), mobile bottom tabs (Home/Read/Plan/Radar/More) + FABs, ⌘K command bar (shouldFilter=false, server-filtered), Copilot right dock / mobile full-screen sheet with clickable citation chips, quick capture (voice via Web Speech API + fallback), Pomodoro focus timer linked to tasks, progress rings, swipeable task rows (framer-motion), notifications popover, offline banner + sync indicator, theme toggle (mounted-guard against hydration mismatch), confetti on goal completion, skeleton loaders, teaching empty states
+- Fixed during verification: ui.tsx barrel import paths (./ui/*), cmdk filter race (items mounted after search set were culled → replaced CommandDialog with Dialog+Command shouldFilter={false}), next-themes hydration mismatch (useMounted via useSyncExternalStore), copilot mobile Sheet blocking desktop clicks (breakpoint guard), floating buttons overlap, SM-2 preview labels (720m→12h), seed script day-plan reference bug
+- Browser-verified E2E (agent-browser) desktop 1440×900 + mobile 390×844, light + dark: all 11 views render with seeded data; flashcard review flow (flip → grade Good → queue advances, persisted); task completion persisted; ⌘K search returns docs/notes/tasks; Copilot answered "Which goals are at risk?" with cross-module data + working citation links; reader shows seeded highlight + AI summary + Literata typography; lint clean; all APIs 200
+
+Stage Summary:
+- Cortex v2 is the running app on port 3000: 11 views, 30+ API routes, 17-model schema, rich demo data (scripts/seed.ts)
+- Design tokens match DESIGN_SPEC.md exactly (indigo accent, 12px cards, OLED dark, Literata reading, spring motion, reduced-motion)
+- Known honest limitations: Gmail OAuth & Google Calendar two-way sync are placeholder flows (email paste-parser + JSON export instead); PDF/EPUB import is metadata-only until text is pasted; voice capture uses browser SpeechRecognition where available
+- Key files: prisma/schema.prisma, src/lib/{sm2,store,nav-config,confetti,timeago,types,client}.ts, src/components/{app-shell,command-bar,copilot-dock,quick-capture,focus-timer,shared,theme-provider,ui.tsx}, src/components/views/*.tsx (11), src/app/api/** (30+), scripts/seed.ts

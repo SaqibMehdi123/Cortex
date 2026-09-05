@@ -1,511 +1,340 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-import { api, useApi } from '@/lib/client'
-import type { ChatMessage, DocumentItem } from '@/lib/types'
-import { PageHeader, EmptyState, LoadingBlock, ErrorBlock, Tone } from '@/components/shared'
+import { useMemo, useState } from 'react'
+import { api, fmtDate } from '@/lib/client'
+import type { DocumentItem, Note } from '@/lib/types'
+import { useApi } from '@/lib/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
-import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Card, CardContent } from '@/components/ui/card'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { Textarea } from '@/components/ui/textarea'
+import { useToast } from '@/hooks/use-toast'
+import { useUI } from '@/lib/nav-config'
+import { EmptyState, SkeletonCard } from '@/components/shared'
 import { cn } from '@/lib/utils'
-import { toast } from '@/hooks/use-toast'
 import {
-  Plus,
-  Search,
-  BookOpen,
-  Sparkles,
-  Send,
-  Trash2,
-  ArrowLeft,
-  ExternalLink,
-  Loader2,
-  Eraser,
-  Save,
+  LayoutGrid, List, Plus, BookOpen, FileText, Search, Sparkles, Loader2,
+  Link2, ClipboardPaste, Trash2, BookmarkPlus, StickyNote, FileText as FileIcon,
 } from 'lucide-react'
-import Markdown from 'react-markdown'
 
-const DOC_TYPES = ['article', 'paper', 'book', 'blog', 'newsletter', 'video', 'course', 'other']
-const STATUSES = ['to-read', 'reading', 'finished', 'paused']
+const TYPE_META: Record<string, { label: string; icon: React.ReactNode }> = {
+  article: { label: 'Article', icon: <FileIcon className="h-4 w-4" /> },
+  paper: { label: 'Paper', icon: <FileIcon className="h-4 w-4" /> },
+  book: { label: 'Book', icon: <BookOpen className="h-4 w-4" /> },
+  url: { label: 'Web', icon: <Link2 className="h-4 w-4" /> },
+  text: { label: 'Text', icon: <FileIcon className="h-4 w-4" /> },
+  newsletter: { label: 'Newsletter', icon: <FileIcon className="h-4 w-4" /> },
+  other: { label: 'Doc', icon: <FileIcon className="h-4 w-4" /> },
+}
 
-const emptyForm = {
-  title: '',
-  author: '',
-  type: 'article',
-  source: '',
-  tags: '',
-  status: 'reading',
-  progress: 0,
-  notes: '',
-  content: '',
+const STATUS_STYLES: Record<string, string> = {
+  queued: 'border-zinc-400/40 text-zinc-500',
+  reading: 'border-primary/40 text-primary',
+  finished: 'border-success/50 text-success',
+  paused: 'border-warning/50 text-warning',
 }
 
 export function LibraryView() {
-  const [query, setQuery] = useState('')
-  const [statusFilter, setStatusFilter] = useState('all')
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [addOpen, setAddOpen] = useState(false)
-  const [form, setForm] = useState({ ...emptyForm })
-  const [saving, setSaving] = useState(false)
+  const openReader = useUI((s) => s.openReader)
+  const { toast } = useToast()
+  const [status, setStatus] = useState('all')
+  const [q, setQ] = useState('')
+  const [layout, setLayout] = useState<'grid' | 'list'>('grid')
+  const [importOpen, setImportOpen] = useState(false)
+  const [notes, setNotes] = useState<Note[] | null>(null)
 
-  const url = `/api/documents?${new URLSearchParams({ ...(query ? { q: query } : {}), status: statusFilter })}`
-  const { data, loading, error, reload } = useApi<{ documents: DocumentItem[] }>(url, [query, statusFilter])
-
-  const documents = data?.documents ?? []
-  const selected = documents.find((d) => d.id === selectedId) ?? null
-
-  async function addDocument() {
-    if (!form.title.trim()) {
-      toast({ title: 'Title is required', variant: 'destructive' })
-      return
-    }
-    setSaving(true)
-    try {
-      const res = await api.post<{ document: DocumentItem }>('/api/documents', form)
-      setAddOpen(false)
-      setForm({ ...emptyForm })
-      await reload()
-      setSelectedId(res.document.id)
-      toast({ title: 'Added to your library' })
-    } catch (e) {
-      toast({ title: e instanceof Error ? e.message : 'Failed to add', variant: 'destructive' })
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  async function patchDoc(id: string, body: Record<string, unknown>) {
-    try {
-      await api.patch(`/api/documents/${id}`, body)
-      await reload()
-    } catch (e) {
-      toast({ title: e instanceof Error ? e.message : 'Update failed', variant: 'destructive' })
-    }
-  }
-
-  async function deleteDoc(id: string) {
-    try {
-      await api.del(`/api/documents/${id}`)
-      setSelectedId(null)
-      await reload()
-      toast({ title: 'Removed from library' })
-    } catch (e) {
-      toast({ title: e instanceof Error ? e.message : 'Delete failed', variant: 'destructive' })
-    }
-  }
-
-  return (
-    <div className="space-y-5">
-      <PageHeader title="Reading Library" subtitle="Everything you're reading — with an AI tutor on call">
-        <Button size="sm" onClick={() => { setForm({ ...emptyForm }); setAddOpen(true) }}>
-          <Plus className="mr-1.5 h-4 w-4" /> Add reading
-        </Button>
-      </PageHeader>
-
-      <div className={cn('grid gap-5', selected && documents.length > 0 ? 'lg:grid-cols-[340px_1fr]' : 'grid-cols-1')}>
-        {/* List pane */}
-        <div className={cn(selected && 'hidden lg:block')}>
-          <div className="mb-3 flex gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Search title, author, tag…"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                className="pl-8"
-              />
-            </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[120px]">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All</SelectItem>
-                {STATUSES.map((s) => (
-                  <SelectItem key={s} value={s} className="capitalize">
-                    {s.replace('-', ' ')}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {loading ? (
-            <LoadingBlock rows={4} />
-          ) : error ? (
-            <ErrorBlock message={error} />
-          ) : documents.length === 0 ? (
-            <EmptyState
-              icon={<BookOpen className="h-8 w-8" />}
-              title="Your library is empty"
-              hint="Add a book, paper, article or newsletter. Paste its text and you can ask AI questions about it."
-            />
-          ) : (
-            <ul className="space-y-2">
-              {documents.map((d) => (
-                <li key={d.id}>
-                  <button
-                    onClick={() => setSelectedId(d.id)}
-                    className={cn(
-                      'w-full rounded-xl border p-3.5 text-left transition-colors hover:bg-muted/60',
-                      selectedId === d.id && 'border-primary/40 bg-primary/5'
-                    )}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="line-clamp-2 text-sm font-medium leading-snug">{d.title}</p>
-                      <Tone>{d.type}</Tone>
-                    </div>
-                    {d.author && <p className="mt-0.5 truncate text-xs text-muted-foreground">{d.author}</p>}
-                    <div className="mt-2 flex items-center gap-2">
-                      <Progress value={d.progress} className="h-1.5 flex-1" />
-                      <span className="text-[11px] tabular-nums text-muted-foreground">{d.progress}%</span>
-                    </div>
-                    <div className="mt-2 flex items-center gap-1.5">
-                      <Badge variant="secondary" className="text-[10px] capitalize">
-                        {d.status.replace('-', ' ')}
-                      </Badge>
-                      {d.content && <span className="text-[10px] text-muted-foreground">AI-ready</span>}
-                    </div>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        {/* Detail pane */}
-        {selected && (
-          <div className="min-w-0">
-            <button
-              className="mb-3 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground lg:hidden"
-              onClick={() => setSelectedId(null)}
-            >
-              <ArrowLeft className="h-4 w-4" /> Back to library
-            </button>
-            <DocumentDetail key={selected.id} doc={selected} onPatch={patchDoc} onDelete={deleteDoc} />
-          </div>
-        )}
-      </div>
-
-      {/* Add dialog */}
-      <Dialog open={addOpen} onOpenChange={setAddOpen}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Add to library</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-3 py-1">
-            <div className="grid gap-1.5">
-              <Label htmlFor="doc-title">Title *</Label>
-              <Input
-                id="doc-title"
-                value={form.title}
-                onChange={(e) => setForm({ ...form, title: e.target.value })}
-                placeholder="e.g. Attention Is All You Need"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="grid gap-1.5">
-                <Label>Author</Label>
-                <Input value={form.author} onChange={(e) => setForm({ ...form, author: e.target.value })} placeholder="Vaswani et al." />
-              </div>
-              <div className="grid gap-1.5">
-                <Label>Type</Label>
-                <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {DOC_TYPES.map((t) => (
-                      <SelectItem key={t} value={t} className="capitalize">{t}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid gap-1.5">
-              <Label>Source URL</Label>
-              <Input value={form.source} onChange={(e) => setForm({ ...form, source: e.target.value })} placeholder="https://…" />
-            </div>
-            <div className="grid gap-1.5">
-              <Label>Tags</Label>
-              <Input value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} placeholder="ai, transformers, research" />
-            </div>
-            <div className="grid gap-1.5">
-              <Label>Notes / key takeaways</Label>
-              <Textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Optional — your own notes" />
-            </div>
-            <div className="grid gap-1.5">
-              <Label>Paste content (optional, powers AI Q&A)</Label>
-              <Textarea
-                rows={5}
-                value={form.content}
-                onChange={(e) => setForm({ ...form, content: e.target.value })}
-                placeholder="Paste the article text, paper content, chapter text… The AI will read this when you ask questions."
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
-            <Button onClick={addDocument} disabled={saving}>
-              {saving && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />} Add
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+  const { data, loading, reload } = useApi<{ documents: DocumentItem[] }>(
+    `/api/documents?status=${status}${q ? `&q=${encodeURIComponent(q)}` : ''}`
   )
-}
 
-// ─── Detail + chat ──────────────────────────────────────────────────
+  async function loadNotes() {
+    try {
+      const d = await api.get<{ notes: Note[] }>('/api/notes')
+      setNotes(d.notes)
+    } catch {
+      toast({ title: 'Failed to load notes', variant: 'destructive' })
+    }
+  }
 
-function DocumentDetail({
-  doc,
-  onPatch,
-  onDelete,
-}: {
-  doc: DocumentItem
-  onPatch: (id: string, body: Record<string, unknown>) => Promise<void>
-  onDelete: (id: string) => Promise<void>
-}) {
-  // key={doc.id} on the parent remounts this component when switching documents,
-  // so local state is initialized fresh from the doc — no sync effects needed.
-  const [notes, setNotes] = useState(doc.notes ?? '')
-  const [notesDirty, setNotesDirty] = useState(false)
-  const [progress, setProgress] = useState(doc.progress)
-
-  return (
-    <div className="space-y-4">
-      {/* Meta card */}
-      <div className="rounded-xl border bg-card p-4 sm:p-5">
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <div className="min-w-0">
-            <h2 className="text-lg font-semibold leading-snug">{doc.title}</h2>
-            <p className="mt-0.5 text-sm text-muted-foreground">
-              {doc.author ?? 'Unknown author'} · <Tone>{doc.type}</Tone>
-            </p>
-          </div>
-          <div className="flex items-center gap-1.5">
-            {doc.source && (
-              <Button variant="outline" size="sm" asChild>
-                <a href={doc.source} target="_blank" rel="noreferrer">
-                  <ExternalLink className="h-3.5 w-3.5" />
-                </a>
-              </Button>
-            )}
-            <Button variant="outline" size="sm" onClick={() => onDelete(doc.id)} aria-label="Delete document">
-              <Trash2 className="h-3.5 w-3.5 text-destructive" />
-            </Button>
-          </div>
-        </div>
-
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <div className="grid gap-1.5">
-            <Label className="text-xs text-muted-foreground">Status</Label>
-            <Select value={doc.status} onValueChange={(v) => onPatch(doc.id, { status: v })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {STATUSES.map((s) => (
-                  <SelectItem key={s} value={s} className="capitalize">{s.replace('-', ' ')}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid gap-1.5">
-            <Label className="text-xs text-muted-foreground">Progress — {progress}%</Label>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              step={5}
-              value={progress}
-              onChange={(e) => setProgress(Number(e.target.value))}
-              onMouseUp={() => progress !== doc.progress && onPatch(doc.id, { progress })}
-              onTouchEnd={() => progress !== doc.progress && onPatch(doc.id, { progress })}
-              className="mt-2 accent-emerald-600"
-              aria-label="Reading progress"
-            />
-          </div>
-        </div>
-
-        {doc.tags && (
-          <div className="mt-3 flex flex-wrap gap-1.5">
-            {doc.tags.split(',').map((t) => t.trim() && <Badge key={t} variant="secondary">{t}</Badge>)}
-          </div>
-        )}
-
-        <div className="mt-4 grid gap-1.5">
-          <div className="flex items-center justify-between">
-            <Label className="text-xs text-muted-foreground">My notes</Label>
-            {notesDirty && (
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-7 text-xs"
-                onClick={async () => {
-                  await onPatch(doc.id, { notes })
-                  setNotesDirty(false)
-                  toast({ title: 'Notes saved' })
-                }}
-              >
-                <Save className="mr-1 h-3 w-3" /> Save
-              </Button>
-            )}
-          </div>
-          <Textarea
-            rows={3}
-            value={notes}
-            onChange={(e) => {
-              setNotes(e.target.value)
-              setNotesDirty(true)
-            }}
-            placeholder="Key ideas, quotes, page numbers…"
-          />
-        </div>
-
-        {doc.content && (
-          <details className="mt-3 rounded-lg border bg-muted/40 px-3 py-2">
-            <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
-              Saved content used for AI Q&A ({Math.round(doc.content.length / 1000)}k chars)
-            </summary>
-            <p className="mt-2 max-h-40 overflow-y-auto whitespace-pre-wrap text-xs text-muted-foreground">{doc.content}</p>
-          </details>
-        )}
-      </div>
-
-      <ChatPanel doc={doc} />
-    </div>
-  )
-}
-
-function ChatPanel({ doc }: { doc: DocumentItem }) {
-  const { data, reload } = useApi<{ messages: ChatMessage[] }>(`/api/chat?documentId=${doc.id}`, [doc.id])
-  const [messages, setMessages] = useState<ChatMessage[]>([])
-  const [input, setInput] = useState('')
-  const [sending, setSending] = useState(false)
-  const scrollRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    setMessages(data?.messages ?? [])
+  const allTags = useMemo(() => {
+    const tags = new Set<string>()
+    data?.documents.forEach((d) => d.tags?.split(',').forEach((t) => t.trim() && tags.add(t.trim())))
+    return Array.from(tags).slice(0, 10)
   }, [data])
 
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
-  }, [messages, sending])
-
-  async function send(text?: string) {
-    const msg = (text ?? input).trim()
-    if (!msg || sending) return
-    setInput('')
-    setSending(true)
-    setMessages((m) => [
-      ...m,
-      { id: `tmp-${Date.now()}`, documentId: doc.id, role: 'user', content: msg, createdAt: new Date().toISOString() },
-    ])
-    try {
-      const res = await api.post<{ userMessage: ChatMessage; assistantMessage: ChatMessage }>('/api/chat', {
-        documentId: doc.id,
-        message: msg,
-      })
-      setMessages((m) => [...m.filter((x) => !x.id.startsWith('tmp-')), res.userMessage, res.assistantMessage])
-      reload()
-    } catch (e) {
-      toast({ title: e instanceof Error ? e.message : 'AI failed to respond', variant: 'destructive' })
-      setMessages((m) => m.filter((x) => !x.id.startsWith('tmp-')))
-    } finally {
-      setSending(false)
-    }
-  }
-
-  async function clearChat() {
-    await api.del(`/api/chat?documentId=${doc.id}`)
-    setMessages([])
-  }
-
-  const suggestions = doc.content
-    ? ['Summarize the key points', 'Explain the hardest concept simply', 'Quiz me on this material']
-    : ['What should I look for when reading this?', 'Give me a quick overview of the topic']
-
   return (
-    <div className="rounded-xl border bg-card">
-      <div className="flex items-center justify-between border-b px-4 py-3">
-        <div className="flex items-center gap-2">
-          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            <Sparkles className="h-4 w-4" />
-          </span>
-          <div>
-            <p className="text-sm font-medium leading-none">Ask AI about this</p>
-            <p className="mt-0.5 text-[11px] text-muted-foreground">
-              {doc.content ? 'Answers grounded in the saved content' : 'Add content below the form for grounded answers'}
-            </p>
-          </div>
+    <div className="anim-fade-up space-y-4 pb-8">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Library</h1>
+          <p className="text-sm text-muted-foreground">Everything you&apos;re reading — papers, articles, books.</p>
         </div>
-        {messages.length > 0 && (
-          <Button variant="ghost" size="sm" onClick={clearChat} aria-label="Clear conversation">
-            <Eraser className="h-3.5 w-3.5" />
+        <div className="flex items-center gap-2">
+          <div className="hidden overflow-hidden rounded-lg border sm:flex">
+            <button
+              onClick={() => setLayout('grid')}
+              className={cn('flex h-9 w-9 items-center justify-center transition-colors', layout === 'grid' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted')}
+              aria-label="Grid view"
+            >
+              <LayoutGrid className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => setLayout('list')}
+              className={cn('flex h-9 w-9 items-center justify-center transition-colors', layout === 'list' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted')}
+              aria-label="List view"
+            >
+              <List className="h-4 w-4" />
+            </button>
+          </div>
+          <Button onClick={() => setImportOpen(true)}>
+            <Plus className="mr-1.5 h-4 w-4" /> Import
           </Button>
-        )}
+        </div>
       </div>
 
-      <div ref={scrollRef} className="max-h-[380px] min-h-[180px] space-y-3 overflow-y-auto px-4 py-4">
-        {messages.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center gap-3 py-4 text-center">
-            <p className="text-sm text-muted-foreground">Start with one of these:</p>
-            <div className="flex flex-wrap justify-center gap-2">
-              {suggestions.map((s) => (
+      <Tabs defaultValue="documents" onValueChange={(v) => v === 'notes' && !notes && loadNotes()}>
+        <TabsList>
+          <TabsTrigger value="documents">Reading</TabsTrigger>
+          <TabsTrigger value="notes" className="gap-1.5">
+            <StickyNote className="h-3.5 w-3.5" /> Notes
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="documents" className="mt-4 space-y-4">
+          {/* Filters */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative flex-1 sm:max-w-xs">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search library…" className="pl-9" aria-label="Search documents" />
+            </div>
+            <div className="flex gap-1.5">
+              {['all', 'queued', 'reading', 'finished'].map((s) => (
                 <button
                   key={s}
-                  onClick={() => send(s)}
-                  className="rounded-full border bg-muted/50 px-3 py-1.5 text-xs transition-colors hover:bg-muted"
+                  onClick={() => setStatus(s)}
+                  className={cn(
+                    'min-h-[36px] rounded-full border px-3.5 text-xs font-medium capitalize transition-colors',
+                    status === s ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted'
+                  )}
                 >
-                  {s}
+                  {s === 'queued' ? 'read later' : s}
                 </button>
               ))}
             </div>
           </div>
-        ) : (
-          messages.map((m) => (
-            <div key={m.id} className={cn('flex', m.role === 'user' ? 'justify-end' : 'justify-start')}>
-              <div
-                className={cn(
-                  'max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed',
-                  m.role === 'user'
-                    ? 'rounded-br-md bg-primary text-primary-foreground'
-                    : 'rounded-bl-md bg-muted prose-sm dark:prose-invert'
-                )}
-              >
-                {m.role === 'assistant' ? (
-                  <Markdown>{m.content}</Markdown>
-                ) : (
-                  <p className="whitespace-pre-wrap">{m.content}</p>
-                )}
-              </div>
-            </div>
-          ))
-        )}
-        {sending && (
-          <div className="flex justify-start">
-            <div className="flex items-center gap-2 rounded-2xl rounded-bl-md bg-muted px-3.5 py-2.5 text-sm text-muted-foreground">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Thinking…
-            </div>
-          </div>
-        )}
-      </div>
 
-      <div className="flex gap-2 border-t p-3">
-        <Input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && send()}
-          placeholder="Ask anything about this material…"
-          aria-label="Ask AI"
-        />
-        <Button size="icon" onClick={() => send()} disabled={sending || !input.trim()} aria-label="Send question">
-          <Send className="h-4 w-4" />
-        </Button>
-      </div>
+          {allTags.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {allTags.map((t) => (
+                <button key={t} onClick={() => setQ(t)} className="rounded-full bg-muted px-2.5 py-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground">
+                  #{t}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {loading ? (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {[1, 2, 3].map((i) => <SkeletonCard key={i} />)}
+            </div>
+          ) : !data || data.documents.length === 0 ? (
+            <EmptyState
+              icon={<BookOpen className="h-5 w-5" />}
+              title={q ? `No matches for “${q}”` : 'Import your first paper'}
+              description="Paste a URL to any article or paper, paste raw text, or add a book you're reading. Ask AI questions about it once it's here."
+              action={{ label: 'Import a document', onClick: () => setImportOpen(true) }}
+            />
+          ) : layout === 'grid' ? (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {data.documents.map((doc) => (
+                <button key={doc.id} onClick={() => openReader(doc.id)} className="group text-left">
+                  <Card className="h-full overflow-hidden pt-0 transition-all duration-200 group-hover:-translate-y-0.5 group-hover:shadow-soft">
+                    <div className="relative flex h-24 items-end bg-gradient-to-br from-primary/80 via-primary/60 to-teal-500/50 p-3">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/20 text-white backdrop-blur">
+                        {TYPE_META[doc.type]?.icon ?? TYPE_META.other.icon}
+                      </span>
+                      <Badge variant="outline" className={cn('absolute right-2.5 top-2.5 bg-background/80 text-[10px] backdrop-blur', STATUS_STYLES[doc.status])}>
+                        {doc.status === 'queued' ? 'read later' : doc.status}
+                      </Badge>
+                    </div>
+                    <CardContent className="space-y-2 p-4">
+                      <p className="line-clamp-2 text-sm font-semibold leading-snug">{doc.title}</p>
+                      {doc.author && <p className="text-xs text-muted-foreground">{doc.author}</p>}
+                      {doc.summary && <p className="line-clamp-2 text-xs text-muted-foreground">{doc.summary}</p>}
+                      <div className="flex items-center gap-2 pt-1">
+                        <Progress value={doc.progress} className="h-1.5" />
+                        <span className="shrink-0 text-[10px] text-muted-foreground">{doc.progress}%</span>
+                      </div>
+                      {doc.tags && (
+                        <div className="flex flex-wrap gap-1 pt-0.5">
+                          {doc.tags.split(',').slice(0, 3).map((t) => (
+                            <span key={t} className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">{t.trim()}</span>
+                          ))}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="overflow-hidden rounded-xl border bg-card">
+              {data.documents.map((doc, i) => (
+                <button
+                  key={doc.id}
+                  onClick={() => openReader(doc.id)}
+                  className={cn('flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/50', i !== 0 && 'border-t')}
+                >
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sidebar-accent text-primary">
+                    {TYPE_META[doc.type]?.icon ?? TYPE_META.other.icon}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{doc.title}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {doc.author ?? TYPE_META[doc.type]?.label ?? 'Doc'} · updated {fmtDate(doc.updatedAt)}
+                    </p>
+                  </div>
+                  <div className="hidden w-32 items-center gap-2 sm:flex">
+                    <Progress value={doc.progress} className="h-1.5" />
+                    <span className="shrink-0 text-[10px] text-muted-foreground">{doc.progress}%</span>
+                  </div>
+                  <Badge variant="outline" className={cn('shrink-0 text-[10px]', STATUS_STYLES[doc.status])}>
+                    {doc.status === 'queued' ? 'later' : doc.status}
+                  </Badge>
+                </button>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="notes" className="mt-4">
+          {!notes ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {[1, 2].map((i) => <SkeletonCard key={i} />)}
+            </div>
+          ) : notes.length === 0 ? (
+            <EmptyState
+              icon={<StickyNote className="h-5 w-5" />}
+              title="No quick-capture notes yet"
+              description="Use the + button (or ⌘K) from anywhere to capture a note, voice memo or link. They land here."
+            />
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {notes.map((n) => (
+                <Card key={n.id} className="group relative">
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-sm font-medium">{n.title ?? (n.source === 'voice' ? 'Voice memo' : 'Note')}</p>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 opacity-0 transition-opacity group-hover:opacity-100"
+                        aria-label="Delete note"
+                        onClick={async () => {
+                          await api.del(`/api/notes/${n.id}`)
+                          setNotes(notes.filter((x) => x.id !== n.id))
+                        }}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                    <p className="mt-1.5 line-clamp-5 whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">{n.content}</p>
+                    <div className="mt-2 flex items-center gap-2 text-[10px] text-muted-foreground">
+                      {n.source === 'voice' && <span className="rounded-full bg-muted px-1.5 py-0.5">voice</span>}
+                      {fmtDate(n.createdAt, { month: 'short', day: 'numeric' })}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
+
+      <ImportDialog open={importOpen} onOpenChange={setImportOpen} onImported={() => { reload(); toast({ title: 'Added to library' }) }} />
     </div>
+  )
+}
+
+function ImportDialog({ open, onOpenChange, onImported }: { open: boolean; onOpenChange: (v: boolean) => void; onImported: () => void }) {
+  const [mode, setMode] = useState<'url' | 'paste' | 'manual'>('url')
+  const [url, setUrl] = useState('')
+  const [title, setTitle] = useState('')
+  const [author, setAuthor] = useState('')
+  const [type, setType] = useState('article')
+  const [tags, setTags] = useState('')
+  const [content, setContent] = useState('')
+  const [busy, setBusy] = useState(false)
+  const { toast } = useToast()
+
+  async function submit() {
+    setBusy(true)
+    try {
+      if (mode === 'url') {
+        if (!url.trim()) throw new Error('Paste a link first')
+        await api.post('/api/documents', { title: url, source: url.trim(), autoExtract: true, status: 'queued', type: 'url' })
+      } else if (mode === 'paste') {
+        if (!title.trim()) throw new Error('Give it a title')
+        if (!content.trim()) throw new Error('Paste some content')
+        await api.post('/api/documents', { title, author, type, tags, content, status: 'reading' })
+      } else {
+        if (!title.trim()) throw new Error('Give it a title')
+        await api.post('/api/documents', { title, author, type, tags, status: 'reading' })
+      }
+      setUrl(''); setTitle(''); setAuthor(''); setTags(''); setContent('')
+      onOpenChange(false)
+      onImported()
+    } catch (e) {
+      toast({ title: 'Import failed', description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Import to library</DialogTitle>
+          <DialogDescription>Web articles are fetched automatically. Paste text for PDFs & EPUBs to enable AI chat.</DialogDescription>
+        </DialogHeader>
+        <Tabs value={mode} onValueChange={(v) => setMode(v as 'url' | 'paste' | 'manual')}>
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="url" className="gap-1.5"><Link2 className="h-3.5 w-3.5" /> URL</TabsTrigger>
+            <TabsTrigger value="paste" className="gap-1.5"><ClipboardPaste className="h-3.5 w-3.5" /> Paste text</TabsTrigger>
+            <TabsTrigger value="manual" className="gap-1.5"><FileText className="h-3.5 w-3.5" /> Manual</TabsTrigger>
+          </TabsList>
+        </Tabs>
+        <div className="space-y-3">
+          {mode === 'url' ? (
+            <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://arxiv.org/abs/…" aria-label="Article URL" autoFocus />
+          ) : (
+            <>
+              <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title" aria-label="Title" />
+              {mode === 'paste' ? (
+                <Textarea value={content} onChange={(e) => setContent(e.target.value)} placeholder="Paste the full text here — the AI will use it to answer questions." className="min-h-[140px]" aria-label="Content" />
+              ) : (
+                <p className="text-xs text-muted-foreground">You can paste the content later from the reader to enable AI Q&amp;A.</p>
+              )}
+            </>
+          )}
+          <div className="grid grid-cols-2 gap-3">
+            <Input value={author} onChange={(e) => setAuthor(e.target.value)} placeholder="Author (optional)" aria-label="Author" />
+            <Input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="Tags, comma separated" aria-label="Tags" />
+          </div>
+        </div>
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button onClick={submit} disabled={busy}>
+            {busy && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+            <BookmarkPlus className="mr-1.5 h-4 w-4" /> Add to library
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }

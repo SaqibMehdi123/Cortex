@@ -7,79 +7,143 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ─── Reading library ────────────────────────────────────────────────
+// ─── Knowledge Hub ─────────────────────────────────────────────────
 
 model Document {
-  id           String        @id @default(cuid())
-  title        String
-  author       String?
-  type         String        @default("article") // article | paper | book | blog | newsletter | video | course | other
-  source       String? // URL or where it came from
-  notes        String?
-  content      String? // pasted text used as AI Q&A context
-  status       String        @default("reading") // to-read | reading | finished | paused
-  progress     Int           @default(0) // 0-100
-  tags         String? // comma separated
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  chatMessages ChatMessage[]
+  id             String           @id @default(cuid())
+  title          String
+  author         String?
+  type           String           @default("article") // article | paper | book | url | text | newsletter | other
+  source         String?
+  notes          String?
+  content        String?
+  status         String           @default("reading") // queued | reading | finished | paused
+  progress       Int              @default(0) // 0-100
+  tags           String? // comma separated
+  summary        String?
+  takeaways      String? // JSON array of strings
+  lastReadAt     DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  highlights     Highlight[]
+  chatMessages   ChatMessage[]
+  flashcards     Flashcard[]
+  readingSessions ReadingSession[]
+}
+
+model Highlight {
+  id         String      @id @default(cuid())
+  documentId String
+  document   Document    @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  text       String
+  color      String      @default("yellow") // yellow | green | blue | pink
+  note       String?
+  position   Int         @default(0) // approximate char offset in content
+  createdAt  DateTime    @default(now())
+  flashcards Flashcard[]
 }
 
 model ChatMessage {
   id         String    @id @default(cuid())
   documentId String?
   document   Document? @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  thread     String    @default("copilot") // "copilot" | "doc:<documentId>"
   role       String // user | assistant
   content    String
+  citations  String? // JSON [{n, label, documentId?, url?}]
   createdAt  DateTime  @default(now())
 }
 
-// ─── Goals & plans ──────────────────────────────────────────────────
-
-model Goal {
-  id          String    @id @default(cuid())
-  title       String
-  description String?
-  category    String    @default("learning") // career | learning | health | personal | project
-  deadline    DateTime?
-  status      String    @default("active") // active | completed | paused
-  color       String    @default("emerald") // emerald | amber | rose | violet | cyan | orange
-  steps       Step[]
-  plans       Plan[]
-  mindmaps    MindMap[]
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+model Note {
+  id        String   @id @default(cuid())
+  title     String?
+  content   String
+  source    String   @default("typed") // typed | voice | url | capture
+  pinned    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
-model Step {
-  id        String   @id @default(cuid())
-  goalId    String
-  goal      Goal     @relation(fields: [goalId], references: [id], onDelete: Cascade)
-  title     String
-  done      Boolean  @default(false)
-  order     Int      @default(0)
-  createdAt DateTime @default(now())
+// ─── Planning & Goal Engine ────────────────────────────────────────
+
+model Goal {
+  id              String         @id @default(cuid())
+  title           String
+  description     String?
+  category        String         @default("learning") // career | learning | health | personal | project
+  deadline        DateTime?
+  status          String         @default("active") // active | completed | paused
+  color           String         @default("indigo") // indigo | emerald | amber | rose | violet | cyan
+  streak          Int            @default(0)
+  lastCompletedAt DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  milestones      Milestone[]
+  plans           Plan[]
+  mindmaps        MindMap[]
+  tasks           Task[]
+  focusSessions   FocusSession[]
+}
+
+model Milestone {
+  id          String    @id @default(cuid())
+  goalId      String
+  goal        Goal      @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  title       String
+  done        Boolean   @default(false)
+  dueDate     DateTime?
+  order       Int       @default(0)
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  tasks       Task[]
+}
+
+model Task {
+  id           String         @id @default(cuid())
+  title        String
+  status       String         @default("todo") // todo | doing | done
+  priority     String         @default("med") // low | med | high
+  dueDate      DateTime?
+  estimate     Int            @default(30) // estimated minutes
+  focusMinutes Int            @default(0)
+  order        Int            @default(0)
+  milestoneId  String?
+  milestone    Milestone?     @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
+  goalId       String?
+  goal         Goal?          @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  planId       String?
+  plan         Plan?          @relation(fields: [planId], references: [id], onDelete: Cascade)
+  completedAt  DateTime?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  focusSessions FocusSession[]
 }
 
 model Plan {
   id        String    @id @default(cuid())
-  timeframe String    @default("day") // day | week | month
+  timeframe String    @default("day") // year | month | week | day
   title     String
   notes     String?
-  dueDate   DateTime? // day: that day; week: week start; month: month start
+  startDate DateTime?
+  endDate   DateTime?
   done      Boolean   @default(false)
   goalId    String?
   goal      Goal?     @relation(fields: [goalId], references: [id], onDelete: SetNull)
+  parentId  String?
+  parent    Plan?     @relation("PlanTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children  Plan[]    @relation("PlanTree")
+  tasks     Task[]
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 }
 
-// ─── AI news feed ───────────────────────────────────────────────────
+// ─── AI News Radar ─────────────────────────────────────────────────
 
 model NewsArticle {
   id          String    @id @default(cuid())
   title       String
-  source      String? // e.g. OpenAI, DeepMind, Hugging Face
+  source      String?
   url         String    @unique
   summary     String?
   category    String    @default("company") // company | research | lab | newsletter | blog
@@ -89,31 +153,104 @@ model NewsArticle {
   createdAt   DateTime  @default(now())
 }
 
-// ─── Opportunities (internship / job emails) ───────────────────────
-
-model Opportunity {
-  id        String    @id @default(cuid())
-  company   String
-  role      String
-  type      String    @default("internship") // internship | job | scholarship | event | referral
-  sender    String? // who sent the email
-  source    String? // e.g. "Gmail", "LinkedIn"
-  url       String?
-  status    String    @default("new") // new | applied | interview | offer | rejected | archived
-  deadline  DateTime?
-  notes     String?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+model CustomSource {
+  id        String   @id @default(cuid())
+  name      String
+  url       String
+  type      String   @default("blog") // blog | newsletter | x | company | lab
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
 }
 
-// ─── Mindmaps ───────────────────────────────────────────────────────
+// ─── Career Command Center ─────────────────────────────────────────
+
+model Opportunity {
+  id          String    @id @default(cuid())
+  company     String
+  role        String
+  type        String    @default("internship") // internship | job | scholarship | event | referral
+  classification String @default("opportunity") // opportunity | rejection | interview | offer | deadline
+  sender      String?
+  source      String?
+  url         String?
+  status      String    @default("saved") // saved | applied | interview | offer | rejected | archived
+  deadline    DateTime?
+  nextAction  String?
+  resume      String? // resume/CV version linked to this application
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+// ─── Mindmap Studio ────────────────────────────────────────────────
 
 model MindMap {
   id        String   @id @default(cuid())
   title     String
   goalId    String?
   goal      Goal?    @relation(fields: [goalId], references: [id], onDelete: SetNull)
-  nodes     String   @default("[]") // JSON [{id,label,x,y,parentId,color}]
+  nodes     String   @default("[]") // JSON [{id,label,x,y,parentId,color,linkType?,linkId?,linkUrl?}]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ─── Spaced repetition ─────────────────────────────────────────────
+
+model Flashcard {
+  id             String      @id @default(cuid())
+  front          String
+  back           String
+  documentId     String?
+  document       Document?   @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  highlightId    String?
+  highlight      Highlight?  @relation(fields: [highlightId], references: [id], onDelete: SetNull)
+  ease           Float       @default(2.5)
+  interval       Float       @default(0) // days
+  repetitions    Int         @default(0)
+  lapses         Int         @default(0)
+  dueAt          DateTime    @default(now())
+  lastReviewedAt DateTime?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  reviews        ReviewLog[]
+}
+
+model ReviewLog {
+  id         String    @id @default(cuid())
+  flashcardId String
+  flashcard  Flashcard @relation(fields: [flashcardId], references: [id], onDelete: Cascade)
+  grade      String // again | hard | good | easy
+  reviewedAt DateTime  @default(now())
+}
+
+// ─── Analytics & focus ─────────────────────────────────────────────
+
+model ReadingSession {
+  id         String   @id @default(cuid())
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  minutes    Int
+  day        DateTime // midnight of the day
+  createdAt  DateTime @default(now())
+}
+
+model FocusSession {
+  id        String    @id @default(cuid())
+  taskId    String?
+  task      Task?     @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  goalId    String?
+  goal      Goal?     @relation(fields: [goalId], references: [id], onDelete: SetNull)
+  minutes   Int
+  startedAt DateTime  @default(now())
+  endedAt   DateTime?
+}
+
+// ─── Settings singleton ────────────────────────────────────────────
+
+model Setting {
+  id         String   @id @default("user")
+  name       String   @default("there")
+  theme      String   @default("system") // light | dark | system
+  digestTime String   @default("08:00") // daily digest delivery time
+  updatedAt  DateTime @updatedAt
 }
