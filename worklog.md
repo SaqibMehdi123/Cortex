@@ -18,3 +18,18 @@ Stage Summary:
 - Runnable Next.js 16 app at / (port 3000), lint clean, all golden paths verified in browser
 - Seed/demo data present: 1 goal (4 steps, 25%), 1 daily plan, 1 document with AI chat history, 28 news articles, 1 opportunity (Google SWE intern), 1 mindmap (3 nodes)
 - Key files: prisma/schema.prisma, src/app/api/**, src/components/app-shell.tsx, src/components/views/*.tsx, src/lib/{types,client,db}.ts
+
+---
+Task ID: 2
+Agent: Main agent (Super Z)
+Task: Save the "Cortex" v2 product specification provided by the user (no build work — explicitly deferred)
+
+Work Log:
+- Read existing worklog to confirm v1 "Second Brain" state (6 views, 17 API routes, Prisma/SQLite, verified E2E)
+- Transcribed the user's full Cortex brief verbatim into /home/z/my-project/CORTEX_SPEC.md: 6 core modules (Knowledge Hub, Planning & Goal Engine, AI News Radar, Career Command Center, Mindmap Studio, AI Copilot), 5 additional features (spaced repetition SM-2, ⌘K universal search, focus/Pomodoro mode, quick capture with voice memo transcription, analytics charts), and non-functional requirements (real-time sync, offline-first, auth email+Google, encryption at rest, export Markdown/JSON, <2s cold load)
+- Marked spec as SAVED / DO-NOT-BUILD until the user's design prompt arrives
+
+Stage Summary:
+- Cortex v2 spec persisted at /home/z/my-project/CORTEX_SPEC.md; it supersedes v1 scope
+- Current codebase remains the runnable v1 "Second Brain" app — untouched
+- NEXT STEP (pending user input): receive the design prompt, then rebuild/extend v1 to full Cortex scope strictly following that design (desktop + mobile breakpoints)
