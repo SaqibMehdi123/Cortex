@@ -52,3 +52,23 @@ prompt
 server.log
 # Skills directory
 /skills/
+
+# local data & user content
+/db/
+/uploads/
+/upload/
+/download/
+
+# internal working files
+/worklog.md
+/CORTEX_SPEC.md
+/DESIGN_SPEC.md
+/tool-results/
+/.zscripts/
+/z-ai-config/
+
+# sandbox scaffolding
+/examples/
+/mini-services/
+/tests/
+/Caddyfile
