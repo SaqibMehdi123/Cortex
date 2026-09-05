@@ -1,0 +1,119 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Reading library ────────────────────────────────────────────────
+
+model Document {
+  id           String        @id @default(cuid())
+  title        String
+  author       String?
+  type         String        @default("article") // article | paper | book | blog | newsletter | video | course | other
+  source       String? // URL or where it came from
+  notes        String?
+  content      String? // pasted text used as AI Q&A context
+  status       String        @default("reading") // to-read | reading | finished | paused
+  progress     Int           @default(0) // 0-100
+  tags         String? // comma separated
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  chatMessages ChatMessage[]
+}
+
+model ChatMessage {
+  id         String    @id @default(cuid())
+  documentId String?
+  document   Document? @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  role       String // user | assistant
+  content    String
+  createdAt  DateTime  @default(now())
+}
+
+// ─── Goals & plans ──────────────────────────────────────────────────
+
+model Goal {
+  id          String    @id @default(cuid())
+  title       String
+  description String?
+  category    String    @default("learning") // career | learning | health | personal | project
+  deadline    DateTime?
+  status      String    @default("active") // active | completed | paused
+  color       String    @default("emerald") // emerald | amber | rose | violet | cyan | orange
+  steps       Step[]
+  plans       Plan[]
+  mindmaps    MindMap[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Step {
+  id        String   @id @default(cuid())
+  goalId    String
+  goal      Goal     @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  title     String
+  done      Boolean  @default(false)
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+}
+
+model Plan {
+  id        String    @id @default(cuid())
+  timeframe String    @default("day") // day | week | month
+  title     String
+  notes     String?
+  dueDate   DateTime? // day: that day; week: week start; month: month start
+  done      Boolean   @default(false)
+  goalId    String?
+  goal      Goal?     @relation(fields: [goalId], references: [id], onDelete: SetNull)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+// ─── AI news feed ───────────────────────────────────────────────────
+
+model NewsArticle {
+  id          String    @id @default(cuid())
+  title       String
+  source      String? // e.g. OpenAI, DeepMind, Hugging Face
+  url         String    @unique
+  summary     String?
+  category    String    @default("company") // company | research | lab | newsletter | blog
+  publishedAt DateTime?
+  read        Boolean   @default(false)
+  saved       Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+}
+
+// ─── Opportunities (internship / job emails) ───────────────────────
+
+model Opportunity {
+  id        String    @id @default(cuid())
+  company   String
+  role      String
+  type      String    @default("internship") // internship | job | scholarship | event | referral
+  sender    String? // who sent the email
+  source    String? // e.g. "Gmail", "LinkedIn"
+  url       String?
+  status    String    @default("new") // new | applied | interview | offer | rejected | archived
+  deadline  DateTime?
+  notes     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+// ─── Mindmaps ───────────────────────────────────────────────────────
+
+model MindMap {
+  id        String   @id @default(cuid())
+  title     String
+  goalId    String?
+  goal      Goal?    @relation(fields: [goalId], references: [id], onDelete: SetNull)
+  nodes     String   @default("[]") // JSON [{id,label,x,y,parentId,color}]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
