@@ -110,7 +110,7 @@ export interface Goal {
 
 export interface Plan {
   id: string
-  timeframe: 'year' | 'month' | 'week' | 'day'
+  timeframe: 'year' | 'quarter' | 'month' | 'week' | 'day'
   title: string
   notes: string | null
   startDate: string | null

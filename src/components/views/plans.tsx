@@ -95,7 +95,7 @@ export function PlansView() {
     const out: { id: string; title: string; timeframe: string }[] = []
     const walk = (nodes: PlanNode[]) => {
       for (const n of nodes) {
-        out.push({ id: n.id, title: `${n.timeframe === 'day' ? '☀' : n.timeframe === 'week' ? '🗓' : n.timeframe === 'month' ? '📅' : '🎯'} ${n.title}`, timeframe: n.timeframe })
+        out.push({ id: n.id, title: `${n.timeframe === 'day' ? '☀' : n.timeframe === 'week' ? '🗓' : n.timeframe === 'month' ? '📅' : n.timeframe === 'quarter' ? '📈' : '🎯'} ${n.title}`, timeframe: n.timeframe })
         walk((n.children as PlanNode[]) ?? [])
       }
     }
@@ -118,7 +118,7 @@ export function PlansView() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Plans</h1>
-          <p className="text-sm text-muted-foreground">Year → Month → Week → Day, with milestones and tasks.</p>
+          <p className="text-sm text-muted-foreground">Year → Quarter → Month → Week → Day, with milestones and tasks.</p>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex overflow-hidden rounded-lg border">
@@ -372,7 +372,7 @@ function PlanNodeRow({
   const tasks = node.tasks ?? []
   const doneCount = tasks.filter((t) => t.status === 'done').length
 
-  const TF_ICON: Record<string, string> = { year: '🎯', month: '📅', week: '🗓', day: '☀️' }
+  const TF_ICON: Record<string, string> = { year: '🎯', quarter: '📈', month: '📅', week: '🗓', day: '☀️' }
 
   return (
     <div style={{ marginLeft: depth > 0 ? 16 : 0 }}>
@@ -635,7 +635,7 @@ function AddPlanDialog({ open, onOpenChange, allPlans, onCreated }: { open: bool
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>New plan</DialogTitle>
-          <DialogDescription>Nest it under a parent plan (year → month → week → day) and optionally aim it at a goal.</DialogDescription>
+          <DialogDescription>Nest it under a parent plan (year → quarter → month → week → day) and optionally aim it at a goal.</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. September — interview sprint" aria-label="Plan title" autoFocus />
@@ -646,6 +646,7 @@ function AddPlanDialog({ open, onOpenChange, allPlans, onCreated }: { open: bool
                 <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="year">Year</SelectItem>
+                  <SelectItem value="quarter">Quarter</SelectItem>
                   <SelectItem value="month">Month</SelectItem>
                   <SelectItem value="week">Week</SelectItem>
                   <SelectItem value="day">Day</SelectItem>

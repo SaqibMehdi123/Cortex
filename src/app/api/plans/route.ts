@@ -101,7 +101,7 @@ export async function POST(req: NextRequest) {
     const plan = await db.plan.create({
       data: {
         title: title.trim(),
-        timeframe: ['year', 'month', 'week', 'day'].includes(timeframe) ? timeframe : 'day',
+        timeframe: ['year', 'quarter', 'month', 'week', 'day'].includes(timeframe) ? timeframe : 'day',
         notes: notes || null,
         startDate: startDate ? new Date(startDate) : null,
         endDate: endDate ? new Date(endDate) : null,

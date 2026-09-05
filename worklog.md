@@ -121,3 +121,20 @@ Stage Summary:
 - Plans can be aimed at a goal as a "destination" without merging the two tabs
 - Theme + collapse controls live at the sidebar heading (desktop + mobile); Copilot subtitle trimmed
 - Remaining known pending items (from earlier rounds, unchanged): Gmail/Calendar OAuth still needs the user's GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET in .env (Settings shows the redirect URI)
+
+---
+Task ID: 7
+Agent: Main agent (Super Z)
+Task: Round-4 feedback — toggles back under Notifications (before sync), Quarter plan timeframe, proper professional logo
+
+Work Log:
+- Sidebar bottom restored per request: order is now Notifications → Collapse → Dark mode → sync status (toggles removed from the top heading area); labels return when expanded, icons when collapsed; both tested (collapse/expand, dark↔light) from the new position
+- New logo: src/components/logo.tsx exports CortexMark (two nested "cortex fold" arcs forming a C + pine synaptic center node — theme-aware via currentColor + var(--primary)) and CortexLogo lockup; mark placed at the sidebar heading (expanded: mark + serif wordmark + dot; collapsed: centered mark alone) and in the mobile top bar
+- Favicon: src/app/icon.svg (mark on warm-paper rounded tile); removed the starter template's explicit CDN icons config from layout.tsx metadata so Next serves the local mark — <link rel="icon"> now points at /icon.svg (verified 200 image/svg+xml)
+- Quarter timeframe: Plan.timeframe type gains 'quarter' (types.ts + schema comment); POST /api/plans accepts it; Plans view: Timeframe select gains Quarter, quarter row icon 📈, parent-picker emoji chain, header + dialog copy now read "Year → Quarter → Month → Week → Day"
+- E2E verified in browser: created "Q4 deep-work sprint" as Quarter (renders 📈 QUARTER row), deleted it; collapsed rail shows centered mark; dark mode re-tested from bottom toggle; mobile header shows mark + toggle; lint clean; zero page errors
+
+Stage Summary:
+- Controls are back under Notifications exactly as before (Collapse → Dark mode), now ordered before the sync indicator
+- Plans support Year / Quarter / Month / Week / Day
+- Cortex has a real identity: geometric cortex-fold C mark (light/dark aware) as sidebar logo, mobile logo and favicon

@@ -8,6 +8,7 @@ import { useTheme } from 'next-themes'
 import { Moon, Sun } from 'lucide-react'
 import { api } from '@/lib/client'
 import type { DashboardData } from '@/lib/types'
+import { CortexMark } from '@/components/logo'
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger,
   Popover, PopoverContent, PopoverTrigger,
@@ -104,34 +105,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             collapsed ? 'w-16' : 'w-[232px]'
           )}
         >
-          <div className={cn('flex items-center gap-1 px-4 pb-4 pt-5', collapsed && 'justify-center px-0')}>
+          {/* Heading: mark + wordmark (controls live at the bottom, before sync) */}
+          <div className={cn('flex items-center gap-2 px-4 pb-4 pt-5', collapsed && 'justify-center px-0')}>
+            <CortexMark size={collapsed ? 26 : 27} className="text-foreground" />
             {!collapsed && (
               <div className="flex min-w-0 flex-1 items-baseline gap-1.5">
                 <span className="font-display text-[1.35rem] leading-none">Cortex</span>
                 <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" aria-hidden />
               </div>
             )}
-            {/* Theme + collapse — top, beside the heading */}
-            <div className={cn('flex items-center gap-0.5', collapsed && 'flex-col gap-1')}>
-              <button
-                onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                aria-label="Toggle dark mode"
-                title={resolvedTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-              >
-                {/* CSS-only swap: no hydration mismatch (next-themes sets .dark on <html>) */}
-                <Sun className="hidden h-4 w-4 dark:block" />
-                <Moon className="h-4 w-4 dark:hidden" />
-              </button>
-              <button
-                onClick={toggleSidebar}
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-                title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              >
-                {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
-              </button>
-            </div>
             {collapsed && <span className="sr-only">Cortex</span>}
           </div>
 
@@ -218,6 +200,32 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </PopoverContent>
             </Popover>
 
+            {/* Collapse + dark mode — under Notifications, before sync */}
+            <button
+              onClick={toggleSidebar}
+              className={cn('flex min-h-[36px] w-full items-center gap-2.5 rounded-lg px-3 py-1.5 text-[13px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground', collapsed && 'justify-center px-0')}
+              aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            >
+              {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+              {!collapsed && 'Collapse'}
+            </button>
+
+            <button
+              onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
+              className={cn('flex min-h-[36px] w-full items-center gap-2.5 rounded-lg px-3 py-1.5 text-[13px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground', collapsed && 'justify-center px-0')}
+              aria-label="Toggle dark mode"
+            >
+              {/* CSS-only swap: no hydration mismatch (next-themes sets .dark on <html>) */}
+              <Sun className="hidden h-4 w-4 dark:block" />
+              <Moon className="h-4 w-4 dark:hidden" />
+              {!collapsed && (
+                <>
+                  <span className="hidden dark:inline">Light mode</span>
+                  <span className="dark:hidden">Dark mode</span>
+                </>
+              )}
+            </button>
+
             <div className={cn('flex min-h-[32px] items-center gap-2.5 rounded-lg px-3 py-1.5 text-xs text-muted-foreground', collapsed && 'justify-center px-0')} aria-live="polite">
               {!online ? (
                 <WifiOff className="h-4 w-4 text-warning" aria-label="Offline" />
@@ -244,7 +252,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* ── Mobile top bar ── */}
         <header className="fixed inset-x-0 top-0 z-30 flex items-center gap-2 border-b bg-background/95 px-4 py-2.5 backdrop-blur supports-[backdrop-filter]:bg-background/80 lg:hidden">
-          <div className="flex flex-1 items-baseline gap-1.5">
+          <div className="flex flex-1 items-center gap-2">
+            <CortexMark size={22} className="text-foreground" />
             <span className="font-display text-xl leading-none">Cortex</span>
             <span className="h-1.5 w-1.5 rounded-full bg-primary" aria-hidden />
           </div>

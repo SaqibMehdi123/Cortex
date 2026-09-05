@@ -35,9 +35,7 @@ export const metadata: Metadata = {
   description:
     "One coherent workspace for your reading, documents, plans and goals, AI news radar, career pipeline, mindmaps, flashcards and an AI copilot — synced across laptop and mobile.",
   keywords: ["Cortex", "second brain", "knowledge hub", "reading tracker", "AI news", "goals", "mindmap", "flashcards", "internship tracker"],
-  icons: {
-    icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
-  },
+  // Favicon: app/icon.svg (the Cortex mark) is served automatically by Next.js
 };
 
 export const viewport: Viewport = {

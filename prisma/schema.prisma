@@ -126,7 +126,7 @@ model Task {
 
 model Plan {
   id        String    @id @default(cuid())
-  timeframe String    @default("day") // year | month | week | day
+  timeframe String    @default("day") // year | quarter | month | week | day
   title     String
   notes     String?
   startDate DateTime?
