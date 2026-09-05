@@ -196,6 +196,33 @@ export interface Opportunity {
   notes: string | null
 }
 
+export interface JobListing {
+  id: string
+  company: string
+  role: string
+  type: string // job | internship | research
+  location: string | null
+  source: string
+  url: string
+  externalId: string | null
+  publishedAt: string | null
+  saved: boolean
+  fetchedAt: string
+}
+
+export interface ListingFetchResult {
+  added: number
+  total: number
+  sources: Array<{ name: string; ok: boolean; count: number }>
+}
+
+export interface ListingIndex {
+  listings: JobListing[]
+  total: number
+  counts: Record<string, number>
+  sources: Array<{ name: string; count: number }>
+}
+
 export interface MindmapNode {
   id: string
   label: string

@@ -28,7 +28,7 @@ I started it because my workflow had fallen apart across tools: papers in one ap
 
 ![News](docs/screenshots/news.png)
 
-**Career.** A Kanban tracker (saved → applied → interview → offer) for opportunities. Paste an email or job posting and the AI extracts company, role, and deadline into a structured entry. Gmail import is wired up through real Google OAuth — bring your own credentials and it surfaces application-related emails automatically.
+**Career.** Two tabs. *Discover* pulls live jobs, internships, and research positions from authentic sources — official company ATS boards (Anthropic, Mistral AI, Databricks, Together AI, Scale AI, Figure AI, Imbue via the Greenhouse/Lever public APIs) plus the RemoteOK and Remotive public job APIs — each listing linked straight to the real posting, with type/source filters and search. Anything interesting gets saved into the *Pipeline* Kanban (saved → applied → interview → offer) with one click. Paste an email or job posting and the AI extracts company, role, and deadline into a structured entry. Gmail import is wired up through real Google OAuth — bring your own credentials and it surfaces application-related emails automatically.
 
 **Knowledge tools.** Mindmaps can be generated from any document or topic and edited on canvas. Flashcards use the SM-2 spaced-repetition algorithm (the Anki one) with a daily due queue. Analytics charts reading time, focus hours, and task completion. A Copilot dock sits on every screen with suggested questions, and there's a global ⌘K command bar, a Pomodoro focus timer tied to tasks, quick capture from anywhere, full JSON export, and a dark mode that isn't an afterthought.
 

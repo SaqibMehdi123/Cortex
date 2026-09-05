@@ -1,9 +1,9 @@
 'use client'
 
-import { useState } from 'react'
-import { api, fmtDate, daysUntil } from '@/lib/client'
-import type { Opportunity } from '@/lib/types'
-import { useApi } from '@/lib/client'
+import { useEffect, useMemo, useState } from 'react'
+import { api, fmtDate, daysUntil, useApi } from '@/lib/client'
+import type { Opportunity, JobListing, ListingIndex, ListingFetchResult } from '@/lib/types'
+import { timeAgo } from '@/lib/timeago'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -17,6 +17,7 @@ import { SkeletonCard, EmptyState } from '@/components/shared'
 import { useUI } from '@/lib/nav-config'
 import {
   Briefcase, Plus, Loader2, Mail, Clock, FileText, Trash2, GripVertical, MailWarning, Inbox,
+  Radar, Search, ExternalLink, Bookmark, BookmarkCheck, MapPin, RefreshCw,
 } from 'lucide-react'
 
 const STAGES = [
@@ -35,6 +36,12 @@ const CLASSIFICATION_STYLE: Record<string, string> = {
   deadline: 'bg-danger/10 text-danger',
 }
 
+const TYPE_STYLE: Record<string, string> = {
+  job: 'bg-primary/10 text-primary',
+  internship: 'bg-warning/10 text-warning',
+  research: 'bg-success/10 text-success',
+}
+
 function companyAvatar(company: string) {
   let hash = 0
   for (let i = 0; i < company.length; i++) hash = (hash * 31 + company.charCodeAt(i)) >>> 0
@@ -51,6 +58,47 @@ function companyAvatar(company: string) {
 }
 
 export function CareerView() {
+  const [tab, setTab] = useState<'pipeline' | 'discover'>('pipeline')
+
+  return (
+    <div className="anim-fade-up space-y-4 pb-8">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Career</h1>
+          <p className="text-sm text-muted-foreground">
+            {tab === 'pipeline'
+              ? 'Internship & job pipeline.'
+              : 'Live listings from authentic sources — save any into your pipeline.'}
+          </p>
+        </div>
+        <div className="flex items-center gap-1 rounded-xl border bg-muted/40 p-1">
+          <button
+            onClick={() => setTab('pipeline')}
+            className={cn(
+              'flex min-h-[32px] items-center gap-1.5 rounded-lg px-3 text-xs font-medium transition-colors',
+              tab === 'pipeline' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            <Briefcase className="h-3.5 w-3.5" /> Pipeline
+          </button>
+          <button
+            onClick={() => setTab('discover')}
+            className={cn(
+              'flex min-h-[32px] items-center gap-1.5 rounded-lg px-3 text-xs font-medium transition-colors',
+              tab === 'discover' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            <Radar className="h-3.5 w-3.5" /> Discover
+          </button>
+        </div>
+      </div>
+
+      {tab === 'pipeline' ? <PipelineTab /> : <DiscoverTab />}
+    </div>
+  )
+}
+
+function PipelineTab() {
   const { toast } = useToast()
   const setView = useUI((s) => s.setView)
   const { data, loading, reload } = useApi<{ opportunities: Opportunity[] }>('/api/opportunities')
@@ -94,14 +142,11 @@ export function CareerView() {
     .sort((a, b) => new Date(a.deadline!).getTime() - new Date(b.deadline!).getTime())[0]
 
   return (
-    <div className="anim-fade-up space-y-4 pb-8">
+    <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Career</h1>
-          <p className="text-sm text-muted-foreground">
-            Internship & job pipeline. {nextDeadline?.deadline ? `Next deadline: ${nextDeadline.company} in ${Math.max(0, daysUntil(nextDeadline.deadline))}d.` : ''}
-          </p>
-        </div>
+        <p className="text-sm text-muted-foreground">
+          {nextDeadline?.deadline ? `Next deadline: ${nextDeadline.company} in ${Math.max(0, daysUntil(nextDeadline.deadline))}d.` : ''}
+        </p>
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" onClick={scanGmail} disabled={scanning}>
             {scanning ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Inbox className="mr-1.5 h-4 w-4" />}
@@ -327,7 +372,7 @@ function AddApplicationDialog({ open, onOpenChange, onCreated }: { open: boolean
           <div>
             <Label>Type</Label>
             <select value={type} onChange={(e) => setType(e.target.value)} className="mt-1 h-9 w-full rounded-md border bg-background px-2 text-sm" aria-label="Type">
-              {['internship', 'job', 'scholarship', 'event', 'referral'].map((t) => <option key={t} value={t}>{t}</option>)}
+              {['internship', 'job', 'research', 'scholarship', 'event', 'referral'].map((t) => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
           <div>
@@ -355,5 +400,210 @@ function AddApplicationDialog({ open, onOpenChange, onCreated }: { open: boolean
         </div>
       </DialogContent>
     </Dialog>
+  )
+}
+
+const TYPE_LABELS: Array<{ key: string; label: string }> = [
+  { key: '', label: 'All' },
+  { key: 'job', label: 'Jobs' },
+  { key: 'internship', label: 'Internships' },
+  { key: 'research', label: 'Research' },
+]
+
+function DiscoverTab() {
+  const { toast } = useToast()
+  const [type, setType] = useState('')
+  const [source, setSource] = useState('')
+  const [search, setSearch] = useState('')
+  const [q, setQ] = useState('')
+  const [savedOnly, setSavedOnly] = useState(false)
+  const [fetching, setFetching] = useState(false)
+  const [busyId, setBusyId] = useState<string | null>(null)
+
+  // debounce the search box so we don't hit the API on every keystroke
+  useEffect(() => {
+    const t = setTimeout(() => setQ(search), 300)
+    return () => clearTimeout(t)
+  }, [search])
+
+  const url = useMemo(() => {
+    const p = new URLSearchParams()
+    if (type) p.set('type', type)
+    if (source) p.set('source', source)
+    if (q.trim()) p.set('q', q.trim())
+    if (savedOnly) p.set('saved', '1')
+    const s = p.toString()
+    return `/api/opportunities/listings${s ? `?${s}` : ''}`
+  }, [type, source, q, savedOnly])
+
+  const { data, loading, reload } = useApi<ListingIndex>(url)
+
+  async function fetchListings() {
+    setFetching(true)
+    try {
+      const r = await api.post<ListingFetchResult>('/api/opportunities/fetch', {})
+      const ok = r.sources.filter((s) => s.ok).length
+      toast({
+        title: r.added > 0 ? `${r.added} new listings fetched` : 'Already up to date',
+        description: `${r.total} listings on the board · ${ok}/${r.sources.length} sources responded.`,
+      })
+      reload()
+    } catch (e) {
+      toast({ title: 'Fetch failed', description: e instanceof Error ? e.message : 'Try again in a moment.', variant: 'destructive' })
+    } finally {
+      setFetching(false)
+    }
+  }
+
+  async function toggleSave(l: JobListing) {
+    setBusyId(l.id)
+    try {
+      await api.patch(`/api/opportunities/listings/${l.id}`, { saved: !l.saved })
+      if (!l.saved) toast({ title: 'Saved to pipeline', description: `${l.role} at ${l.company} now sits on your pipeline board.` })
+      reload()
+    } catch {
+      toast({ title: 'Could not update listing', variant: 'destructive' })
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  const listings = data?.listings ?? []
+  const counts = data?.counts ?? {}
+  const total = data?.total ?? 0
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-xs text-muted-foreground">
+          Pulled live from official company ATS boards (Anthropic, Mistral AI, Databricks, Together AI, Scale AI, Figure AI, Imbue) and
+          the RemoteOK & Remotive public job APIs. Nothing is invented — every card links to the real posting.
+        </p>
+        <Button onClick={fetchListings} disabled={fetching}>
+          {fetching ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-1.5 h-4 w-4" />}
+          {fetching ? 'Fetching…' : 'Fetch latest'}
+        </Button>
+      </div>
+
+      {/* filters */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5">
+          {TYPE_LABELS.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setType(t.key)}
+              className={cn(
+                'rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
+                type === t.key ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted',
+              )}
+            >
+              {t.label}
+              {t.key && counts[t.key] ? <span className="ml-1 text-[10px] opacity-70">{counts[t.key]}</span> : null}
+            </button>
+          ))}
+          <button
+            onClick={() => setSavedOnly(!savedOnly)}
+            className={cn(
+              'flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
+              savedOnly ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted',
+            )}
+          >
+            <BookmarkCheck className="h-3.5 w-3.5" /> Saved
+          </button>
+        </div>
+        <div className="ml-auto flex items-center gap-2">
+          {data?.sources && data.sources.length > 0 && (
+            <select
+              value={source}
+              onChange={(e) => setSource(e.target.value)}
+              className="h-9 rounded-md border bg-background px-2 text-xs"
+              aria-label="Filter by source"
+            >
+              <option value="">All sources</option>
+              {data.sources.map((s) => (
+                <option key={s.name} value={s.name}>{s.name} ({s.count})</option>
+              ))}
+            </select>
+          )}
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search listings…"
+              className="h-9 w-44 pl-8 text-xs"
+              aria-label="Search listings"
+            />
+          </div>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {[1, 2, 3, 4, 5, 6].map((i) => <SkeletonCard key={i} className="h-32" />)}
+        </div>
+      ) : total === 0 ? (
+        <EmptyState
+          icon={<Radar className="h-5 w-5" />}
+          title="No listings fetched yet"
+          description="Hit “Fetch latest” to pull live jobs, internships and research positions from official company boards and public job APIs. Everything arrives with a direct link to the real posting."
+          action={{ label: fetching ? 'Fetching…' : 'Fetch opportunities', onClick: fetchListings }}
+        />
+      ) : listings.length === 0 ? (
+        <EmptyState
+          icon={<Search className="h-5 w-5" />}
+          title="Nothing matches these filters"
+          description="Try a different type, source, or clear the search."
+        />
+      ) : (
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {listings.map((l) => (
+            <Card key={l.id} className="group border transition-shadow hover:shadow-soft">
+              <CardContent className="p-4">
+                <div className="flex items-start gap-2.5">
+                  {companyAvatar(l.company)}
+                  <div className="min-w-0 flex-1">
+                    <p className="line-clamp-2 text-sm font-semibold leading-snug">{l.role}</p>
+                    <p className="mt-0.5 truncate text-xs text-muted-foreground">{l.company}</p>
+                  </div>
+                  <button
+                    onClick={() => toggleSave(l)}
+                    disabled={busyId === l.id}
+                    className={cn(
+                      'flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border transition-colors',
+                      l.saved ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted',
+                    )}
+                    aria-label={l.saved ? 'Saved to pipeline' : 'Save to pipeline'}
+                    title={l.saved ? 'Saved to pipeline' : 'Save to pipeline'}
+                  >
+                    {l.saved ? <BookmarkCheck className="h-3.5 w-3.5" /> : <Bookmark className="h-3.5 w-3.5" />}
+                  </button>
+                </div>
+                <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                  <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-medium capitalize', TYPE_STYLE[l.type] ?? 'bg-muted text-muted-foreground')}>
+                    {l.type}
+                  </span>
+                  <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">{l.source}</span>
+                </div>
+                <div className="mt-2 flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
+                  <span className="flex min-w-0 items-center gap-1">
+                    {l.location && <><MapPin className="h-3 w-3 shrink-0" /><span className="truncate">{l.location}</span></>}
+                    {l.publishedAt && <span className="shrink-0">· {timeAgo(l.publishedAt)}</span>}
+                  </span>
+                  <a
+                    href={l.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex shrink-0 items-center gap-1 font-medium text-primary hover:underline"
+                  >
+                    Apply <ExternalLink className="h-3 w-3" />
+                  </a>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }

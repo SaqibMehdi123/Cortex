@@ -196,11 +196,12 @@ model Opportunity {
   id          String    @id @default(cuid())
   company     String
   role        String
-  type        String    @default("internship") // internship | job | scholarship | event | referral
+  type        String    @default("internship") // internship | job | research | scholarship | event | referral
   classification String @default("opportunity") // opportunity | rejection | interview | offer | deadline
   sender      String?
   source      String?
   url         String?
+  location    String?
   status      String    @default("saved") // saved | applied | interview | offer | rejected | archived
   deadline    DateTime?
   nextAction  String?
@@ -212,6 +213,25 @@ model Opportunity {
 }
 
 // ─── Mindmap Studio ────────────────────────────────────────────────
+
+// Fetched job/internship/research listings from authentic external sources.
+// Saved listings get copied into the Opportunity pipeline.
+model JobListing {
+  id          String    @id @default(cuid())
+  company     String
+  role        String
+  type        String    @default("job") // job | internship | research
+  location    String?
+  source      String
+  url         String    @unique
+  externalId  String?
+  publishedAt DateTime?
+  saved       Boolean   @default(false)
+  fetchedAt   DateTime  @default(now())
+
+  @@index([type])
+  @@index([source])
+}
 
 model MindMap {
   id        String   @id @default(cuid())
