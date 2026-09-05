@@ -104,16 +104,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             collapsed ? 'w-16' : 'w-[232px]'
           )}
         >
-          <div className={cn('flex items-center gap-2.5 px-4 pb-4 pt-5', collapsed && 'justify-center px-0')}>
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 via-primary to-teal-500 text-primary-foreground shadow-soft">
-              <Sparkles className="h-5 w-5" />
+          <div className={cn('flex items-center gap-2 px-4 pb-4 pt-5', collapsed && 'justify-center px-0')}>
+            <div className={cn('flex min-w-0 items-baseline gap-1.5', collapsed && 'justify-center')}>
+              <span className="font-display text-[1.35rem] leading-none">Cortex</span>
+              {!collapsed && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" aria-hidden />}
             </div>
-            {!collapsed && (
-              <div className="min-w-0">
-                <p className="truncate text-sm font-bold leading-tight tracking-tight">Cortex</p>
-                <p className="truncate text-[11px] text-muted-foreground">Your second brain</p>
-              </div>
-            )}
+            {!collapsed && <span className="sr-only">Your second brain</span>}
           </div>
 
           <div className={cn('px-3 pb-3', collapsed && 'px-2')}>
@@ -250,10 +246,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* ── Mobile top bar ── */}
         <header className="fixed inset-x-0 top-0 z-30 flex items-center gap-2 border-b bg-background/95 px-4 py-2.5 backdrop-blur supports-[backdrop-filter]:bg-background/80 lg:hidden">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 via-primary to-teal-500 text-primary-foreground">
-            <Sparkles className="h-4 w-4" />
+          <div className="flex flex-1 items-baseline gap-1.5">
+            <span className="font-display text-xl leading-none">Cortex</span>
+            <span className="h-1.5 w-1.5 rounded-full bg-primary" aria-hidden />
           </div>
-          <p className="flex-1 text-sm font-semibold">Cortex</p>
           {!online && <WifiOff className="h-4 w-4 text-warning" aria-label="Offline" />}
           <button
             onClick={() => setCommandOpen(true)}
@@ -329,10 +325,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="fixed bottom-20 right-4 z-40 flex flex-col gap-3 lg:hidden">
           <button
             onClick={() => setCopilotOpen(true)}
-            className="flex h-12 w-12 items-center justify-center rounded-full border bg-card text-primary shadow-soft transition-transform active:scale-95"
+            className="flex h-12 w-12 items-center justify-center rounded-full border bg-card shadow-soft transition-transform active:scale-95"
             aria-label="Open AI Copilot"
           >
-            <Sparkles className="h-5 w-5" />
+            <Sparkles className="h-5 w-5 text-muted-foreground" />
           </button>
           <button
             onClick={() => setCaptureOpen(true)}

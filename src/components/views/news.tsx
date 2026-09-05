@@ -340,7 +340,7 @@ function PaperCard({ paper, onUpdated }: { paper: Paper; onUpdated: (p: Paper) =
     <Card className="card-lift overflow-hidden">
       <CardContent className="p-4">
         <div className="flex items-start gap-3">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary/15 to-teal-500/10 text-primary ring-1 ring-primary/15" aria-hidden>
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border bg-secondary text-muted-foreground" aria-hidden>
             <FileText className="h-4 w-4" />
           </span>
           <div className="min-w-0 flex-1">
@@ -521,7 +521,6 @@ export function NewsView() {
   return (
     <div className="anim-fade-up space-y-5 pb-8">
       <PageHeader
-        icon={<Radar className="h-5 w-5" />}
         title="News & Papers"
         description="Real stories from labs & newsletters, plus fresh research from Hugging Face and arXiv."
       />

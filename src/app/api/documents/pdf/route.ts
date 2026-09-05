@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { promises as fs } from 'fs'
+import path from 'path'
 import { db } from '@/lib/db'
 
 export const maxDuration = 120
 
-// POST /api/documents/pdf — multipart upload of a PDF; real text extraction
-// with pdf-parse (pdf.js). The extracted text powers highlighting, AI
-// summaries and doc Q&A in the Reader.
+// POST /api/documents/pdf — multipart upload of a PDF.
+// The ORIGINAL file is kept byte-for-byte on disk (uploads/) so the Reader
+// can embed it in a native browser PDF viewer — no formatting loss, images
+// intact. Text is additionally extracted (pdf-parse/pdf.js) to power
+// highlighting, AI summaries and doc Q&A.
 export async function POST(req: NextRequest) {
   try {
     const form = await req.formData()
@@ -51,12 +55,18 @@ export async function POST(req: NextRequest) {
       .trim()
 
     if (cleaned.length < 40) {
+      // Still accept the PDF — the original renders fine in the viewer — but
+      // warn that AI features will be limited without extractable text.
+      const doc = await createDocument(buffer, name, {
+        title: ((form.get('title') as string | null)?.trim() || name.replace(/\.pdf$/i, '').replace(/[_-]+/g, ' ').trim()).slice(0, 300),
+        author: (form.get('author') as string | null)?.trim() || null,
+        tags: (form.get('tags') as string | null)?.trim() || null,
+        content: null,
+        pageCount: 0,
+      })
       return NextResponse.json(
-        {
-          error:
-            'No extractable text found — this PDF is probably a scan of images. OCR is not supported yet; try a text-based PDF or paste the text manually.',
-        },
-        { status: 422 }
+        { document: doc, pages: 0, chars: 0, warning: 'No extractable text (probably a scan) — the original PDF still opens in the viewer, but highlighting & AI Q&A need text.' },
+        { status: 201 }
       )
     }
 
@@ -65,16 +75,12 @@ export async function POST(req: NextRequest) {
     const fallbackTitle = name.replace(/\.pdf$/i, '').replace(/[_-]+/g, ' ').trim()
     const title = ((form.get('title') as string | null)?.trim() || metaTitle || fallbackTitle).slice(0, 300)
 
-    const document = await db.document.create({
-      data: {
-        title,
-        author,
-        type: 'paper',
-        source: null,
-        content: cleaned.slice(0, 500000),
-        status: 'reading',
-        tags: tags ? `pdf,${tags}` : 'pdf',
-      },
+    const document = await createDocument(buffer, name, {
+      title,
+      author,
+      tags,
+      content: cleaned.slice(0, 500000),
+      pageCount: pages,
     })
 
     return NextResponse.json({ document, pages, chars: cleaned.length }, { status: 201 })
@@ -82,4 +88,37 @@ export async function POST(req: NextRequest) {
     console.error('POST /api/documents/pdf error', e)
     return NextResponse.json({ error: 'PDF extraction failed' }, { status: 500 })
   }
+}
+
+// Store the original bytes + create the DB row. Files live in <project>/uploads
+// keyed by document id, so they can be streamed back exactly as uploaded.
+async function createDocument(
+  buffer: Buffer,
+  fileName: string,
+  opts: { title: string; author: string | null; tags: string | null; content: string | null; pageCount: number }
+) {
+  const uploadDir = path.join(process.cwd(), 'uploads')
+  await fs.mkdir(uploadDir, { recursive: true })
+
+  const document = await db.document.create({
+    data: {
+      title: opts.title,
+      author: opts.author,
+      type: 'paper',
+      source: null,
+      content: opts.content,
+      status: 'reading',
+      tags: opts.tags ? `pdf,${opts.tags}` : 'pdf',
+      pageCount: opts.pageCount || null,
+    },
+  })
+
+  const safeName = `${document.id}.pdf`
+  await fs.writeFile(path.join(uploadDir, safeName), buffer)
+  await db.document.update({
+    where: { id: document.id },
+    data: { filePath: safeName, fileName, fileSize: buffer.length },
+  })
+
+  return { ...document, filePath: safeName, fileName, fileSize: buffer.length }
 }

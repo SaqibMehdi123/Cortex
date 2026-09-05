@@ -2,7 +2,7 @@
 
 // Lightweight canvas-free confetti burst (respects prefers-reduced-motion)
 
-const COLORS = ['#6366F1', '#14B8A6', '#F59E0B', '#22C55E', '#F472B6', '#818CF8']
+const COLORS = ['#2F6B57', '#C08A2D', '#C25E3A', '#557A4E', '#7D5A6C', '#4F7F7B']
 
 export function fireConfetti(count = 80) {
   if (typeof window === 'undefined') return

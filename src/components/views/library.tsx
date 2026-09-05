@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { api, fmtDate } from '@/lib/client'
 import type { DocumentItem, Note } from '@/lib/types'
 import { useApi } from '@/lib/client'
@@ -49,6 +49,16 @@ export function LibraryView() {
 
   const { data, loading, reload } = useApi<{ documents: DocumentItem[] }>(
     `/api/documents?status=${status}${q ? `&q=${encodeURIComponent(q)}` : ''}`
+  )
+  const [allDocs, setAllDocs] = useState<DocumentItem[] | null>(null)
+
+  useEffect(() => {
+    api.get<{ documents: DocumentItem[] }>('/api/documents').then((d) => setAllDocs(d.documents)).catch(() => {})
+  }, [])
+
+  const reading = useMemo(
+    () => (allDocs ?? []).filter((d) => d.status === 'reading' && d.progress > 0).sort((a, b) => (b.lastReadAt ?? b.updatedAt).localeCompare(a.lastReadAt ?? a.updatedAt)).slice(0, 4),
+    [allDocs]
   )
 
   async function loadNotes() {
@@ -105,6 +115,32 @@ export function LibraryView() {
         </TabsList>
 
         <TabsContent value="documents" className="mt-4 space-y-4">
+          {/* Continue reading — pick up where you left off */}
+          {reading.length > 0 && status === 'all' && !q && (
+            <section aria-label="Continue reading">
+              <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Continue reading</h2>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                {reading.map((doc) => (
+                  <button key={doc.id} onClick={() => openReader(doc.id)} className="text-left">
+                    <Card className="card-lift h-full">
+                      <CardContent className="space-y-2 p-4">
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Badge variant="outline" className="text-[10px] capitalize">{doc.filePath ? 'PDF' : doc.type}</Badge>
+                          {doc.author && <span className="truncate">{doc.author}</span>}
+                        </div>
+                        <p className="line-clamp-2 text-sm font-semibold leading-snug">{doc.title}</p>
+                        <div className="flex items-center gap-2 pt-1">
+                          <Progress value={doc.progress} className="h-1.5" />
+                          <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">{doc.progress}%</span>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
+
           {/* Filters */}
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative flex-1 sm:max-w-xs">
@@ -153,9 +189,12 @@ export function LibraryView() {
               {data.documents.map((doc) => (
                 <button key={doc.id} onClick={() => openReader(doc.id)} className="group text-left">
                   <Card className="h-full overflow-hidden pt-0 transition-all duration-200 group-hover:-translate-y-0.5 group-hover:shadow-soft">
-                    <div className="relative flex h-24 items-end bg-gradient-to-br from-primary/80 via-primary/60 to-teal-500/50 p-3">
-                      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/20 text-white backdrop-blur">
-                        {TYPE_META[doc.type]?.icon ?? TYPE_META.other.icon}
+                    <div className="relative flex h-24 items-center justify-center bg-secondary">
+                      <span className="font-display text-4xl leading-none text-foreground/25" aria-hidden>
+                        {(doc.title.trim().charAt(0) || '·').toUpperCase()}
+                      </span>
+                      <span className="absolute bottom-2.5 left-3.5 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                        {doc.filePath ? 'PDF' : TYPE_META[doc.type]?.label ?? 'Doc'}
                       </span>
                       <Badge variant="outline" className={cn('absolute right-2.5 top-2.5 bg-background/80 text-[10px] backdrop-blur', STATUS_STYLES[doc.status])}>
                         {doc.status === 'queued' ? 'read later' : doc.status}
@@ -282,7 +321,7 @@ function ImportDialog({ open, onOpenChange, onImported }: { open: boolean; onOpe
     const res = await fetch('/api/documents/pdf', { method: 'POST', body: form })
     const data = await res.json().catch(() => ({}))
     if (!res.ok) throw new Error(data.error || 'PDF extraction failed')
-    toast({ title: 'PDF imported', description: `${data.pages} pages · ${Math.round((data.chars ?? 0) / 1000)}k characters extracted — ready for highlighting and Ask AI.` })
+    toast({ title: 'PDF imported', description: `${data.pages} pages — opens with its original layout in the viewer${data.chars ? ` · ${Math.round((data.chars ?? 0) / 1000)}k characters extracted for highlights & AI` : ''}.` })
   }
 
   async function submit() {
@@ -316,7 +355,7 @@ function ImportDialog({ open, onOpenChange, onImported }: { open: boolean; onOpe
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Import to library</DialogTitle>
-          <DialogDescription>PDFs get real text extraction server-side. Web articles are fetched automatically.</DialogDescription>
+          <DialogDescription>PDFs open in an embedded viewer with their original layout intact — text is also extracted for highlights &amp; AI. Web articles are fetched automatically.</DialogDescription>
         </DialogHeader>
         <Tabs value={mode} onValueChange={(v) => setMode(v as typeof mode)}>
           <TabsList className="grid w-full grid-cols-4">

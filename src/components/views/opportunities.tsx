@@ -54,6 +54,7 @@ export function OpportunitiesView() {
   const [addOpen, setAddOpen] = useState(false)
   const [pasteOpen, setPasteOpen] = useState(false)
   const [form, setForm] = useState({ ...emptyForm })
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
   const opportunities = data?.opportunities ?? []
@@ -65,7 +66,24 @@ export function OpportunitiesView() {
         : opportunities.filter((o) => o.status === tab)
 
   function openAdd(prefill?: Partial<typeof emptyForm>) {
+    setEditingId(null)
     setForm({ ...emptyForm, ...prefill })
+    setAddOpen(true)
+  }
+
+  function openEdit(o: Opportunity) {
+    setEditingId(o.id)
+    setForm({
+      company: o.company,
+      role: o.role,
+      type: o.type,
+      sender: o.sender ?? '',
+      source: o.source ?? '',
+      url: o.url ?? '',
+      status: o.status,
+      deadline: o.deadline ? o.deadline.slice(0, 10) : '',
+      notes: o.notes ?? '',
+    })
     setAddOpen(true)
   }
 
@@ -76,10 +94,17 @@ export function OpportunitiesView() {
     }
     setSaving(true)
     try {
-      await api.post('/api/opportunities', { ...form, deadline: form.deadline || null })
-      setAddOpen(false)
-      await reload()
-      toast({ title: 'Opportunity saved', description: 'Deadlines show up on the dashboard.' })
+      if (editingId) {
+        await api.patch(`/api/opportunities/${editingId}`, { ...form, deadline: form.deadline || null })
+        setAddOpen(false)
+        await reload()
+        toast({ title: 'Opportunity updated' })
+      } else {
+        await api.post('/api/opportunities', { ...form, deadline: form.deadline || null })
+        setAddOpen(false)
+        await reload()
+        toast({ title: 'Opportunity saved', description: 'Deadlines show up on the dashboard.' })
+      }
     } catch (e) {
       toast({ title: e instanceof Error ? e.message : 'Failed to save', variant: 'destructive' })
     } finally {
@@ -99,7 +124,7 @@ export function OpportunitiesView() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="Opportunities" subtitle="Internship & job emails, deadlines and application status — in one board">
+      <PageHeader title="Opportunities" description="Internship & job emails, deadlines and application status — in one board">
         <Button variant="outline" size="sm" onClick={() => setPasteOpen(true)}>
           <Wand2 className="mr-1.5 h-4 w-4" /> Paste email (AI)
         </Button>
@@ -138,10 +163,10 @@ export function OpportunitiesView() {
             return (
               <div key={o.id} className="group rounded-xl border bg-card p-4">
                 <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold">{o.company}</p>
-                    <p className="truncate text-sm text-muted-foreground">{o.role}</p>
-                  </div>
+                  <button className="min-w-0 text-left" onClick={() => openEdit(o)} aria-label={`Edit ${o.company}`}>
+                    <p className="truncate text-sm font-semibold transition-colors hover:text-foreground">{o.company}</p>
+                    <p className="truncate text-sm text-muted-foreground underline-offset-2 group-hover:underline">{o.role}</p>
+                  </button>
                   <Tone className={cn('shrink-0 capitalize', STATUS_TONE[o.status] ?? '')}>{o.status}</Tone>
                 </div>
 

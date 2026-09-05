@@ -45,7 +45,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
+    const existing = await db.document.findUnique({ where: { id }, select: { filePath: true } })
     await db.document.delete({ where: { id } })
+    // clean up the stored PDF from disk
+    if (existing?.filePath) {
+      const { unlink } = await import('fs/promises')
+      const path = await import('path')
+      await unlink(path.join(process.cwd(), 'uploads', path.basename(existing.filePath))).catch(() => {})
+    }
     return NextResponse.json({ ok: true })
   } catch (e) {
     console.error('DELETE /api/documents/[id] error', e)

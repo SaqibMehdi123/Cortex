@@ -1,6 +1,6 @@
 'use client'
 
-import { LayoutDashboard, Library, BookOpenText, CalendarRange, Target, Radar, Briefcase, Share2, Layers, ChartLine, Settings } from 'lucide-react'
+import { LayoutDashboard, Library, CalendarRange, Target, Radar, Briefcase, Share2, Layers, ChartLine, Settings } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 export { useUI } from './store'
@@ -8,7 +8,6 @@ export { useUI } from './store'
 export type ViewKey =
   | 'dashboard'
   | 'library'
-  | 'reader'
   | 'plans'
   | 'goals'
   | 'news'
@@ -27,7 +26,6 @@ export const NAV_ITEMS: {
 }[] = [
   { key: 'dashboard', label: 'Dashboard', short: 'Home', icon: <LayoutDashboard className="h-4 w-4" />, group: 'workspace' },
   { key: 'library', label: 'Library', short: 'Read', icon: <Library className="h-4 w-4" />, group: 'workspace' },
-  { key: 'reader', label: 'Reader', short: 'Reader', icon: <BookOpenText className="h-4 w-4" />, group: 'workspace' },
   { key: 'plans', label: 'Plans', short: 'Plan', icon: <CalendarRange className="h-4 w-4" />, group: 'workspace' },
   { key: 'goals', label: 'Goals', short: 'Goals', icon: <Target className="h-4 w-4" />, group: 'workspace' },
   { key: 'news', label: 'News & Papers', short: 'Radar', icon: <Radar className="h-4 w-4" />, group: 'intelligence' },
@@ -56,7 +54,6 @@ export const MOBILE_TABS: { key: ViewKey | 'more'; label: string; icon: ReactNod
 export const VIEW_TITLES: Record<ViewKey, string> = {
   dashboard: 'Today',
   library: 'Library',
-  reader: 'Reader',
   plans: 'Plans',
   goals: 'Goals',
   news: 'News & Papers',

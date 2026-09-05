@@ -9,6 +9,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { useToast } from '@/hooks/use-toast'
 import { useUI } from '@/lib/nav-config'
@@ -17,7 +20,7 @@ import { PriorityDot, EmptyState, SkeletonCard } from '@/components/shared'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ChevronDown, ChevronRight, Plus, LayoutList, KanbanSquare, Trash2, CalendarDays,
-  Wand2, Loader2, Clock,
+  Wand2, Loader2, Clock, CheckCircle2, Pencil, MoreHorizontal, Check,
 } from 'lucide-react'
 
 type PlanNode = Plan & { children: Plan[] }
@@ -229,6 +232,115 @@ export function PlansView() {
   )
 }
 
+// ─── Plan title with one-click done toggle + inline rename ──────────
+function PlanTitleToggle({ node, onReload }: { node: PlanNode; onReload: () => void }) {
+  const [editing, setEditing] = useState(false)
+  const [title, setTitle] = useState(node.title)
+  const [busy, setBusy] = useState(false)
+  const { toast } = useToast()
+
+  // the row menu's "Rename" action focuses this row's editor
+  useEffect(() => {
+    const handler = (e: Event) => {
+      if ((e as CustomEvent).detail === node.id) setEditing(true)
+    }
+    document.addEventListener('cortex:rename-plan', handler)
+    return () => document.removeEventListener('cortex:rename-plan', handler)
+  }, [node.id])
+
+  async function toggleDone() {
+    try {
+      await api.patch(`/api/plans/${node.id}`, { done: !node.done })
+      onReload()
+    } catch {
+      toast({ title: 'Could not update plan', variant: 'destructive' })
+    }
+  }
+
+  async function save() {
+    const t = title.trim()
+    if (!t || t === node.title) return setEditing(false)
+    setBusy(true)
+    try {
+      await api.patch(`/api/plans/${node.id}`, { title: t })
+      setEditing(false)
+      onReload()
+    } catch {
+      toast({ title: 'Could not rename plan', variant: 'destructive' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (editing) {
+    return (
+      <Input
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') save()
+          if (e.key === 'Escape') {
+            setTitle(node.title)
+            setEditing(false)
+          }
+        }}
+        onBlur={save}
+        disabled={busy}
+        className="h-7 max-w-[240px] text-sm font-semibold"
+        autoFocus
+        aria-label="Plan title"
+      />
+    )
+  }
+
+  return (
+    <span className="flex min-w-0 items-center gap-1.5">
+      <button
+        onClick={toggleDone}
+        className={cn(
+          'flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-colors',
+          node.done ? 'border-success bg-success text-white' : 'border-input text-transparent hover:border-success'
+        )}
+        aria-label={node.done ? `Mark "${node.title}" as not done` : `Mark "${node.title}" as done`}
+      >
+        <Check className="h-3 w-3" />
+      </button>
+      <span className={cn('truncate text-sm font-semibold', node.done && 'text-muted-foreground line-through')} title={node.title}>
+        {node.title}
+      </span>
+    </span>
+  )
+}
+
+// menu: rename
+function PlanRowMenu({ node, onReload }: { node: PlanNode; onReload: () => void }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground opacity-60 transition-opacity hover:bg-muted hover:opacity-100"
+          aria-label={`Actions for ${node.title}`}
+        >
+          <MoreHorizontal className="h-4 w-4" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-40">
+        <DropdownMenuItem onClick={() => document.dispatchEvent(new CustomEvent('cortex:rename-plan', { detail: node.id }))}>
+          <Pencil className="mr-2 h-3.5 w-3.5" /> Rename
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={async () => {
+            await api.patch(`/api/plans/${node.id}`, { done: !node.done })
+            onReload()
+          }}
+        >
+          <CheckCircle2 className="mr-2 h-3.5 w-3.5" /> {node.done ? 'Mark as not done' : 'Mark as done'}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
 // ─── Recursive plan node row ───────────────────────────────────────
 function PlanNodeRow({
   node, depth, collapsed, toggleCollapse, onToggleTask, onSnoozeTask, onAddTask, onReload, allPlans, mode,
@@ -265,10 +377,11 @@ function PlanNodeRow({
           ) : (
             <span className="w-6 text-center text-sm">{TF_ICON[node.timeframe]}</span>
           )}
-          <span className={cn('text-sm font-semibold', node.done && 'text-muted-foreground line-through')}>{node.title}</span>
+          <PlanTitleToggle node={node} onReload={onReload} />
           <Badgeish timeframe={node.timeframe} />
           {node.goal && <span className="hidden rounded-full bg-sidebar-accent px-2 py-0.5 text-[10px] font-medium text-sidebar-accent-foreground sm:inline">{node.goal.title}</span>}
-          <span className="ml-auto text-[10px] text-muted-foreground">{doneCount}/{tasks.length} tasks</span>
+          <span className="ml-auto text-[10px] tabular-nums text-muted-foreground">{doneCount}/{tasks.length} tasks</span>
+          <PlanRowMenu node={node} onReload={onReload} />
           <button
             onClick={async () => {
               await api.del(`/api/plans/${node.id}`)

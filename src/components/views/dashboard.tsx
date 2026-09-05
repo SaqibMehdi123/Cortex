@@ -97,12 +97,12 @@ export function DashboardView() {
       </div>
 
       {/* Copilot briefing card */}
-      <Card className="border-primary/25 bg-gradient-to-br from-sidebar-accent/60 to-card transition-shadow hover:shadow-soft">
+      <Card className="transition-shadow hover:shadow-soft">
         <CardHeader className="flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="flex items-center gap-2 text-sm">
-            <Sparkles className="h-4 w-4 text-primary" /> Daily briefing
+            Daily briefing
           </CardTitle>
-          <Button variant="ghost" size="sm" className="h-7 text-xs text-primary" onClick={() => setCopilotOpen(true)}>
+          <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setCopilotOpen(true)}>
             Ask Copilot <ChevronRight className="h-3.5 w-3.5" />
           </Button>
         </CardHeader>
@@ -322,8 +322,8 @@ export function DashboardView() {
                   onClick={() => openReader(doc.id)}
                   className="flex items-center gap-3 rounded-xl border p-3 text-left transition-all hover:shadow-soft active:scale-[0.99]"
                 >
-                  <div className="flex h-12 w-9 shrink-0 items-center justify-center rounded-md bg-gradient-to-br from-primary/70 to-teal-500/60 text-primary-foreground">
-                    <BookOpen className="h-4 w-4" />
+                  <div className="flex h-12 w-9 shrink-0 items-center justify-center rounded-md border bg-secondary font-display text-lg text-foreground/40">
+                    {(doc.title.trim().charAt(0) || '·').toUpperCase()}
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{doc.title}</p>

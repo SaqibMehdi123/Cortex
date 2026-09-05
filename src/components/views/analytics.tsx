@@ -88,15 +88,15 @@ export function AnalyticsView() {
               <AreaChart data={chartDays} margin={{ top: 6, right: 6, left: -18, bottom: 0 }}>
                 <defs>
                   <linearGradient id="readGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#6366F1" stopOpacity={0.3} />
-                    <stop offset="100%" stopColor="#6366F1" stopOpacity={0} />
+                    <stop offset="0%" stopColor="#2F6B57" stopOpacity={0.3} />
+                    <stop offset="100%" stopColor="#2F6B57" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
                 <XAxis dataKey="label" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
                 <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} unit="h" />
                 <ReTooltip contentStyle={{ background: 'var(--popover)', border: '1px solid var(--border)', borderRadius: 10, fontSize: 12 }} />
-                <Area type="monotone" dataKey="readingHours" name="Reading (h)" stroke="#6366F1" strokeWidth={2} fill="url(#readGrad)" />
+                <Area type="monotone" dataKey="readingHours" name="Reading (h)" stroke="#2F6B57" strokeWidth={2} fill="url(#readGrad)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -170,7 +170,7 @@ export function AnalyticsView() {
                 <XAxis dataKey="week" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
                 <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} allowDecimals={false} />
                 <ReTooltip contentStyle={{ background: 'var(--popover)', border: '1px solid var(--border)', borderRadius: 10, fontSize: 12 }} />
-                <Line type="monotone" dataKey="completed" name="Milestones" stroke="#6366F1" strokeWidth={2.5} dot={{ r: 3, fill: '#6366F1' }} activeDot={{ r: 5 }} />
+                <Line type="monotone" dataKey="completed" name="Milestones" stroke="#2F6B57" strokeWidth={2.5} dot={{ r: 3, fill: '#2F6B57' }} activeDot={{ r: 5 }} />
               </LineChart>
             </ResponsiveContainer>
           </div>

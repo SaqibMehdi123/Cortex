@@ -9,16 +9,16 @@ import { Check, Clock } from 'lucide-react'
 import { toast } from '@/hooks/use-toast'
 import type { Task } from '@/lib/types'
 
-// ─── Goal color palette ────────────────────────────────────────────
+// ─── Goal color palette (muted, editorial — keys stay DB-compatible) ─
 export const GOAL_COLORS: Record<string, string> = {
-  indigo: '#6366F1',
-  teal: '#14B8A6',
-  emerald: '#22C55E',
-  amber: '#F59E0B',
-  rose: '#F43F5E',
-  violet: '#8B5CF6',
-  cyan: '#06B6D4',
-  zinc: '#71717A',
+  indigo: '#5E6B73', // slate
+  teal: '#2F6B57', // pine
+  emerald: '#557A4E', // moss
+  amber: '#C08A2D', // ochre
+  rose: '#C25E3A', // terracotta
+  violet: '#7D5A6C', // plum
+  cyan: '#4F7F7B', // eucalyptus
+  zinc: '#8A8375', // stone
 }
 
 export function colorHex(color?: string | null) {
@@ -30,7 +30,7 @@ export function ProgressRing({
   value,
   size = 64,
   stroke = 6,
-  color = '#6366F1',
+  color = '#2F6B57',
   label,
   sublabel,
 }: {
@@ -84,12 +84,12 @@ export function EmptyState({
   action?: { label: string; onClick: () => void }
 }) {
   return (
-    <div className="anim-fade-up flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed bg-card/60 px-6 py-14 text-center">
-      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/15 via-primary/10 to-teal-500/10 text-primary ring-1 ring-primary/20">
+    <div className="anim-fade-up flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed bg-card/50 px-6 py-14 text-center">
+      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground [&_svg]:h-5 [&_svg]:w-5">
         {icon}
       </div>
       <div>
-        <p className="font-semibold">{title}</p>
+        <p className="font-display text-lg">{title}</p>
         <p className="mx-auto mt-1 max-w-sm text-sm leading-relaxed text-muted-foreground">{description}</p>
       </div>
       {action && (
@@ -103,28 +103,19 @@ export function EmptyState({
 
 // ─── Consistent page header (title + subtitle + actions) ───────────
 export function PageHeader({
-  icon,
   title,
   description,
   actions,
 }: {
-  icon?: ReactNode
   title: string
   description?: string
   actions?: ReactNode
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3">
-      <div className="flex items-center gap-3">
-        {icon && (
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary/15 via-primary/10 to-teal-500/10 text-primary ring-1 ring-primary/15">
-            {icon}
-          </span>
-        )}
-        <div>
-          <h1 className="text-xl font-bold tracking-tight sm:text-2xl">{title}</h1>
-          {description && <p className="text-sm text-muted-foreground">{description}</p>}
-        </div>
+    <div className="flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <h1 className="font-display text-2xl leading-tight sm:text-[1.7rem]">{title}</h1>
+        {description && <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </div>

@@ -386,7 +386,7 @@ export function MindmapView() {
                   </div>
                 </foreignObject>
                 {n.linkType && (
-                  <circle cx={NODE_W - 6} cy={6} r={3.5} fill="#14B8A6" />
+                  <circle cx={NODE_W - 6} cy={6} r={3.5} fill="#2F6B57" />
                 )}
               </g>
             ))}

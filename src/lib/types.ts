@@ -8,6 +8,10 @@ export interface DocumentItem {
   source: string | null
   notes: string | null
   content: string | null
+  filePath: string | null // set for uploaded PDFs — original file streams at /api/documents/[id]/file
+  fileName: string | null
+  fileSize: number | null
+  pageCount: number | null
   status: string // queued | reading | finished | paused
   progress: number
   tags: string | null

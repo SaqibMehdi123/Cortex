@@ -17,6 +17,10 @@ model Document {
   source         String?
   notes          String?
   content        String?
+  filePath       String? // original PDF stored on disk (uploads/) — rendered in the embedded viewer
+  fileName       String?
+  fileSize       Int?
+  pageCount      Int?
   status         String           @default("reading") // queued | reading | finished | paused
   progress       Int              @default(0) // 0-100
   tags           String? // comma separated

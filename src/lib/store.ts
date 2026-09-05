@@ -34,7 +34,7 @@ export const useUI = create<UIState>((set) => ({
   sidebarCollapsed: false,
   mobileMoreOpen: false,
   focusTask: null,
-  setView: (v) => set({ view: v, mobileMoreOpen: false }),
+  setView: (v) => set({ view: v, mobileMoreOpen: false, readerDocId: null }),
   openReader: (docId) => set({ readerDocId: docId }),
   closeReader: () => set({ readerDocId: null }),
   setCopilotOpen: (open) => set({ copilotOpen: open }),
