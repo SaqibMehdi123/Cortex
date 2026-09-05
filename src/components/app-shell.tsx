@@ -104,12 +104,35 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             collapsed ? 'w-16' : 'w-[232px]'
           )}
         >
-          <div className={cn('flex items-center gap-2 px-4 pb-4 pt-5', collapsed && 'justify-center px-0')}>
-            <div className={cn('flex min-w-0 items-baseline gap-1.5', collapsed && 'justify-center')}>
-              <span className="font-display text-[1.35rem] leading-none">Cortex</span>
-              {!collapsed && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" aria-hidden />}
+          <div className={cn('flex items-center gap-1 px-4 pb-4 pt-5', collapsed && 'justify-center px-0')}>
+            {!collapsed && (
+              <div className="flex min-w-0 flex-1 items-baseline gap-1.5">
+                <span className="font-display text-[1.35rem] leading-none">Cortex</span>
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" aria-hidden />
+              </div>
+            )}
+            {/* Theme + collapse — top, beside the heading */}
+            <div className={cn('flex items-center gap-0.5', collapsed && 'flex-col gap-1')}>
+              <button
+                onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                aria-label="Toggle dark mode"
+                title={resolvedTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+              >
+                {/* CSS-only swap: no hydration mismatch (next-themes sets .dark on <html>) */}
+                <Sun className="hidden h-4 w-4 dark:block" />
+                <Moon className="h-4 w-4 dark:hidden" />
+              </button>
+              <button
+                onClick={toggleSidebar}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              >
+                {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+              </button>
             </div>
-            {!collapsed && <span className="sr-only">Your second brain</span>}
+            {collapsed && <span className="sr-only">Cortex</span>}
           </div>
 
           <div className={cn('px-3 pb-3', collapsed && 'px-2')}>
@@ -195,22 +218,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </PopoverContent>
             </Popover>
 
-            <button
-              onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
-              className={cn('flex min-h-[36px] w-full items-center gap-2.5 rounded-lg px-3 py-1.5 text-[13px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground', collapsed && 'justify-center px-0')}
-              aria-label="Toggle theme"
-            >
-              {/* CSS-only swap: no hydration mismatch (next-themes sets .dark on <html>) */}
-              <Sun className="hidden h-4 w-4 dark:block" />
-              <Moon className="h-4 w-4 dark:hidden" />
-              {!collapsed && (
-                <>
-                  <span className="hidden dark:inline">Light mode</span>
-                  <span className="dark:hidden">Dark mode</span>
-                </>
-              )}
-            </button>
-
             <div className={cn('flex min-h-[32px] items-center gap-2.5 rounded-lg px-3 py-1.5 text-xs text-muted-foreground', collapsed && 'justify-center px-0')} aria-live="polite">
               {!online ? (
                 <WifiOff className="h-4 w-4 text-warning" aria-label="Offline" />
@@ -221,15 +228,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               )}
               {!collapsed && <span>{!online ? 'Offline mode' : synced ? 'All synced' : 'Syncing…'}</span>}
             </div>
-
-            <button
-              onClick={toggleSidebar}
-              className={cn('flex min-h-[36px] w-full items-center gap-2.5 rounded-lg px-3 py-1.5 text-[13px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground', collapsed && 'justify-center px-0')}
-              aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            >
-              {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
-              {!collapsed && 'Collapse'}
-            </button>
           </div>
         </aside>
 
@@ -251,6 +249,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <span className="h-1.5 w-1.5 rounded-full bg-primary" aria-hidden />
           </div>
           {!online && <WifiOff className="h-4 w-4 text-warning" aria-label="Offline" />}
+          <button
+            onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            aria-label="Toggle dark mode"
+          >
+            <Sun className="hidden h-4 w-4 dark:block" />
+            <Moon className="h-4 w-4 dark:hidden" />
+          </button>
           <button
             onClick={() => setCommandOpen(true)}
             className="flex h-9 items-center gap-1.5 rounded-lg border bg-muted px-2.5 text-xs text-muted-foreground"

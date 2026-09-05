@@ -10,6 +10,10 @@ import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/hooks/use-toast'
@@ -46,6 +50,7 @@ export function LibraryView() {
   const [layout, setLayout] = useState<'grid' | 'list'>('grid')
   const [importOpen, setImportOpen] = useState(false)
   const [notes, setNotes] = useState<Note[] | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<DocumentItem | null>(null)
 
   const { data, loading, reload } = useApi<{ documents: DocumentItem[] }>(
     `/api/documents?status=${status}${q ? `&q=${encodeURIComponent(q)}` : ''}`
@@ -67,6 +72,18 @@ export function LibraryView() {
       setNotes(d.notes)
     } catch {
       toast({ title: 'Failed to load notes', variant: 'destructive' })
+    }
+  }
+
+  async function deleteDoc(doc: DocumentItem) {
+    try {
+      await api.del(`/api/documents/${doc.id}`)
+      setConfirmDelete(null)
+      api.get<{ documents: DocumentItem[] }>('/api/documents').then((d) => setAllDocs(d.documents)).catch(() => {})
+      reload()
+      toast({ title: 'Document deleted', description: `“${doc.title}” was removed from your library.` })
+    } catch {
+      toast({ title: 'Delete failed', variant: 'destructive' })
     }
   }
 
@@ -187,7 +204,19 @@ export function LibraryView() {
           ) : layout === 'grid' ? (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {data.documents.map((doc) => (
-                <button key={doc.id} onClick={() => openReader(doc.id)} className="group text-left">
+                <div
+                  key={doc.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => openReader(doc.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      openReader(doc.id)
+                    }
+                  }}
+                  className="group rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                >
                   <Card className="h-full overflow-hidden pt-0 transition-all duration-200 group-hover:-translate-y-0.5 group-hover:shadow-soft">
                     <div className="relative flex h-24 items-center justify-center bg-secondary">
                       <span className="font-display text-4xl leading-none text-foreground/25" aria-hidden>
@@ -196,9 +225,21 @@ export function LibraryView() {
                       <span className="absolute bottom-2.5 left-3.5 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
                         {doc.filePath ? 'PDF' : TYPE_META[doc.type]?.label ?? 'Doc'}
                       </span>
-                      <Badge variant="outline" className={cn('absolute right-2.5 top-2.5 bg-background/80 text-[10px] backdrop-blur', STATUS_STYLES[doc.status])}>
+                      <Badge variant="outline" className={cn('absolute left-2.5 top-2.5 bg-background/80 text-[10px] backdrop-blur', STATUS_STYLES[doc.status])}>
                         {doc.status === 'queued' ? 'read later' : doc.status}
                       </Badge>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-1.5 top-1.5 h-7 w-7 bg-background/80 text-muted-foreground opacity-0 backdrop-blur transition-opacity hover:text-danger focus-visible:opacity-100 group-hover:opacity-100"
+                        aria-label={`Delete ${doc.title}`}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setConfirmDelete(doc)
+                        }}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
                     </div>
                     <CardContent className="space-y-2 p-4">
                       <p className="line-clamp-2 text-sm font-semibold leading-snug">{doc.title}</p>
@@ -217,16 +258,24 @@ export function LibraryView() {
                       )}
                     </CardContent>
                   </Card>
-                </button>
+                </div>
               ))}
             </div>
           ) : (
             <div className="overflow-hidden rounded-xl border bg-card">
               {data.documents.map((doc, i) => (
-                <button
+                <div
                   key={doc.id}
+                  role="button"
+                  tabIndex={0}
                   onClick={() => openReader(doc.id)}
-                  className={cn('flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/50', i !== 0 && 'border-t')}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      openReader(doc.id)
+                    }
+                  }}
+                  className={cn('group flex w-full cursor-pointer items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring', i !== 0 && 'border-t')}
                 >
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sidebar-accent text-primary">
                     {TYPE_META[doc.type]?.icon ?? TYPE_META.other.icon}
@@ -241,10 +290,22 @@ export function LibraryView() {
                     <Progress value={doc.progress} className="h-1.5" />
                     <span className="shrink-0 text-[10px] text-muted-foreground">{doc.progress}%</span>
                   </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-danger focus-visible:opacity-100 group-hover:opacity-100"
+                    aria-label={`Delete ${doc.title}`}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setConfirmDelete(doc)
+                    }}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
                   <Badge variant="outline" className={cn('shrink-0 text-[10px]', STATUS_STYLES[doc.status])}>
                     {doc.status === 'queued' ? 'later' : doc.status}
                   </Badge>
-                </button>
+                </div>
               ))}
             </div>
           )}
@@ -295,6 +356,27 @@ export function LibraryView() {
       </Tabs>
 
       <ImportDialog open={importOpen} onOpenChange={setImportOpen} onImported={() => { reload(); toast({ title: 'Added to library' }) }} />
+
+      {/* Delete confirmation (grid + list) */}
+      <AlertDialog open={!!confirmDelete} onOpenChange={(v) => !v && setConfirmDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete “{confirmDelete?.title}”?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently removes the document{confirmDelete?.filePath ? ' and its stored PDF file' : ''}, including highlights, notes and chat history. This can’t be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-danger text-white hover:bg-danger/90"
+              onClick={() => confirmDelete && deleteDoc(confirmDelete)}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
@@ -408,7 +490,12 @@ function ImportDialog({ open, onOpenChange, onImported }: { open: boolean; onOpe
               </div>
             </>
           ) : mode === 'url' ? (
-            <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://arxiv.org/abs/…" aria-label="Article URL" autoFocus />
+            <>
+              <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://arxiv.org/pdf/1706.03762 or any article URL" aria-label="Article URL" autoFocus />
+              <p className="text-xs text-muted-foreground">
+                Direct PDF links (arXiv, papers, reports…) are stored with their original layout and open in the embedded viewer. Other links are fetched as clean reading text.
+              </p>
+            </>
           ) : (
             <>
               <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title" aria-label="Title" />

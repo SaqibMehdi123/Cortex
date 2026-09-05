@@ -98,3 +98,26 @@ Stage Summary:
 - New identity: warm paper + ink + deep pine accent, Inter/Newsreader/Literata stack, minimal icon usage
 - Everything completable is reversible: goals (edit/reopen/delete + milestone-driven auto state), plans (done toggle + rename), milestones (toggle/rename/delete), opportunities (edit + any status transition), documents (finish/reopen)
 - Known notes: pre-existing docs uploaded before this change (e.g. "Elite Slide Mastery") have no stored file → they open in Text mode only; Gmail/Calendar OAuth still awaits the user's GOOGLE_CLIENT_ID/SECRET in .env (Settings shows the redirect URI to paste into Google Cloud Console)
+
+---
+Task ID: 6
+Agent: Main agent (Super Z)
+Task: Round-3 feedback — delete docs from Library, import PDFs via links (arXiv) rendered in the native embedded viewer, taller reading window, Plans↔Goals destination link, collapse + dark-mode toggles at the top heading, shorter Copilot subtitle
+
+Work Log:
+- URL→PDF import (POST /api/documents): PDF links are now detected (content-type + .pdf//pdf/ patterns + %PDF- magic bytes), downloaded, stored byte-for-byte in uploads/ and text-extracted via pdf-parse — same pipeline as manual upload, so they open in the embedded native viewer. arXiv /abs/ links are auto-promoted to /pdf/ (verified: abs/1706.03762 → real PDF, 15 pages). Title resolution: user title → PDF metadata → arXiv Atom API (export.arxiv.org) → arXiv:<id> → prettified filename; "Attention Is All You Need" resolves perfectly
+- Library delete: grid cards + list rows restructured (button→div role=button, keyboard accessible) with hover-reveal trash + shared AlertDialog confirm; reader header gained a delete button (same confirm); DELETE already cleaned stored files from disk (verified 4→3 uploads after test delete); status badge moved top-left on card covers to make room
+- Reader window taller: container 100dvh-128px → 100dvh-88px on desktop (+40px, now 812px @900px viewport), 100dvh-232px → 100dvh-184px on mobile (+48px); embedded PDF iframe fills it
+- Plans↔Goals destination: AddPlanDialog gained an optional "Destination goal" select; plan row "..." menu gained "Destination goal…" (GoalSelectDialog with no-goal option, PATCH /api/plans/[id] goalId — API already supported it); linked goal shows as a clickable chip (target icon) that jumps to the Goals tab; Plans stay a separate tab — only linked
+- Sidebar: theme + collapse toggles moved to the TOP beside the "Cortex" wordmark (collapsed rail stacks them vertically); bottom section keeps Notifications + sync; mobile top bar gained a dark-mode toggle next to the heading too
+- Copilot header subtitle shortened: "Your second brain — docs, plans, notes & news" → "Ask across your workspace"
+- Fixed latent bug: GET /api/documents select now includes filePath/fileName/fileSize/pageCount so library cards show the PDF badge for URL-imported papers
+- Verified in browser (desktop 1440×900 light+dark, mobile 390×844): arXiv URL import → native viewer with thumbnails/zoom/page 1/15; delete confirm dialog (cancel + API path); collapse/expand + dark mode from header; destination-goal dialog → chip → Goals navigation; copilot subtitle; measured reader height; zero page errors; lint clean
+- Noted: user live-imported papers (WalkVLM, VizWiz) and deleted their two broken "arXiv: 1706.03762" entries via the new button during the session — feature confirmed working in real use
+
+Stage Summary:
+- arXiv (and any) PDF links now import as REAL PDFs rendered in the embedded browser-native viewer — no more garbled text-mode imports
+- Docs deletable from Library (grid+list) and Reader header, always with confirm + file cleanup
+- Plans can be aimed at a goal as a "destination" without merging the two tabs
+- Theme + collapse controls live at the sidebar heading (desktop + mobile); Copilot subtitle trimmed
+- Remaining known pending items (from earlier rounds, unchanged): Gmail/Calendar OAuth still needs the user's GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET in .env (Settings shows the redirect URI)

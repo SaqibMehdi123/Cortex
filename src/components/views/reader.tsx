@@ -10,6 +10,10 @@ import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Slider } from '@/components/ui/slider'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
@@ -59,6 +63,7 @@ export function ReaderView() {
   const [lastHighlightId, setLastHighlightId] = useState<string | null>(null)
   const [flashcardBusy, setFlashcardBusy] = useState(false)
   const [manualProgress, setManualProgress] = useState(0)
+  const [confirmDelete, setConfirmDelete] = useState(false)
 
   const contentRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -521,7 +526,7 @@ export function ReaderView() {
 
   return (
     <div
-      className="anim-fade-up flex h-[calc(100dvh-232px)] min-h-[480px] flex-col lg:h-[calc(100dvh-128px)]"
+      className="anim-fade-up flex h-[calc(100dvh-184px)] min-h-[480px] flex-col lg:h-[calc(100dvh-88px)]"
       data-reader
     >
 
@@ -552,6 +557,15 @@ export function ReaderView() {
             <Button variant="outline" size="sm" className="hidden h-8 gap-1.5 text-xs sm:flex" onClick={toggleFinished}>
               <CheckCircle2 className={cn('h-3.5 w-3.5', doc.status === 'finished' && 'text-success')} />
               {doc.status === 'finished' ? 'Reopen' : 'Finish'}
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 shrink-0 text-muted-foreground hover:text-danger"
+              aria-label="Delete document"
+              onClick={() => setConfirmDelete(true)}
+            >
+              <Trash2 className="h-4 w-4" />
             </Button>
             <Button
               size="sm"
@@ -644,6 +658,36 @@ export function ReaderView() {
           {rail}
         </aside>
       </div>
+
+      {/* Delete confirmation */}
+      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete “{doc?.title}”?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently removes the document{isPdf ? ' and its stored PDF file' : ''}, including highlights, notes and chat history. This can’t be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-danger text-white hover:bg-danger/90"
+              onClick={async () => {
+                if (!doc) return
+                try {
+                  await api.del(`/api/documents/${doc.id}`)
+                  toast({ title: 'Document deleted' })
+                  closeReader()
+                } catch {
+                  toast({ title: 'Delete failed', variant: 'destructive' })
+                }
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Mobile side rail sheet */}
       <Sheet open={railOpen} onOpenChange={setRailOpen}>

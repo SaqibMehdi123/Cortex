@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState, useEffect } from 'react'
 import { api, todayISO } from '@/lib/client'
-import type { Plan, Task } from '@/lib/types'
+import type { Plan, Task, Goal } from '@/lib/types'
 import { useApi } from '@/lib/client'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -20,7 +20,7 @@ import { PriorityDot, EmptyState, SkeletonCard } from '@/components/shared'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ChevronDown, ChevronRight, Plus, LayoutList, KanbanSquare, Trash2, CalendarDays,
-  Wand2, Loader2, Clock, CheckCircle2, Pencil, MoreHorizontal, Check,
+  Wand2, Loader2, Clock, CheckCircle2, Pencil, MoreHorizontal, Check, Target,
 } from 'lucide-react'
 
 type PlanNode = Plan & { children: Plan[] }
@@ -34,6 +34,7 @@ export function PlansView() {
   const [addOpen, setAddOpen] = useState(false)
   const [templatesOpen, setTemplatesOpen] = useState(false)
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  const [goalFor, setGoalFor] = useState<PlanNode | null>(null)
 
   const week = useMemo(() => {
     const now = new Date()
@@ -217,6 +218,7 @@ export function PlansView() {
                 onReload={reload}
                 allPlans={allPlansFlat}
                 mode={mode}
+                onSetGoal={setGoalFor}
               />
             ))
           )}
@@ -228,6 +230,7 @@ export function PlansView() {
 
       <AddPlanDialog open={addOpen} onOpenChange={setAddOpen} allPlans={allPlansFlat} onCreated={() => reload()} />
       <TemplatesDialog open={templatesOpen} onOpenChange={setTemplatesOpen} onApplied={() => { reload(); toast({ title: 'Template applied — goal, plans & tasks created', description: 'Check Goals and Plans.' }) }} />
+      <GoalSelectDialog node={goalFor} onClose={() => setGoalFor(null)} onSaved={() => { setGoalFor(null); reload() }} />
     </div>
   )
 }
@@ -312,8 +315,8 @@ function PlanTitleToggle({ node, onReload }: { node: PlanNode; onReload: () => v
   )
 }
 
-// menu: rename
-function PlanRowMenu({ node, onReload }: { node: PlanNode; onReload: () => void }) {
+// menu: rename / done / destination goal
+function PlanRowMenu({ node, onReload, onSetGoal }: { node: PlanNode; onReload: () => void; onSetGoal: (node: PlanNode) => void }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -324,7 +327,7 @@ function PlanRowMenu({ node, onReload }: { node: PlanNode; onReload: () => void 
           <MoreHorizontal className="h-4 w-4" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-40">
+      <DropdownMenuContent align="end" className="w-48">
         <DropdownMenuItem onClick={() => document.dispatchEvent(new CustomEvent('cortex:rename-plan', { detail: node.id }))}>
           <Pencil className="mr-2 h-3.5 w-3.5" /> Rename
         </DropdownMenuItem>
@@ -336,6 +339,9 @@ function PlanRowMenu({ node, onReload }: { node: PlanNode; onReload: () => void 
         >
           <CheckCircle2 className="mr-2 h-3.5 w-3.5" /> {node.done ? 'Mark as not done' : 'Mark as done'}
         </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onSetGoal(node)}>
+          <Target className="mr-2 h-3.5 w-3.5" /> Destination goal…
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   )
@@ -343,7 +349,7 @@ function PlanRowMenu({ node, onReload }: { node: PlanNode; onReload: () => void 
 
 // ─── Recursive plan node row ───────────────────────────────────────
 function PlanNodeRow({
-  node, depth, collapsed, toggleCollapse, onToggleTask, onSnoozeTask, onAddTask, onReload, allPlans, mode,
+  node, depth, collapsed, toggleCollapse, onToggleTask, onSnoozeTask, onAddTask, onReload, allPlans, mode, onSetGoal,
 }: {
   node: PlanNode
   depth: number
@@ -355,10 +361,12 @@ function PlanNodeRow({
   onReload: () => void
   allPlans: { id: string; title: string; timeframe: string }[]
   mode: string
+  onSetGoal: (node: PlanNode) => void
 }) {
   const [adding, setAdding] = useState(false)
   const [newTask, setNewTask] = useState('')
   const { toast } = useToast()
+  const setView = useUI((s) => s.setView)
   const hasChildren = (node.children?.length ?? 0) > 0
   const isCollapsed = collapsed.has(node.id)
   const tasks = node.tasks ?? []
@@ -379,9 +387,18 @@ function PlanNodeRow({
           )}
           <PlanTitleToggle node={node} onReload={onReload} />
           <Badgeish timeframe={node.timeframe} />
-          {node.goal && <span className="hidden rounded-full bg-sidebar-accent px-2 py-0.5 text-[10px] font-medium text-sidebar-accent-foreground sm:inline">{node.goal.title}</span>}
+          {node.goal && (
+            <button
+              onClick={() => setView('goals')}
+              className="hidden shrink-0 items-center gap-1 rounded-full bg-sidebar-accent px-2 py-0.5 text-[10px] font-medium text-sidebar-accent-foreground transition-opacity hover:opacity-80 sm:inline-flex"
+              title={`Destination goal: ${node.goal.title} — open Goals`}
+            >
+              <Target className="h-3 w-3" />
+              <span className="max-w-[140px] truncate">{node.goal.title}</span>
+            </button>
+          )}
           <span className="ml-auto text-[10px] tabular-nums text-muted-foreground">{doneCount}/{tasks.length} tasks</span>
-          <PlanRowMenu node={node} onReload={onReload} />
+          <PlanRowMenu node={node} onReload={onReload} onSetGoal={onSetGoal} />
           <button
             onClick={async () => {
               await api.del(`/api/plans/${node.id}`)
@@ -456,6 +473,7 @@ function PlanNodeRow({
                     onReload={onReload}
                     allPlans={allPlans}
                     mode={mode}
+                    onSetGoal={onSetGoal}
                   />
                 ))}
               </div>
@@ -579,9 +597,17 @@ function AddPlanDialog({ open, onOpenChange, allPlans, onCreated }: { open: bool
   const [title, setTitle] = useState('')
   const [timeframe, setTimeframe] = useState('day')
   const [parentId, setParentId] = useState('none')
+  const [goalId, setGoalId] = useState('none')
+  const [goals, setGoals] = useState<Goal[]>([])
   const [startDate, setStartDate] = useState(todayISO())
   const [busy, setBusy] = useState(false)
   const { toast } = useToast()
+
+  useEffect(() => {
+    if (!open) return
+    setGoalId('none')
+    api.get<{ goals: Goal[] }>('/api/goals').then((d) => setGoals(d.goals)).catch(() => setGoals([]))
+  }, [open])
 
   async function create() {
     if (!title.trim()) return
@@ -591,6 +617,7 @@ function AddPlanDialog({ open, onOpenChange, allPlans, onCreated }: { open: bool
         title: title.trim(),
         timeframe,
         parentId: parentId === 'none' ? null : parentId,
+        goalId: goalId === 'none' ? null : goalId,
         startDate: startDate || undefined,
       })
       setTitle('')
@@ -608,7 +635,7 @@ function AddPlanDialog({ open, onOpenChange, allPlans, onCreated }: { open: bool
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>New plan</DialogTitle>
-          <DialogDescription>Nest it under a parent plan (year → month → week → day).</DialogDescription>
+          <DialogDescription>Nest it under a parent plan (year → month → week → day) and optionally aim it at a goal.</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. September — interview sprint" aria-label="Plan title" autoFocus />
@@ -637,6 +664,18 @@ function AddPlanDialog({ open, onOpenChange, allPlans, onCreated }: { open: bool
                 </SelectContent>
               </Select>
             </div>
+          </div>
+          <div>
+            <label className="flex items-center gap-1 text-xs text-muted-foreground"><Target className="h-3 w-3" /> Destination goal (optional)</label>
+            <Select value={goalId} onValueChange={setGoalId}>
+              <SelectTrigger className="mt-1"><SelectValue placeholder="No destination goal" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">— no destination goal —</SelectItem>
+                {goals.map((g) => (
+                  <SelectItem key={g.id} value={g.id}>{g.title}{g.status === 'completed' ? ' ✓' : ''}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <label className="text-xs text-muted-foreground">Start date</label>
@@ -697,6 +736,66 @@ function TemplatesDialog({ open, onOpenChange, onApplied }: { open: boolean; onO
               {busyId === t.id && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
             </button>
           ))}
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ─── Destination goal picker — link a plan to the goal it serves ───
+function GoalSelectDialog({ node, onClose, onSaved }: { node: PlanNode | null; onClose: () => void; onSaved: () => void }) {
+  const [goals, setGoals] = useState<Goal[] | null>(null)
+  const [goalId, setGoalId] = useState('none')
+  const [busy, setBusy] = useState(false)
+  const { toast } = useToast()
+
+  useEffect(() => {
+    if (!node) return
+    setGoalId(node.goalId ?? 'none')
+    setGoals(null)
+    api.get<{ goals: Goal[] }>('/api/goals').then((d) => setGoals(d.goals)).catch(() => setGoals([]))
+  }, [node])
+
+  async function save() {
+    if (!node) return
+    setBusy(true)
+    try {
+      await api.patch(`/api/plans/${node.id}`, { goalId: goalId === 'none' ? null : goalId })
+      toast({ title: goalId === 'none' ? 'Destination goal removed' : 'Destination goal linked', description: goalId === 'none' ? undefined : `“${node.title}” now drives toward the selected goal.` })
+      onSaved()
+    } catch {
+      toast({ title: 'Could not update plan', variant: 'destructive' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Dialog open={!!node} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><Target className="h-4 w-4 text-primary" /> Destination goal</DialogTitle>
+          <DialogDescription>
+            Choose the goal “{node?.title}” is driving toward. Goals stay a separate tab — this only connects the two.
+          </DialogDescription>
+        </DialogHeader>
+        <Select value={goalId} onValueChange={setGoalId}>
+          <SelectTrigger><SelectValue placeholder="Choose a goal" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">— no destination goal —</SelectItem>
+            {(goals ?? []).map((g) => (
+              <SelectItem key={g.id} value={g.id}>{g.title}{g.status === 'completed' ? ' ✓' : ''}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {goals !== null && goals.length === 0 && (
+          <p className="text-xs text-muted-foreground">No goals yet — create one in the Goals tab first.</p>
+        )}
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button onClick={save} disabled={busy || goals === null}>
+            {busy && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />} Save
+          </Button>
         </div>
       </DialogContent>
     </Dialog>

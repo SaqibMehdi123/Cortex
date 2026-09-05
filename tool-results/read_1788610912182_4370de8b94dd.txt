@@ -1,0 +1,786 @@
+     1→'use client'
+     2→
+     3→import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+     4→import { api } from '@/lib/client'
+     5→import type { DocumentItem, Highlight, ChatMessage, Citation } from '@/lib/types'
+     6→import { useUI } from '@/lib/nav-config'
+     7→import { Button } from '@/components/ui/button'
+     8→import { Textarea } from '@/components/ui/textarea'
+     9→import { Badge } from '@/components/ui/badge'
+    10→import { Progress } from '@/components/ui/progress'
+    11→import { Slider } from '@/components/ui/slider'
+    12→import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+    13→import { ScrollArea } from '@/components/ui/scroll-area'
+    14→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+    15→import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+    16→import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+    17→import { useToast } from '@/hooks/use-toast'
+    18→import { cn } from '@/lib/utils'
+    19→import ReactMarkdown from 'react-markdown'
+    20→import {
+    21→  ArrowLeft, Send, Highlighter, StickyNote, Layers, Share2, Loader2,
+    22→  X, Trash2, CheckCircle2, BookOpen, FileText, PanelRightOpen, ExternalLink, Download, Sparkles,
+    23→} from 'lucide-react'
+    24→
+    25→const HL_COLORS = ['yellow', 'green', 'blue', 'pink'] as const
+    26→
+    27→interface SelInfo {
+    28→  text: string
+    29→  x: number
+    30→  y: number
+    31→}
+    32→
+    33→type RailTab = 'chat' | 'summary' | 'highlights'
+    34→
+    35→// ─── Reader — opens INSIDE the app shell as a section ────────────────
+    36→// PDFs render in an embedded browser-native viewer (original layout,
+    37→// images and fonts preserved); text documents use the comfortable
+    38→// reading column. A side rail holds AI chat, summary and highlights.
+    39→export function ReaderView() {
+    40→  const readerDocId = useUI((s) => s.readerDocId)
+    41→  const closeReader = useUI((s) => s.closeReader)
+    42→  const { toast } = useToast()
+    43→
+    44→  const [doc, setDoc] = useState<(DocumentItem & { highlights: Highlight[] }) | null>(null)
+    45→  const [loading, setLoading] = useState(true)
+    46→  const [selection, setSelection] = useState<SelInfo | null>(null)
+    47→  const [mode, setMode] = useState<'original' | 'text'>('original')
+    48→  const [railTab, setRailTab] = useState<RailTab>('chat')
+    49→  const [railOpen, setRailOpen] = useState(false) // mobile drawer
+    50→  const [messages, setMessages] = useState<ChatMessage[]>([])
+    51→  const [aiInput, setAiInput] = useState('')
+    52→  const [aiBusy, setAiBusy] = useState(false)
+    53→  const [summarizing, setSummarizing] = useState(false)
+    54→  const [noteDialogFor, setNoteDialogFor] = useState<string | null>(null)
+    55→  const [noteText, setNoteText] = useState('')
+    56→  const [mindmapOpen, setMindmapOpen] = useState(false)
+    57→  const [mindmaps, setMindmaps] = useState<{ id: string; title: string }[]>([])
+    58→  const [mindmapChoice, setMindmapChoice] = useState<string>('__new')
+    59→  const [lastHighlightId, setLastHighlightId] = useState<string | null>(null)
+    60→  const [flashcardBusy, setFlashcardBusy] = useState(false)
+    61→  const [manualProgress, setManualProgress] = useState(0)
+    62→
+    63→  const contentRef = useRef<HTMLDivElement>(null)
+    64→  const scrollRef = useRef<HTMLDivElement>(null)
+    65→  const sessionStart = useRef<number>(Date.now())
+    66→  const lastLogged = useRef<number>(Date.now())
+    67→
+    68→  const isPdf = !!doc?.filePath
+    69→
+    70→  // Load document + chat
+    71→  useEffect(() => {
+    72→    if (!readerDocId) return
+    73→    setLoading(true)
+    74→    setMode('original')
+    75→    setRailTab('chat')
+    76→    sessionStart.current = Date.now()
+    77→    lastLogged.current = Date.now()
+    78→    Promise.all([
+    79→      api.get<{ document: DocumentItem & { highlights: Highlight[] } }>(`/api/documents/${readerDocId}`),
+    80→      api.get<{ messages: ChatMessage[] }>(`/api/chat?documentId=${readerDocId}`),
+    81→      api.get<{ mindmaps: { id: string; title: string }[] }>('/api/mindmaps'),
+    82→    ])
+    83→      .then(([d, m, mm]) => {
+    84→        setDoc(d.document)
+    85→        setManualProgress(d.document.progress)
+    86→        setMessages(m.messages)
+    87→        setMindmaps(mm.mindmaps)
+    88→        // opening a PDF counts as a reading session
+    89→        if (d.document.filePath && d.document.status === 'queued') {
+    90→          api.patch(`/api/documents/${d.document.id}`, { status: 'reading' }).catch(() => {})
+    91→        }
+    92→      })
+    93→      .catch(() => toast({ title: 'Failed to open document', variant: 'destructive' }))
+    94→      .finally(() => setLoading(false))
+    95→  }, [readerDocId, toast])
+    96→
+    97→  // Log reading time every minute
+    98→  useEffect(() => {
+    99→    if (!readerDocId || !doc) return
+   100→    const interval = setInterval(async () => {
+   101→      const minutes = Math.round((Date.now() - lastLogged.current) / 60000)
+   102→      if (minutes >= 1) {
+   103→        lastLogged.current = Date.now()
+   104→        try {
+   105→          await api.post('/api/reading-sessions', { documentId: readerDocId, minutes })
+   106→        } catch {}
+   107→      }
+   108→    }, 60000)
+   109→    return () => {
+   110→      clearInterval(interval)
+   111→      const minutes = Math.round((Date.now() - lastLogged.current) / 60000)
+   112→      if (minutes >= 1) {
+   113→        api.post('/api/reading-sessions', { documentId: readerDocId, minutes }).catch(() => {})
+   114→      }
+   115→    }
+   116→  }, [readerDocId, doc])
+   117→
+   118→  // Scroll-driven progress (text mode only — the native PDF viewer can't expose scroll)
+   119→  const onScroll = useCallback(() => {
+   120→    if (mode !== 'text') return
+   121→    const el = scrollRef.current
+   122→    if (!el || !doc) return
+   123→    const pct = Math.min(100, Math.round((el.scrollTop / Math.max(1, el.scrollHeight - el.clientHeight)) * 100))
+   124→    if (pct > doc.progress) {
+   125→      setDoc({ ...doc, progress: pct })
+   126→      api.patch(`/api/documents/${doc.id}`, { progress: pct, status: doc.status === 'queued' ? 'reading' : doc.status }).catch(() => {})
+   127→    }
+   128→  }, [doc, mode])
+   129→
+   130→  // Selection handling (text mode / extracted text)
+   131→  useEffect(() => {
+   132→    const handler = () => {
+   133→      if (mode !== 'text') return setSelection(null)
+   134→      const sel = window.getSelection()
+   135→      if (!sel || sel.isCollapsed || !contentRef.current) return setSelection(null)
+   136→      const text = sel.toString().trim()
+   137→      if (text.length < 2) return setSelection(null)
+   138→      const range = sel.getRangeAt(0)
+   139→      const rect = range.getBoundingClientRect()
+   140→      setSelection({ text, x: rect.left + rect.width / 2, y: rect.top })
+   141→    }
+   142→    document.addEventListener('mouseup', handler)
+   143→    document.addEventListener('touchend', handler)
+   144→    return () => {
+   145→      document.removeEventListener('mouseup', handler)
+   146→      document.removeEventListener('touchend', handler)
+   147→    }
+   148→  }, [mode])
+   149→
+   150→  async function addHighlight(color: (typeof HL_COLORS)[number]) {
+   151→    if (!selection || !doc) return
+   152→    const text = selection.text
+   153→    const position = doc.content?.indexOf(text.slice(0, 60)) ?? 0
+   154→    setSelection(null)
+   155→    window.getSelection()?.removeAllRanges()
+   156→    try {
+   157→      const { highlight } = await api.post<{ highlight: Highlight }>('/api/highlights', {
+   158→        documentId: doc.id, text, color, position: Math.max(0, position),
+   159→      })
+   160→      setDoc({ ...doc, highlights: [...doc.highlights, highlight] })
+   161→      setLastHighlightId(highlight.id)
+   162→      toast({ title: 'Highlighted', description: 'Find it in the Highlights tab of the side panel.' })
+   163→    } catch {
+   164→      toast({ title: 'Could not save highlight', variant: 'destructive' })
+   165→    }
+   166→  }
+   167→
+   168→  function renderContent() {
+   169→    if (!doc?.content) {
+   170→      return (
+   171→        <div className="rounded-xl border border-dashed p-8 text-center">
+   172→          <BookOpen className="mx-auto h-8 w-8 text-muted-foreground/50" />
+   173→          <p className="mt-3 font-medium">No extractable text</p>
+   174→          <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
+   175→            This PDF has no machine-readable text (likely a scan). Paste its text to unlock highlighting and AI Q&amp;A.
+   176→          </p>
+   177→          <Textarea
+   178→            className="mx-auto mt-4 min-h-[160px] max-w-xl text-left"
+   179→            placeholder="Paste the full text…"
+   180→            aria-label="Paste document text"
+   181→            onBlur={(e) => {
+   182→              const v = e.target.value.trim()
+   183→              if (v && doc) {
+   184→                api.patch(`/api/documents/${doc.id}`, { content: v }).then(() => setDoc({ ...doc, content: v }))
+   185→              }
+   186→            }}
+   187→          />
+   188→        </div>
+   189→      )
+   190→    }
+   191→
+   192→    const paragraphs = doc.content.split(/\n{1,}/)
+   193→    return paragraphs.map((p, i) => <p key={i}>{renderWithHighlights(p)}</p>)
+   194→  }
+   195→
+   196→  function renderWithHighlights(text: string) {
+   197→    const highlights = doc!.highlights
+   198→    if (highlights.length === 0) return text
+   199→    for (const h of highlights) {
+   200→      const idx = text.indexOf(h.text.slice(0, Math.min(h.text.length, 80)))
+   201→      if (idx !== -1 && h.text.length <= text.length + 20) {
+   202→        const end = idx + h.text.length
+   203→        return (
+   204→          <>
+   205→            {text.slice(0, idx)}
+   206→            <mark className={cn('hl-' + h.color)} title={h.note ?? undefined}>
+   207→              {text.slice(idx, Math.min(end, text.length))}
+   208→            </mark>
+   209→            {text.slice(Math.min(end, text.length))}
+   210→          </>
+   211→        )
+   212→      }
+   213→    }
+   214→    return text
+   215→  }
+   216→
+   217→  async function summarize() {
+   218→    if (!doc) return
+   219→    setSummarizing(true)
+   220→    try {
+   221→      const { document: updated } = await api.post<{ document: DocumentItem }>(`/api/documents/${doc.id}/summarize`)
+   222→      setDoc({ ...doc, ...updated, highlights: doc.highlights })
+   223→      toast({ title: 'Summary ready' })
+   224→    } catch (e) {
+   225→      toast({ title: 'Summary failed', description: e instanceof Error ? e.message : 'No text content?', variant: 'destructive' })
+   226→    } finally {
+   227→      setSummarizing(false)
+   228→    }
+   229→  }
+   230→
+   231→  async function sendAI(text?: string) {
+   232→    const msg = (text ?? aiInput).trim()
+   233→    if (!msg || !doc || aiBusy) return
+   234→    setAiInput('')
+   235→    setAiBusy(true)
+   236→    setMessages((prev) => [...prev, { id: `tmp-${Date.now()}`, documentId: doc.id, role: 'user', content: msg, citations: null, createdAt: new Date().toISOString() }])
+   237→    try {
+   238→      const d = await api.post<{ assistantMessage: ChatMessage }>('/api/chat', { documentId: doc.id, message: msg })
+   239→      setMessages((prev) => [...prev, d.assistantMessage])
+   240→    } catch {
+   241→      toast({ title: 'AI request failed', variant: 'destructive' })
+   242→    } finally {
+   243→      setAiBusy(false)
+   244→    }
+   245→  }
+   246→
+   247→  async function makeFlashcard(highlightId?: string) {
+   248→    if (!doc) return
+   249→    const target = highlightId ?? lastHighlightId
+   250→    if (!target) return
+   251→    setFlashcardBusy(true)
+   252→    try {
+   253→      await api.post('/api/flashcards', { generate: true, highlightId: target })
+   254→      toast({ title: 'Flashcard created', description: 'Find it in Flashcards for spaced review.' })
+   255→    } catch {
+   256→      toast({ title: 'Flashcard generation failed', variant: 'destructive' })
+   257→    } finally {
+   258→      setFlashcardBusy(false)
+   259→    }
+   260→  }
+   261→
+   262→  async function addToMindmap() {
+   263→    if (!doc) return
+   264→    try {
+   265→      if (mindmapChoice === '__new') {
+   266→        await api.post('/api/mindmaps/generate', { documentId: doc.id })
+   267→        toast({ title: 'Mindmap generated', description: 'Open Mindmaps to explore it.' })
+   268→      } else {
+   269→        const maps = await api.get<{ mindmaps: { id: string; nodes: { x: number; y: number }[] }[] }>('/api/mindmaps')
+   270→        const target = maps.mindmaps.find((m) => m.id === mindmapChoice)
+   271→        const maxY = target?.nodes.reduce((mx, n) => Math.max(mx, n.y), 0) ?? 0
+   272→        const nodes = target?.nodes ?? []
+   273→        await api.patch(`/api/mindmaps/${mindmapChoice}`, {
+   274→          nodes: [
+   275→            ...nodes,
+   276→            { id: `n-${Date.now()}`, label: doc.title.slice(0, 40), x: 120, y: maxY + 90, parentId: null, color: 'teal', linkType: 'document', linkId: doc.id },
+   277→          ],
+   278→        })
+   279→        toast({ title: 'Added to mindmap' })
+   280→      }
+   281→      setMindmapOpen(false)
+   282→    } catch {
+   283→      toast({ title: 'Mindmap update failed', variant: 'destructive' })
+   284→    }
+   285→  }
+   286→
+   287→  async function toggleFinished() {
+   288→    if (!doc) return
+   289→    const finished = doc.status === 'finished'
+   290→    const { document: updated } = await api.patch<{ document: DocumentItem }>(`/api/documents/${doc.id}`, {
+   291→      status: finished ? 'reading' : 'finished',
+   292→      progress: finished ? doc.progress : 100,
+   293→    })
+   294→    setDoc({ ...doc, ...updated, highlights: doc.highlights })
+   295→    setManualProgress(updated.progress)
+   296→    if (!finished) toast({ title: 'Marked as finished' })
+   297→  }
+   298→
+   299→  async function saveManualProgress(v: number) {
+   300→    if (!doc) return
+   301→    setManualProgress(v)
+   302→    const { document: updated } = await api.patch<{ document: DocumentItem }>(`/api/documents/${doc.id}`, {
+   303→      progress: v,
+   304→      status: doc.status === 'queued' ? 'reading' : doc.status,
+   305→    })
+   306→    setDoc({ ...doc, ...updated, highlights: doc.highlights })
+   307→  }
+   308→
+   309→  const takeaways = useMemo<string[]>(() => {
+   310→    if (!doc?.takeaways) return []
+   311→    try { return JSON.parse(doc.takeaways) } catch { return [] }
+   312→  }, [doc?.takeaways])
+   313→
+   314→  if (!readerDocId) return null
+   315→
+   316→  const fileUrl = doc ? `/api/documents/${doc.id}/file` : ''
+   317→
+   318→  // ── Side rail content (shared between desktop aside and mobile sheet) ──
+   319→  const rail = (
+   320→    <div className="flex min-h-0 flex-1 flex-col">
+   321→      <Tabs value={railTab} onValueChange={(v) => setRailTab(v as RailTab)} className="flex min-h-0 flex-1 flex-col gap-0">
+   322→        <div className="border-b px-3 pt-2.5">
+   323→          <TabsList className="h-8 w-full justify-start rounded-none border-0 bg-transparent p-0">
+   324→            <TabsTrigger value="chat" className="h-8 rounded-none border-0 border-b-2 px-3 text-xs data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:shadow-none">Ask AI</TabsTrigger>
+   325→            <TabsTrigger value="summary" className="h-8 rounded-none border-0 border-b-2 px-3 text-xs data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:shadow-none">Summary</TabsTrigger>
+   326→            <TabsTrigger value="highlights" className="h-8 rounded-none border-0 border-b-2 px-3 text-xs data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:shadow-none">
+   327→              Highlights{doc?.highlights.length ? ` · ${doc.highlights.length}` : ''}
+   328→            </TabsTrigger>
+   329→          </TabsList>
+   330→        </div>
+   331→
+   332→        {/* Chat */}
+   333→        <TabsContent value="chat" className="mt-0 min-h-0 flex-1 data-[state=inactive]:hidden">
+   334→          <div className="flex h-full flex-col">
+   335→            <ScrollArea className="scroll-thin min-h-0 flex-1 px-4 py-4">
+   336→              <div className="space-y-3">
+   337→                {messages.length === 0 && (
+   338→                  <div className="space-y-2">
+   339→                    <p className="text-sm text-muted-foreground">Ask anything — answers cite the document.</p>
+   340→                    {['Summarize the key argument', 'What methodology was used?', 'Explain the hardest concept simply'].map((s) => (
+   341→                      <button key={s} onClick={() => sendAI(s)} className="block w-full rounded-lg border bg-card px-3 py-2 text-left text-xs transition-colors hover:bg-muted">
+   342→                        {s}
+   343→                      </button>
+   344→                    ))}
+   345→                  </div>
+   346→                )}
+   347→                {messages.map((m) => (
+   348→                  <div key={m.id} className={cn('flex', m.role === 'user' ? 'justify-end' : 'justify-start')}>
+   349→                    <div className={cn('max-w-[88%] rounded-2xl px-3 py-2 text-sm', m.role === 'user' ? 'rounded-br-md bg-foreground text-background' : 'rounded-bl-md border bg-card')}>
+   350→                      {m.role === 'user' ? (
+   351→                        m.content
+   352→                      ) : (
+   353→                        <>
+   354→                          <div className="[&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_li]:ml-4 [&_li]:list-disc [&_p]:mb-2 [&_strong]:font-semibold [&_ul]:ml-4 [&_ul]:list-disc">
+   355→                            <ReactMarkdown>{m.content}</ReactMarkdown>
+   356→                          </div>
+   357→                          {m.citations?.length ? (
+   358→                            <div className="mt-2 space-y-1 border-t pt-2">
+   359→                              {m.citations.map((c: Citation) => (
+   360→                                <p key={c.n} className="text-[10px] leading-snug text-muted-foreground">
+   361→                                  <span className="mr-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-muted text-[9px] font-bold">{c.n}</span>
+   362→                                  {c.label}
+   363→                                </p>
+   364→                              ))}
+   365→                            </div>
+   366→                          ) : null}
+   367→                        </>
+   368→                      )}
+   369→                    </div>
+   370→                  </div>
+   371→                ))}
+   372→                {aiBusy && (
+   373→                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+   374→                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Reading the document…
+   375→                  </div>
+   376→                )}
+   377→              </div>
+   378→            </ScrollArea>
+   379→            <div className="border-t p-3">
+   380→              <div className="flex items-end gap-2">
+   381→                <Textarea
+   382→                  value={aiInput}
+   383→                  onChange={(e) => setAiInput(e.target.value)}
+   384→                  onKeyDown={(e) => {
+   385→                    if (e.key === 'Enter' && !e.shiftKey) {
+   386→                      e.preventDefault()
+   387→                      sendAI()
+   388→                    }
+   389→                  }}
+   390→                  placeholder="Ask about this document…"
+   391→                  className="min-h-[44px] flex-1 resize-none"
+   392→                  rows={1}
+   393→                  aria-label="Ask AI"
+   394→                />
+   395→                <Button size="icon" className="h-11 w-11 shrink-0" onClick={() => sendAI()} disabled={aiBusy || !aiInput.trim()} aria-label="Send question">
+   396→                  <Send className="h-4 w-4" />
+   397→                </Button>
+   398→              </div>
+   399→            </div>
+   400→          </div>
+   401→        </TabsContent>
+   402→
+   403→        {/* Summary + progress */}
+   404→        <TabsContent value="summary" className="mt-0 min-h-0 flex-1 overflow-y-auto scroll-thin data-[state=inactive]:hidden">
+   405→          <div className="space-y-5 px-4 py-4">
+   406→            <section>
+   407→              <div className="flex items-center justify-between gap-2">
+   408→                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">AI summary</h3>
+   409→                <Button variant="ghost" size="sm" className="h-7 gap-1.5 px-2 text-xs" onClick={summarize} disabled={summarizing || !doc?.content}>
+   410→                  {summarizing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+   411→                  {doc?.summary ? 'Regenerate' : 'Generate'}
+   412→                </Button>
+   413→              </div>
+   414→              {doc?.summary ? (
+   415→                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{doc.summary}</p>
+   416→              ) : (
+   417→                <p className="mt-2 text-sm text-muted-foreground">{doc?.content ? 'No summary yet — generate one from the extracted text.' : 'This document has no extracted text, so it cannot be summarized.'}</p>
+   418→              )}
+   419→              {takeaways.length > 0 && (
+   420→                <ul className="mt-3 space-y-1.5">
+   421→                  {takeaways.map((t, i) => (
+   422→                    <li key={i} className="flex gap-2 text-sm"><span className="mt-0.5 text-success">✓</span><span>{t}</span></li>
+   423→                  ))}
+   424→                </ul>
+   425→              )}
+   426→            </section>
+   427→
+   428→            <section className="space-y-2 border-t pt-4">
+   429→              <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Progress</h3>
+   430→              <div className="flex items-center gap-3">
+   431→                <Slider
+   432→                  value={[manualProgress]}
+   433→                  onValueChange={([v]) => setManualProgress(v)}
+   434→                  onValueCommit={([v]) => saveManualProgress(v)}
+   435→                  max={100}
+   436→                  step={1}
+   437→                  aria-label="Reading progress"
+   438→                />
+   439→                <span className="w-10 shrink-0 text-right text-xs tabular-nums text-muted-foreground">{manualProgress}%</span>
+   440→              </div>
+   441→              <p className="text-xs text-muted-foreground">{isPdf ? 'Set manually — the embedded viewer keeps its own scroll.' : 'Also advances automatically while you scroll.'}</p>
+   442→            </section>
+   443→
+   444→            <section className="space-y-2 border-t pt-4">
+   445→              <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Use it elsewhere</h3>
+   446→              <div className="flex flex-wrap gap-2">
+   447→                <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={() => setMindmapOpen(true)}>
+   448→                  <Share2 className="h-3.5 w-3.5" /> Mindmap
+   449→                </Button>
+   450→                <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={() => setRailTab('highlights')}>
+   451→                  <Highlighter className="h-3.5 w-3.5" /> From a highlight
+   452→                </Button>
+   453→              </div>
+   454→            </section>
+   455→          </div>
+   456→        </TabsContent>
+   457→
+   458→        {/* Highlights */}
+   459→        <TabsContent value="highlights" className="mt-0 min-h-0 flex-1 overflow-y-auto scroll-thin data-[state=inactive]:hidden">
+   460→          <div className="space-y-3 px-4 py-4">
+   461→            {mode === 'original' && isPdf && (
+   462→              <p className="rounded-lg border border-dashed px-3 py-2 text-xs text-muted-foreground">
+   463→                Tip: switch to <button onClick={() => setMode('text')} className="font-semibold underline underline-offset-2">Text mode</button> to select passages and highlight them.
+   464→              </p>
+   465→            )}
+   466→            {(doc?.highlights.length ?? 0) === 0 ? (
+   467→              <p className="text-sm text-muted-foreground">
+   468→                {isPdf && mode === 'original'
+   469→                  ? 'Open Text mode, select any passage and pick a color — highlights show up here.'
+   470→                  : 'Select any passage in the text and pick a color — highlights show up here.'}
+   471→              </p>
+   472→            ) : (
+   473→              doc!.highlights.map((h) => (
+   474→                <div key={h.id} className="group rounded-lg border bg-card p-3">
+   475→                  <div className="flex items-start gap-2">
+   476→                    <span className={cn('mt-1 h-2.5 w-2.5 shrink-0 rounded-full', {
+   477→                      'bg-yellow-400/80': h.color === 'yellow',
+   478→                      'bg-green-500/70': h.color === 'green',
+   479→                      'bg-blue-500/60': h.color === 'blue',
+   480→                      'bg-pink-500/60': h.color === 'pink',
+   481→                    })} />
+   482→                    <p className="min-w-0 flex-1 text-xs leading-relaxed text-foreground/90 line-clamp-4">{h.text}</p>
+   483→                    <button
+   484→                      onClick={async () => {
+   485→                        await api.del(`/api/highlights/${h.id}`)
+   486→                        setDoc({ ...doc!, highlights: doc!.highlights.filter((x) => x.id !== h.id) })
+   487→                      }}
+   488→                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:text-danger group-hover:opacity-100"
+   489→                      aria-label="Delete highlight"
+   490→                    >
+   491→                      <Trash2 className="h-3.5 w-3.5" />
+   492→                    </button>
+   493→                  </div>
+   494→                  {h.note && <p className="mt-1.5 border-l-2 border-border pl-2 text-xs italic text-muted-foreground">{h.note}</p>}
+   495→                  <div className="mt-2 flex items-center gap-2">
+   496→                    <button
+   497→                      onClick={() => makeFlashcard(h.id)}
+   498→                      disabled={flashcardBusy}
+   499→                      className="flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+   500→                    >
+   501→                      {flashcardBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Layers className="h-3 w-3" />} Flashcard
+   502→                    </button>
+   503→                    <button
+   504→                      onClick={() => {
+   505→                        setNoteDialogFor(h.id)
+   506→                        setNoteText(h.note ?? '')
+   507→                      }}
+   508→                      className="flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+   509→                    >
+   510→                      <StickyNote className="h-3 w-3" /> {h.note ? 'Edit note' : 'Note'}
+   511→                    </button>
+   512→                  </div>
+   513→                </div>
+   514→              ))
+   515→            )}
+   516→          </div>
+   517→        </TabsContent>
+   518→      </Tabs>
+   519→    </div>
+   520→  )
+   521→
+   522→  return (
+   523→    <div
+   524→      className="anim-fade-up flex h-[calc(100dvh-232px)] min-h-[480px] flex-col lg:h-[calc(100dvh-128px)]"
+   525→      data-reader
+   526→    >
+   527→
+   528→      {/* ── Reader header ── */}
+   529→      <header className="flex flex-wrap items-center gap-2 border-b pb-2.5">
+   530→        <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={closeReader} aria-label="Back to library">
+   531→          <ArrowLeft className="h-4.5 w-4.5" />
+   532→        </Button>
+   533→        <div className="min-w-0 flex-1">
+   534→          <p className="truncate text-sm font-semibold leading-tight">{doc?.title ?? 'Loading…'}</p>
+   535→          <p className="truncate text-xs text-muted-foreground">
+   536→            {doc?.author ? `${doc.author} · ` : ''}
+   537→            {isPdf ? `${doc?.pageCount ?? '?'} pages · ${doc?.fileName ?? 'PDF'}` : doc?.type}
+   538→          </p>
+   539→        </div>
+   540→
+   541→        {isPdf && doc?.content && (
+   542→          <Tabs value={mode} onValueChange={(v) => setMode(v as 'original' | 'text')}>
+   543→            <TabsList className="h-8">
+   544→              <TabsTrigger value="original" className="h-6 gap-1.5 px-2.5 text-xs"><FileText className="h-3.5 w-3.5" /> Original PDF</TabsTrigger>
+   545→              <TabsTrigger value="text" className="h-6 gap-1.5 px-2.5 text-xs"><BookOpen className="h-3.5 w-3.5" /> Text</TabsTrigger>
+   546→            </TabsList>
+   547→          </Tabs>
+   548→        )}
+   549→
+   550→        {doc && (
+   551→          <>
+   552→            <Button variant="outline" size="sm" className="hidden h-8 gap-1.5 text-xs sm:flex" onClick={toggleFinished}>
+   553→              <CheckCircle2 className={cn('h-3.5 w-3.5', doc.status === 'finished' && 'text-success')} />
+   554→              {doc.status === 'finished' ? 'Reopen' : 'Finish'}
+   555→            </Button>
+   556→            <Button
+   557→              size="sm"
+   558→              variant="outline"
+   559→              className="h-8 gap-1.5 text-xs lg:hidden"
+   560→              onClick={() => setRailOpen(true)}
+   561→              aria-label="Open AI panel"
+   562→            >
+   563→              <PanelRightOpen className="h-4 w-4" /> AI
+   564→            </Button>
+   565→          </>
+   566→        )}
+   567→      </header>
+   568→
+   569→      {/* ── Content split ── */}
+   570→      <div className="flex min-h-0 flex-1 gap-0 pt-3">
+   571→        {/* Main reading section */}
+   572→        <div className="flex min-w-0 flex-1 flex-col lg:pr-3">
+   573→          {loading ? (
+   574→            <div className="flex-1 space-y-4 rounded-xl border bg-card p-8">
+   575→              {Array.from({ length: 8 }).map((_, i) => (
+   576→                <div key={i} className="h-4 animate-pulse rounded bg-muted" style={{ width: `${70 + ((i * 13) % 30)}%` }} />
+   577→              ))}
+   578→            </div>
+   579→          ) : isPdf && mode === 'original' ? (
+   580→            /* Embedded browser-PDF window — a section of the page, native rendering */
+   581→            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border bg-muted/40 shadow-soft">
+   582→              <div className="flex items-center gap-2 border-b bg-background/95 px-3 py-2">
+   583→                <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+   584→                <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{doc?.fileName ?? doc?.title}</p>
+   585→                <Badge variant="outline" className="hidden shrink-0 text-[10px] sm:inline-flex">{doc?.pageCount ?? '?'} pages</Badge>
+   586→                <a href={fileUrl} target="_blank" rel="noreferrer" className="flex h-7 items-center gap-1.5 rounded-md border bg-background px-2 text-[11px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" aria-label="Open PDF in new tab">
+   587→                  <ExternalLink className="h-3 w-3" /> Open
+   588→                </a>
+   589→                <a href={fileUrl} download={doc?.fileName ?? undefined} className="flex h-7 items-center gap-1.5 rounded-md border bg-background px-2 text-[11px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" aria-label="Download PDF">
+   590→                  <Download className="h-3 w-3" /> Save
+   591→                </a>
+   592→              </div>
+   593→              {/* Native browser PDF viewer — zoom, thumbnails, search just work */}
+   594→              <iframe
+   595→                src={fileUrl}
+   596→                title={`PDF viewer — ${doc?.title ?? 'document'}`}
+   597→                className="min-h-0 w-full flex-1 bg-muted/40"
+   598→              />
+   599→            </div>
+   600→          ) : (
+   601→            /* Text reading column (articles, extracted text, pasted content) */
+   602→            <div ref={scrollRef} onScroll={onScroll} className="scroll-thin min-h-0 flex-1 overflow-y-auto pr-1">
+   603→              <div className="mx-auto max-w-[680px] px-1 py-4 sm:px-2">
+   604→                {doc?.summary && (
+   605→                  <div className="anim-pop mb-8 rounded-xl border bg-card p-4">
+   606→                    <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
+   607→                      <Sparkles className="h-3.5 w-3.5" /> AI summary
+   608→                    </div>
+   609→                    <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{doc.summary}</p>
+   610→                    {takeaways.length > 0 && (
+   611→                      <ul className="mt-3 space-y-1.5">
+   612→                        {takeaways.map((t, i) => (
+   613→                          <li key={i} className="flex gap-2 text-sm"><span className="text-success">✓</span><span>{t}</span></li>
+   614→                        ))}
+   615→                      </ul>
+   616→                    )}
+   617→                  </div>
+   618→                )}
+   619→                <div ref={contentRef} className="reading-prose">
+   620→                  {doc && renderContent()}
+   621→                </div>
+   622→                <div className="mt-6 flex items-center justify-between gap-2 border-t pt-3 text-xs text-muted-foreground">
+   623→                  <span>— end of document —</span>
+   624→                  <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs sm:hidden" onClick={toggleFinished}>
+   625→                    <CheckCircle2 className={cn('h-3.5 w-3.5', doc?.status === 'finished' && 'text-success')} />
+   626→                    {doc?.status === 'finished' ? 'Reopen' : 'Finish'}
+   627→                  </Button>
+   628→                </div>
+   629→              </div>
+   630→            </div>
+   631→          )}
+   632→
+   633→          {/* progress strip (text mode) */}
+   634→          {(!isPdf || mode === 'text') && doc && (
+   635→            <div className="mt-2 flex items-center gap-3">
+   636→              <Progress value={doc.progress} className="h-1" />
+   637→              <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">{doc.progress}%</span>
+   638→            </div>
+   639→          )}
+   640→        </div>
+   641→
+   642→        {/* Desktop side rail */}
+   643→        <aside className="hidden w-[360px] shrink-0 flex-col overflow-hidden rounded-xl border bg-card lg:flex" aria-label="Document AI panel">
+   644→          {rail}
+   645→        </aside>
+   646→      </div>
+   647→
+   648→      {/* Mobile side rail sheet */}
+   649→      <Sheet open={railOpen} onOpenChange={setRailOpen}>
+   650→        <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-[400px]">
+   651→          <SheetHeader className="border-b p-3 pb-2.5">
+   652→            <SheetTitle className="truncate text-left text-sm">{doc?.title ?? 'Document'}</SheetTitle>
+   653→          </SheetHeader>
+   654→          {rail}
+   655→        </SheetContent>
+   656→      </Sheet>
+   657→
+   658→      {/* ── Floating selection toolbar (text mode) ── */}
+   659→      {selection && (
+   660→        <div
+   661→          className="anim-pop fixed z-50 flex -translate-x-1/2 -translate-y-full items-center gap-1 rounded-xl border bg-popover p-1.5 shadow-lg"
+   662→          style={{ left: selection.x, top: selection.y - 8 }}
+   663→          role="toolbar"
+   664→          aria-label="Highlight actions"
+   665→        >
+   666→          {HL_COLORS.map((c) => (
+   667→            <button
+   668→              key={c}
+   669→              onClick={() => addHighlight(c)}
+   670→              className={cn('h-7 w-7 rounded-full border-2 transition-transform hover:scale-110', {
+   671→                'bg-yellow-400/80': c === 'yellow',
+   672→                'bg-green-500/70': c === 'green',
+   673→                'bg-blue-500/60': c === 'blue',
+   674→                'bg-pink-500/60': c === 'pink',
+   675→              })}
+   676→              aria-label={`Highlight ${c}`}
+   677→            />
+   678→          ))}
+   679→          <span className="mx-1 h-5 w-px bg-border" />
+   680→          <button
+   681→            onClick={() => {
+   682→              setNoteDialogFor('new')
+   683→              setNoteText('')
+   684→            }}
+   685→            className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted"
+   686→            aria-label="Add note to highlight"
+   687→          >
+   688→            <StickyNote className="h-4 w-4" />
+   689→          </button>
+   690→          <button
+   691→            onClick={() => {
+   692→              addHighlight('yellow').then(() => setMindmapOpen(true))
+   693→            }}
+   694→            className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted"
+   695→            aria-label="Add to mindmap"
+   696→          >
+   697→            <Share2 className="h-4 w-4" />
+   698→          </button>
+   699→          <button
+   700→            onClick={() => {
+   701→              addHighlight('yellow').then(() => makeFlashcard())
+   702→            }}
+   703→            className="flex h-7 items-center gap-1 rounded-lg px-2 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+   704→            disabled={flashcardBusy}
+   705→          >
+   706→            {flashcardBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Layers className="h-3.5 w-3.5" />} Flashcard
+   707→          </button>
+   708→        </div>
+   709→      )}
+   710→
+   711→      {/* Note dialog */}
+   712→      <Dialog open={noteDialogFor !== null} onOpenChange={(v) => !v && setNoteDialogFor(null)}>
+   713→        <DialogContent className="sm:max-w-md">
+   714→          <DialogHeader>
+   715→            <DialogTitle>{noteDialogFor === 'new' ? 'Attach a note' : 'Edit note'}</DialogTitle>
+   716→            <DialogDescription className="line-clamp-2">
+   717→              {noteDialogFor === 'new' ? selection?.text : doc?.highlights.find((h) => h.id === noteDialogFor)?.text}
+   718→            </DialogDescription>
+   719→          </DialogHeader>
+   720→          <Textarea value={noteText} onChange={(e) => setNoteText(e.target.value)} placeholder="Your thought on this passage…" className="min-h-[100px]" autoFocus />
+   721→          <div className="flex justify-end gap-2">
+   722→            <Button variant="ghost" onClick={() => setNoteDialogFor(null)}>Cancel</Button>
+   723→            <Button
+   724→              onClick={async () => {
+   725→                if (!doc) return
+   726→                try {
+   727→                  if (noteDialogFor === 'new') {
+   728→                    const text = selection?.text ?? ''
+   729→                    if (text) {
+   730→                      const position = Math.max(0, doc.content?.indexOf(text.slice(0, 60)) ?? 0)
+   731→                      const { highlight } = await api.post<{ highlight: Highlight }>('/api/highlights', { documentId: doc.id, text, color: 'blue', note: noteText, position })
+   732→                      setDoc({ ...doc, highlights: [...doc.highlights, highlight] })
+   733→                      setLastHighlightId(highlight.id)
+   734→                    }
+   735→                  } else if (noteDialogFor) {
+   736→                    await api.patch(`/api/highlights/${noteDialogFor}`, { note: noteText })
+   737→                    setDoc({
+   738→                      ...doc,
+   739→                      highlights: doc.highlights.map((h) => (h.id === noteDialogFor ? { ...h, note: noteText } : h)),
+   740→                    })
+   741→                  }
+   742→                  setNoteDialogFor(null)
+   743→                  setSelection(null)
+   744→                  window.getSelection()?.removeAllRanges()
+   745→                  toast({ title: 'Note saved' })
+   746→                } catch {
+   747→                  toast({ title: 'Failed to save note', variant: 'destructive' })
+   748→                }
+   749→              }}
+   750→            >
+   751→              Save note
+   752→            </Button>
+   753→          </div>
+   754→        </DialogContent>
+   755→      </Dialog>
+   756→
+   757→      {/* Mindmap dialog */}
+   758→      <Dialog open={mindmapOpen} onOpenChange={setMindmapOpen}>
+   759→        <DialogContent className="sm:max-w-sm">
+   760→          <DialogHeader>
+   761→            <DialogTitle>Add to mindmap</DialogTitle>
+   762→            <DialogDescription>Append this document to an existing map, or auto-generate a fresh one from its content.</DialogDescription>
+   763→          </DialogHeader>
+   764→          <Select value={mindmapChoice} onValueChange={setMindmapChoice}>
+   765→            <SelectTrigger aria-label="Choose mindmap">
+   766→              <SelectValue />
+   767→            </SelectTrigger>
+   768→            <SelectContent>
+   769→              <SelectItem value="__new">Generate new mindmap from this document</SelectItem>
+   770→              {mindmaps.map((m) => (
+   771→                <SelectItem key={m.id} value={m.id}>{m.title}</SelectItem>
+   772→              ))}
+   773→            </SelectContent>
+   774→          </Select>
+   775→          <div className="flex justify-end gap-2">
+   776→            <Button variant="ghost" onClick={() => setMindmapOpen(false)}>Cancel</Button>
+   777→            <Button onClick={addToMindmap}>
+   778→              <Share2 className="mr-1.5 h-4 w-4" /> Add
+   779→            </Button>
+   780→          </div>
+   781→        </DialogContent>
+   782→      </Dialog>
+   783→    </div>
+   784→  )
+   785→}
+   786→

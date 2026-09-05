@@ -152,7 +152,7 @@ export function CopilotDock() {
         </div>
         <div className="flex-1">
           <p className="text-sm font-semibold">Copilot</p>
-          <p className="text-xs text-muted-foreground">Your second brain — docs, plans, notes & news</p>
+          <p className="text-xs text-muted-foreground">Ask across your workspace</p>
         </div>
         <Button
           variant="ghost"
