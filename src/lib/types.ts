@@ -139,6 +139,43 @@ export interface CustomSource {
   enabled: boolean
 }
 
+export interface Paper {
+  id: string
+  arxivId: string
+  title: string
+  authors: string | null
+  abstract: string | null
+  url: string | null
+  pdfUrl: string | null
+  source: string // huggingface | arxiv
+  upvotes: number
+  publishedAt: string | null
+  tldr: string | null
+  problem: string | null
+  innovation: string | null
+  results: string | null // JSON array
+  whyMatters: string | null
+  analyzedAt: string | null
+  saved: boolean
+  documentId: string | null
+  createdAt: string
+}
+
+export interface GoogleStatus {
+  configured: boolean
+  connected: boolean
+  email: string | null
+  clientId: string | null
+  redirectUri: string | null
+}
+
+export interface FetchSourceResult {
+  name: string
+  ok: boolean
+  count: number
+  error: string | null
+}
+
 export interface Opportunity {
   id: string
   company: string

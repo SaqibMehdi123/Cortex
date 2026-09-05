@@ -5,7 +5,7 @@ import { CommandBar } from '@/components/command-bar'
 import { CopilotDock } from '@/components/copilot-dock'
 import { QuickCapture } from '@/components/quick-capture'
 import { FocusTimer } from '@/components/focus-timer'
-import { Reader } from '@/components/views/reader'
+import { Reader, ReaderHome } from '@/components/views/reader'
 import { DashboardView } from '@/components/views/dashboard'
 import { LibraryView } from '@/components/views/library'
 import { PlansView } from '@/components/views/plans'
@@ -27,6 +27,7 @@ export default function Home() {
       <AppShell>
         {view === 'dashboard' && <DashboardView />}
         {view === 'library' && <LibraryView />}
+        {view === 'reader' && <ReaderHome />}
         {view === 'plans' && <PlansView />}
         {view === 'goals' && <GoalsView />}
         {view === 'news' && <NewsView />}

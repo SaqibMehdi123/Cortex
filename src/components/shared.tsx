@@ -84,17 +84,49 @@ export function EmptyState({
   action?: { label: string; onClick: () => void }
 }) {
   return (
-    <div className="anim-fade-up flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed bg-card/50 px-6 py-14 text-center">
-      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-sidebar-accent text-primary">{icon}</div>
+    <div className="anim-fade-up flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed bg-card/60 px-6 py-14 text-center">
+      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/15 via-primary/10 to-teal-500/10 text-primary ring-1 ring-primary/20">
+        {icon}
+      </div>
       <div>
         <p className="font-semibold">{title}</p>
-        <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">{description}</p>
+        <p className="mx-auto mt-1 max-w-sm text-sm leading-relaxed text-muted-foreground">{description}</p>
       </div>
       {action && (
         <Button size="sm" onClick={action.onClick} className="mt-1">
           {action.label}
         </Button>
       )}
+    </div>
+  )
+}
+
+// ─── Consistent page header (title + subtitle + actions) ───────────
+export function PageHeader({
+  icon,
+  title,
+  description,
+  actions,
+}: {
+  icon?: ReactNode
+  title: string
+  description?: string
+  actions?: ReactNode
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex items-center gap-3">
+        {icon && (
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary/15 via-primary/10 to-teal-500/10 text-primary ring-1 ring-primary/15">
+            {icon}
+          </span>
+        )}
+        <div>
+          <h1 className="text-xl font-bold tracking-tight sm:text-2xl">{title}</h1>
+          {description && <p className="text-sm text-muted-foreground">{description}</p>}
+        </div>
+      </div>
+      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </div>
   )
 }

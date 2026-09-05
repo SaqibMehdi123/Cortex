@@ -1,9 +1,7 @@
 'use client'
 
 import { cn } from '@/lib/utils'
-import { useMounted } from '@/components/shared'
-import { useUI, type ViewKey } from '@/lib/nav-config'
-import { NAV_ITEMS, MOBILE_TABS } from '@/lib/nav-config'
+import { useUI, type ViewKey, NAV_ITEMS, MOBILE_TABS, NAV_GROUP_LABELS } from '@/lib/nav-config'
 import { PanelLeftClose, PanelLeftOpen, Search, Sparkles, Plus, Bell, WifiOff, CheckCircle2, Loader2, Zap, Target, Share2, Layers, ChartLine, Settings } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTheme } from 'next-themes'
@@ -37,7 +35,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const mobileMoreOpen = useUI((s) => s.mobileMoreOpen)
   const setMobileMoreOpen = useUI((s) => s.setMobileMoreOpen)
   const { resolvedTheme, setTheme } = useTheme()
-  const mounted = useMounted()
   const [online, setOnline] = useState(true)
   const [synced, setSynced] = useState(true)
   const [notifData, setNotifData] = useState<DashboardData | null>(null)
@@ -104,70 +101,90 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <aside
           className={cn(
             'fixed inset-y-0 left-0 z-30 hidden flex-col border-r bg-sidebar transition-[width] duration-200 lg:flex',
-            collapsed ? 'w-16' : 'w-60'
+            collapsed ? 'w-16' : 'w-[232px]'
           )}
         >
-          <div className={cn('flex items-center gap-2.5 px-4 py-5', collapsed && 'justify-center px-0')}>
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-soft">
+          <div className={cn('flex items-center gap-2.5 px-4 pb-4 pt-5', collapsed && 'justify-center px-0')}>
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 via-primary to-teal-500 text-primary-foreground shadow-soft">
               <Sparkles className="h-5 w-5" />
             </div>
             {!collapsed && (
               <div className="min-w-0">
-                <p className="truncate text-sm font-semibold leading-tight">Cortex</p>
-                <p className="truncate text-xs text-muted-foreground">Your second brain</p>
+                <p className="truncate text-sm font-bold leading-tight tracking-tight">Cortex</p>
+                <p className="truncate text-[11px] text-muted-foreground">Your second brain</p>
               </div>
             )}
           </div>
 
-          <nav className={cn('scroll-thin flex-1 space-y-0.5 overflow-y-auto px-2 py-1', collapsed && 'px-1.5')} aria-label="Main">
-            {NAV_ITEMS.map((item) => (
-              <Tooltip key={item.key}>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={() => setView(item.key)}
-                    aria-current={view === item.key ? 'page' : undefined}
-                    className={cn(
-                      'flex min-h-[40px] w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-150',
-                      collapsed && 'justify-center px-0',
-                      view === item.key
-                        ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                    )}
-                  >
-                    {item.icon}
-                    {!collapsed && item.label}
-                    {!collapsed && item.key === 'flashcards' && dueFlashcards > 0 && (
-                      <span className="ml-auto rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground">
-                        {dueFlashcards}
-                      </span>
-                    )}
-                  </button>
-                </TooltipTrigger>
-                {collapsed && <TooltipContent side="right">{item.label}</TooltipContent>}
-              </Tooltip>
-            ))}
-          </nav>
-
-          <div className="space-y-1 border-t px-2 py-3">
+          <div className={cn('px-3 pb-3', collapsed && 'px-2')}>
             <button
               onClick={() => setCommandOpen(true)}
               className={cn(
-                'flex min-h-[40px] w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
+                'flex min-h-[36px] w-full items-center gap-2 rounded-lg border bg-background px-2.5 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground',
                 collapsed && 'justify-center px-0'
               )}
+              aria-label="Search everything (Ctrl+K)"
             >
-              <Search className="h-4 w-4" />
+              <Search className="h-3.5 w-3.5 shrink-0" />
               {!collapsed && (
                 <>
                   <span className="flex-1 text-left">Search…</span>
-                  <kbd className="rounded border bg-muted px-1.5 py-0.5 text-[10px] font-medium">⌘K</kbd>
+                  <kbd className="rounded border bg-muted px-1 py-0.5 text-[10px] font-medium">⌘K</kbd>
                 </>
               )}
             </button>
+          </div>
 
+          <nav className={cn('scroll-thin flex-1 space-y-0.5 overflow-y-auto px-2 pb-2', collapsed && 'px-1.5')} aria-label="Main">
+            {(['workspace', 'intelligence', 'system'] as const).map((group) => {
+              const items = NAV_ITEMS.filter((i) => i.group === group)
+              if (items.length === 0) return null
+              return (
+                <div key={group} className={cn(collapsed ? 'pb-2' : 'pb-3')}>
+                  {!collapsed && (
+                    <p className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/70">
+                      {NAV_GROUP_LABELS[group]}
+                    </p>
+                  )}
+                  {collapsed && group !== 'workspace' && <div className="mx-2 mb-2 border-t" />}
+                  {items.map((item) => (
+                    <Tooltip key={item.key}>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => setView(item.key)}
+                          aria-current={view === item.key ? 'page' : undefined}
+                          className={cn(
+                            'group relative flex min-h-[36px] w-full items-center gap-2.5 rounded-lg px-3 py-1.5 text-[13px] font-medium transition-all duration-150',
+                            collapsed && 'justify-center px-0',
+                            view === item.key
+                              ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                          )}
+                        >
+                          {view === item.key && (
+                            <span className="absolute left-0 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-full bg-primary" aria-hidden />
+                          )}
+                          <span className={cn(view === item.key && 'text-primary')}>{item.icon}</span>
+                          {!collapsed && item.label}
+                          {!collapsed && item.key === 'flashcards' && dueFlashcards > 0 && (
+                            <span className="ml-auto rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground">
+                              {dueFlashcards}
+                            </span>
+                          )}
+                        </button>
+                      </TooltipTrigger>
+                      {collapsed && <TooltipContent side="right">{item.label}</TooltipContent>}
+                    </Tooltip>
+                  ))}
+                </div>
+              )
+            })}
+          </nav>
+
+          <div className="space-y-1 border-t px-2 py-3">
             <Popover>
               <PopoverTrigger asChild>
-                <button aria-label="Notifications" className={cn('relative flex min-h-[40px] w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground', collapsed && 'justify-center px-0')}>
+                <button aria-label="Notifications" className={cn('relative flex min-h-[36px] w-full items-center gap-2.5 rounded-lg px-3 py-1.5 text-[13px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground', collapsed && 'justify-center px-0')}>
                   <Bell className="h-4 w-4" />
                   {!collapsed && 'Notifications'}
                   {notifCount > 0 && (
@@ -184,14 +201,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
             <button
               onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
-              className={cn('flex min-h-[40px] w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground', collapsed && 'justify-center px-0')}
+              className={cn('flex min-h-[36px] w-full items-center gap-2.5 rounded-lg px-3 py-1.5 text-[13px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground', collapsed && 'justify-center px-0')}
               aria-label="Toggle theme"
             >
-              {!mounted ? <Moon className="h-4 w-4" /> : resolvedTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-              {!collapsed && (!mounted ? 'Theme' : resolvedTheme === 'dark' ? 'Light mode' : 'Dark mode')}
+              {/* CSS-only swap: no hydration mismatch (next-themes sets .dark on <html>) */}
+              <Sun className="hidden h-4 w-4 dark:block" />
+              <Moon className="h-4 w-4 dark:hidden" />
+              {!collapsed && (
+                <>
+                  <span className="hidden dark:inline">Light mode</span>
+                  <span className="dark:hidden">Dark mode</span>
+                </>
+              )}
             </button>
 
-            <div className={cn('flex min-h-[36px] items-center gap-3 rounded-lg px-3 py-2 text-xs text-muted-foreground', collapsed && 'justify-center px-0')} aria-live="polite">
+            <div className={cn('flex min-h-[32px] items-center gap-2.5 rounded-lg px-3 py-1.5 text-xs text-muted-foreground', collapsed && 'justify-center px-0')} aria-live="polite">
               {!online ? (
                 <WifiOff className="h-4 w-4 text-warning" aria-label="Offline" />
               ) : synced ? (
@@ -204,7 +228,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
             <button
               onClick={toggleSidebar}
-              className={cn('flex min-h-[40px] w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground', collapsed && 'justify-center px-0')}
+              className={cn('flex min-h-[36px] w-full items-center gap-2.5 rounded-lg px-3 py-1.5 text-[13px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground', collapsed && 'justify-center px-0')}
               aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             >
               {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
@@ -216,8 +240,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {/* ── Main content ── */}
         <main
           className={cn(
-            'px-4 pb-28 pt-16 sm:px-6 lg:px-8 lg:pb-10 lg:pt-8 transition-[margin,padding] duration-200',
-            collapsed ? 'lg:ml-16' : 'lg:ml-60',
+            'px-4 pb-28 pt-16 sm:px-6 lg:px-8 lg:pb-12 lg:pt-8 transition-[margin,padding] duration-200',
+            collapsed ? 'lg:ml-16' : 'lg:ml-[232px]',
             copilotOpen && 'xl:mr-[380px]'
           )}
         >
@@ -226,7 +250,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* ── Mobile top bar ── */}
         <header className="fixed inset-x-0 top-0 z-30 flex items-center gap-2 border-b bg-background/95 px-4 py-2.5 backdrop-blur supports-[backdrop-filter]:bg-background/80 lg:hidden">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 via-primary to-teal-500 text-primary-foreground">
             <Sparkles className="h-4 w-4" />
           </div>
           <p className="flex-1 text-sm font-semibold">Cortex</p>

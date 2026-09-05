@@ -8,15 +8,17 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
+import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
+import { EmptyState, PageHeader, SkeletonCard } from '@/components/shared'
 import ReactMarkdown from 'react-markdown'
 import {
   ArrowLeft, Sparkles, Send, Highlighter, StickyNote, Layers, Share2, Loader2,
-  X, Trash2, CheckCircle2, BookOpen,
+  X, Trash2, CheckCircle2, BookOpen, ChevronRight,
 } from 'lucide-react'
 
 const HL_COLORS = ['yellow', 'green', 'blue', 'pink'] as const
@@ -25,6 +27,112 @@ interface SelInfo {
   text: string
   x: number
   y: number
+}
+
+// ─── Reader home (sidebar "Reader" tab) ─────────────────────────────
+// Distraction-free reading queue: pick up where you left off or start
+// anything from your reading list. Opens the full-screen Reader overlay.
+export function ReaderHome() {
+  const openReader = useUI((s) => s.openReader)
+  const setView = useUI((s) => s.setView)
+  const [docs, setDocs] = useState<DocumentItem[] | null>(null)
+
+  useEffect(() => {
+    api.get<{ documents: DocumentItem[] }>('/api/documents')
+      .then((d) => setDocs(d.documents))
+      .catch(() => setDocs([]))
+  }, [])
+
+  const reading = useMemo(
+    () => (docs ?? []).filter((d) => d.status === 'reading').sort((a, b) => (b.lastReadAt ?? b.updatedAt).localeCompare(a.lastReadAt ?? a.updatedAt)),
+    [docs]
+  )
+  const queued = useMemo(() => (docs ?? []).filter((d) => d.status === 'queued'), [docs])
+  const finishedCount = useMemo(() => (docs ?? []).filter((d) => d.status === 'finished').length, [docs])
+
+  if (!docs) {
+    return (
+      <div className="anim-fade-up space-y-4">
+        <div className="h-8 w-40 animate-pulse rounded bg-muted" />
+        <div className="grid gap-3 sm:grid-cols-2">{[1, 2, 3, 4].map((i) => <SkeletonCard key={i} />)}</div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="anim-fade-up space-y-6 pb-8">
+      <PageHeader
+        icon={<BookOpen className="h-5 w-5" />}
+        title="Reader"
+        description="Your distraction-free reading queue — pick up anything and dive in."
+      />
+
+      {docs.length === 0 ? (
+        <EmptyState
+          icon={<BookOpen className="h-5 w-5" />}
+          title="Nothing to read yet"
+          description="The Reader is where you read what you save: import a PDF (with real text extraction), paste an article URL, or save a paper from News & Papers. Then read here with highlighting and Ask AI."
+          action={{ label: 'Import in Library', onClick: () => setView('library') }}
+        />
+      ) : (
+        <>
+          {reading.length > 0 && (
+            <section aria-label="Continue reading">
+              <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Continue reading</h2>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {reading.slice(0, 4).map((doc) => (
+                  <button key={doc.id} onClick={() => openReader(doc.id)} className="text-left">
+                    <Card className="card-lift h-full">
+                      <CardContent className="space-y-2 p-4">
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Badge variant="outline" className="text-[10px] capitalize">{doc.type}</Badge>
+                          {doc.author && <span className="truncate">{doc.author}</span>}
+                        </div>
+                        <p className="line-clamp-2 text-sm font-semibold leading-snug">{doc.title}</p>
+                        <div className="flex items-center gap-2 pt-1">
+                          <Progress value={doc.progress} className="h-1.5" />
+                          <span className="shrink-0 text-[10px] text-muted-foreground">{doc.progress}%</span>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
+
+          <section aria-label="Reading queue">
+            <div className="mb-2 flex items-center justify-between">
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Reading queue</h2>
+              <span className="text-xs text-muted-foreground">{queued.length} waiting · {finishedCount} finished</span>
+            </div>
+            {queued.length === 0 ? (
+              <div className="rounded-xl border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
+                Queue is clear — everything saved is in progress or finished.
+              </div>
+            ) : (
+              <div className="overflow-hidden rounded-xl border bg-card">
+                {queued.map((doc, i) => (
+                  <button
+                    key={doc.id}
+                    onClick={() => openReader(doc.id)}
+                    className={cn('flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/50', i !== 0 && 'border-t')}
+                  >
+                    <BookOpen className="h-4 w-4 shrink-0 text-primary" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium">{doc.title}</span>
+                      {doc.source && <span className="block truncate text-xs text-muted-foreground">{doc.source}</span>}
+                    </span>
+                    <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  </button>
+                ))}
+              </div>
+            )}
+          </section>
+        </>
+      )}
+    </div>
+  )
 }
 
 export function Reader() {

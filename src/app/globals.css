@@ -50,7 +50,7 @@
 /* ─── Cortex light theme ─── */
 :root {
   --radius: 0.75rem; /* 12px cards */
-  --background: #fafafa;
+  --background: #f8f8fa;
   --foreground: #18181b;
   --card: #ffffff;
   --card-foreground: #18181b;
@@ -58,69 +58,69 @@
   --popover-foreground: #18181b;
   --primary: #6366f1;
   --primary-foreground: #ffffff;
-  --secondary: #f4f4f5;
+  --secondary: #f1f1f4;
   --secondary-foreground: #27272a;
-  --muted: #f4f4f5;
-  --muted-foreground: #71717a;
-  --accent: #eef2ff;
+  --muted: #f1f1f4;
+  --muted-foreground: #6d6d78;
+  --accent: #eef0ff;
   --accent-foreground: #4338ca;
   --destructive: #ef4444;
-  --success: #22c55e;
-  --warning: #f59e0b;
-  --danger: #ef4444;
-  --border: #e4e4e7;
-  --input: #e4e4e7;
+  --success: #16a34a;
+  --warning: #d97706;
+  --danger: #dc2626;
+  --border: #e6e6ea;
+  --input: #e2e2e7;
   --ring: #6366f1;
   --chart-1: #6366f1;
   --chart-2: #14b8a6;
   --chart-3: #f59e0b;
   --chart-4: #22c55e;
   --chart-5: #ef4444;
-  --sidebar: #fcfcfc;
+  --sidebar: #fbfbfd;
   --sidebar-foreground: #18181b;
   --sidebar-primary: #6366f1;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #eef2ff;
+  --sidebar-accent: #ecedfd;
   --sidebar-accent-foreground: #4338ca;
-  --sidebar-border: #e4e4e7;
+  --sidebar-border: #e8e8ec;
   --sidebar-ring: #6366f1;
 }
 
 /* ─── Cortex dark (OLED-friendly) ─── */
 .dark {
-  --background: #0f0f10;
-  --foreground: #fafafa;
-  --card: #17171a;
-  --card-foreground: #fafafa;
-  --popover: #1c1c1f;
-  --popover-foreground: #fafafa;
+  --background: #0e0e10;
+  --foreground: #f4f4f5;
+  --card: #161619;
+  --card-foreground: #f4f4f5;
+  --popover: #1b1b1f;
+  --popover-foreground: #f4f4f5;
   --primary: #818cf8;
-  --primary-foreground: #0f0f10;
-  --secondary: #232327;
+  --primary-foreground: #0e0e10;
+  --secondary: #222226;
   --secondary-foreground: #e4e4e7;
-  --muted: #1d1d21;
-  --muted-foreground: #a1a1aa;
-  --accent: #26264d;
+  --muted: #1c1c20;
+  --muted-foreground: #9d9da8;
+  --accent: #252550;
   --accent-foreground: #c7d2fe;
   --destructive: #f87171;
   --success: #4ade80;
   --warning: #fbbf24;
   --danger: #f87171;
-  --border: #26262b;
-  --input: #2a2a30;
+  --border: #24242a;
+  --input: #2a2a31;
   --ring: #818cf8;
   --chart-1: #818cf8;
   --chart-2: #2dd4bf;
   --chart-3: #fbbf24;
   --chart-4: #4ade80;
   --chart-5: #f87171;
-  --sidebar: #131316;
-  --sidebar-foreground: #fafafa;
+  --sidebar: #121215;
+  --sidebar-foreground: #f4f4f5;
   --sidebar-primary: #818cf8;
-  --sidebar-primary-foreground: #0f0f10;
-  --sidebar-accent: #1e1e4a;
+  --sidebar-primary-foreground: #0e0e10;
+  --sidebar-accent: #1d1d42;
   --sidebar-accent-foreground: #c7d2fe;
-  --sidebar-border: #232328;
+  --sidebar-border: #212127;
   --sidebar-ring: #818cf8;
 }
 
@@ -160,11 +160,45 @@
   /* Soft card shadow */
   .shadow-soft { box-shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 2px 8px rgb(0 0 0 / 0.04); }
   .dark .shadow-soft { box-shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 2px 8px rgb(0 0 0 / 0.3); }
+  .shadow-lift { box-shadow: 0 2px 4px rgb(0 0 0 / 0.05), 0 12px 24px -8px rgb(0 0 0 / 0.12); }
+  .dark .shadow-lift { box-shadow: 0 2px 4px rgb(0 0 0 / 0.5), 0 12px 24px -8px rgb(0 0 0 / 0.6); }
+
+  /* Premium card hover: lift + border tint */
+  .card-lift { transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 180ms ease, border-color 180ms ease; }
+  .card-lift:hover { transform: translateY(-2px); box-shadow: 0 2px 4px rgb(0 0 0 / 0.05), 0 12px 24px -8px rgb(0 0 0 / 0.12); }
+  .dark .card-lift:hover { box-shadow: 0 2px 4px rgb(0 0 0 / 0.5), 0 12px 24px -8px rgb(0 0 0 / 0.55); }
+
+  /* Gradient accent text (page hero) */
+  .text-gradient {
+    background: linear-gradient(120deg, var(--primary) 0%, #a78bfa 55%, var(--chart-2) 110%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* Shimmer skeleton */
+  .skeleton-shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+  .skeleton-shimmer::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.45), transparent);
+    animation: cortex-shimmer 1.6s infinite;
+  }
+  .dark .skeleton-shimmer::after { background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.06), transparent); }
 
   /* Custom scrollbar */
   .scroll-thin::-webkit-scrollbar { width: 8px; height: 8px; }
   .scroll-thin::-webkit-scrollbar-thumb { background: var(--border); border-radius: 8px; }
   .scroll-thin::-webkit-scrollbar-track { background: transparent; }
+}
+
+@keyframes cortex-shimmer {
+  100% { transform: translateX(100%); }
 }
 
 /* ─── Reading mode typography (Readwise comfort) ─── */

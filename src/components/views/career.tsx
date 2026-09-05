@@ -16,7 +16,7 @@ import { cn } from '@/lib/utils'
 import { SkeletonCard, EmptyState } from '@/components/shared'
 import { useUI } from '@/lib/nav-config'
 import {
-  Briefcase, Plus, Loader2, Mail, Clock, FileText, Trash2, GripVertical, MailWarning,
+  Briefcase, Plus, Loader2, Mail, Clock, FileText, Trash2, GripVertical, MailWarning, Inbox,
 } from 'lucide-react'
 
 const STAGES = [
@@ -56,6 +56,28 @@ export function CareerView() {
   const { data, loading, reload } = useApi<{ opportunities: Opportunity[] }>('/api/opportunities')
   const [addOpen, setAddOpen] = useState(false)
   const [dragId, setDragId] = useState<string | null>(null)
+  const [scanning, setScanning] = useState(false)
+
+  async function scanGmail() {
+    setScanning(true)
+    try {
+      const r = await api.post<{ scanned: number; imported: number; skipped: number; message?: string }>('/api/gmail/import')
+      toast({
+        title: r.imported > 0 ? `${r.imported} new applications from Gmail` : 'Nothing new in your inbox',
+        description: r.message ?? `Scanned ${r.scanned} emails · ${r.skipped} already imported or irrelevant.`,
+      })
+      reload()
+    } catch (e) {
+      toast({
+        title: 'Gmail scan failed',
+        description: e instanceof Error && e.message.includes('not connected') ? 'Connect your Google account in Settings first.' : e instanceof Error ? e.message : 'Try again.',
+        variant: 'destructive',
+      })
+      if (e instanceof Error && e.message.includes('not connected')) setView('settings')
+    } finally {
+      setScanning(false)
+    }
+  }
 
   async function moveStage(id: string, status: string) {
     try {
@@ -80,17 +102,24 @@ export function CareerView() {
             Internship & job pipeline. {nextDeadline?.deadline ? `Next deadline: ${nextDeadline.company} in ${Math.max(0, daysUntil(nextDeadline.deadline))}d.` : ''}
           </p>
         </div>
-        <Button onClick={() => setAddOpen(true)}>
-          <Plus className="mr-1.5 h-4 w-4" /> Add application
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" onClick={scanGmail} disabled={scanning}>
+            {scanning ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Inbox className="mr-1.5 h-4 w-4" />}
+            {scanning ? 'Scanning inbox…' : 'Scan Gmail'}
+          </Button>
+          <Button onClick={() => setAddOpen(true)}>
+            <Plus className="mr-1.5 h-4 w-4" /> Add application
+          </Button>
+        </div>
       </div>
 
       {/* Gmail note */}
       <div className="flex items-start gap-2.5 rounded-xl border border-dashed bg-card px-4 py-3 text-xs text-muted-foreground">
         <Mail className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
         <p>
-          <b className="text-foreground">Gmail surface:</b> connect your inbox in Settings, then paste any job-related email into “Add application” —
-          the AI classifies it (opportunity / rejection / interview / offer / deadline), extracts company, role and deadline automatically.
+          <b className="text-foreground">Gmail, for real:</b> connect your Google account in Settings → Google account, then hit “Scan Gmail” —
+          career emails from the last 60 days are classified (opportunity / rejection / interview / offer / deadline) and land on this board automatically.
+          Manual paste still works via “Add application”.
         </p>
       </div>
 

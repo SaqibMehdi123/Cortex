@@ -162,6 +162,30 @@ model CustomSource {
   createdAt DateTime @default(now())
 }
 
+// Research papers tracked from Hugging Face Daily Papers & arXiv
+model Paper {
+  id          String    @id @default(cuid())
+  arxivId     String    @unique
+  title       String
+  authors     String? // comma separated
+  abstract    String?
+  url         String?
+  pdfUrl      String?
+  source      String    @default("huggingface") // huggingface | arxiv
+  upvotes     Int       @default(0)
+  publishedAt DateTime?
+  // AI analysis (structured)
+  tldr        String?
+  problem     String?
+  innovation  String?
+  results     String? // JSON array of key results / numbers
+  whyMatters  String?
+  analyzedAt  DateTime?
+  saved       Boolean   @default(false)
+  documentId  String? // set when saved into the Library
+  createdAt   DateTime  @default(now())
+}
+
 // ─── Career Command Center ─────────────────────────────────────────
 
 model Opportunity {
@@ -178,6 +202,7 @@ model Opportunity {
   nextAction  String?
   resume      String? // resume/CV version linked to this application
   notes       String?
+  gmailId     String? @unique // Gmail message id when imported via OAuth
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 }
@@ -248,9 +273,11 @@ model FocusSession {
 // ─── Settings singleton ────────────────────────────────────────────
 
 model Setting {
-  id         String   @id @default("user")
-  name       String   @default("there")
-  theme      String   @default("system") // light | dark | system
-  digestTime String   @default("08:00") // daily digest delivery time
-  updatedAt  DateTime @updatedAt
+  id          String   @id @default("user")
+  name        String   @default("there")
+  theme       String   @default("system") // light | dark | system
+  digestTime  String   @default("08:00") // daily digest delivery time
+  googleAuth  String? // JSON {access_token, refresh_token, expiry_date, scope}
+  googleEmail String?
+  updatedAt   DateTime @updatedAt
 }

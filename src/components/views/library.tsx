@@ -18,7 +18,7 @@ import { EmptyState, SkeletonCard } from '@/components/shared'
 import { cn } from '@/lib/utils'
 import {
   LayoutGrid, List, Plus, BookOpen, FileText, Search, Sparkles, Loader2,
-  Link2, ClipboardPaste, Trash2, BookmarkPlus, StickyNote, FileText as FileIcon,
+  Link2, ClipboardPaste, Trash2, BookmarkPlus, StickyNote, FileText as FileIcon, FileUp,
 } from 'lucide-react'
 
 const TYPE_META: Record<string, { label: string; icon: React.ReactNode }> = {
@@ -261,7 +261,7 @@ export function LibraryView() {
 }
 
 function ImportDialog({ open, onOpenChange, onImported }: { open: boolean; onOpenChange: (v: boolean) => void; onImported: () => void }) {
-  const [mode, setMode] = useState<'url' | 'paste' | 'manual'>('url')
+  const [mode, setMode] = useState<'pdf' | 'url' | 'paste' | 'manual'>('pdf')
   const [url, setUrl] = useState('')
   const [title, setTitle] = useState('')
   const [author, setAuthor] = useState('')
@@ -269,12 +269,28 @@ function ImportDialog({ open, onOpenChange, onImported }: { open: boolean; onOpe
   const [tags, setTags] = useState('')
   const [content, setContent] = useState('')
   const [busy, setBusy] = useState(false)
+  const [file, setFile] = useState<File | null>(null)
+  const [dragOver, setDragOver] = useState(false)
   const { toast } = useToast()
+
+  async function uploadPdf() {
+    if (!file) throw new Error('Choose a PDF first')
+    const form = new FormData()
+    form.append('file', file)
+    if (author.trim()) form.append('author', author.trim())
+    if (tags.trim()) form.append('tags', tags.trim())
+    const res = await fetch('/api/documents/pdf', { method: 'POST', body: form })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(data.error || 'PDF extraction failed')
+    toast({ title: 'PDF imported', description: `${data.pages} pages · ${Math.round((data.chars ?? 0) / 1000)}k characters extracted — ready for highlighting and Ask AI.` })
+  }
 
   async function submit() {
     setBusy(true)
     try {
-      if (mode === 'url') {
+      if (mode === 'pdf') {
+        await uploadPdf()
+      } else if (mode === 'url') {
         if (!url.trim()) throw new Error('Paste a link first')
         await api.post('/api/documents', { title: url, source: url.trim(), autoExtract: true, status: 'queued', type: 'url' })
       } else if (mode === 'paste') {
@@ -285,7 +301,7 @@ function ImportDialog({ open, onOpenChange, onImported }: { open: boolean; onOpe
         if (!title.trim()) throw new Error('Give it a title')
         await api.post('/api/documents', { title, author, type, tags, status: 'reading' })
       }
-      setUrl(''); setTitle(''); setAuthor(''); setTags(''); setContent('')
+      setUrl(''); setTitle(''); setAuthor(''); setTags(''); setContent(''); setFile(null)
       onOpenChange(false)
       onImported()
     } catch (e) {
@@ -300,17 +316,59 @@ function ImportDialog({ open, onOpenChange, onImported }: { open: boolean; onOpe
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Import to library</DialogTitle>
-          <DialogDescription>Web articles are fetched automatically. Paste text for PDFs & EPUBs to enable AI chat.</DialogDescription>
+          <DialogDescription>PDFs get real text extraction server-side. Web articles are fetched automatically.</DialogDescription>
         </DialogHeader>
-        <Tabs value={mode} onValueChange={(v) => setMode(v as 'url' | 'paste' | 'manual')}>
-          <TabsList className="grid w-full grid-cols-3">
+        <Tabs value={mode} onValueChange={(v) => setMode(v as typeof mode)}>
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="pdf" className="gap-1.5"><FileUp className="h-3.5 w-3.5" /> PDF</TabsTrigger>
             <TabsTrigger value="url" className="gap-1.5"><Link2 className="h-3.5 w-3.5" /> URL</TabsTrigger>
-            <TabsTrigger value="paste" className="gap-1.5"><ClipboardPaste className="h-3.5 w-3.5" /> Paste text</TabsTrigger>
+            <TabsTrigger value="paste" className="gap-1.5"><ClipboardPaste className="h-3.5 w-3.5" /> Text</TabsTrigger>
             <TabsTrigger value="manual" className="gap-1.5"><FileText className="h-3.5 w-3.5" /> Manual</TabsTrigger>
           </TabsList>
         </Tabs>
         <div className="space-y-3">
-          {mode === 'url' ? (
+          {mode === 'pdf' ? (
+            <>
+              <label
+                onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={(e) => {
+                  e.preventDefault()
+                  setDragOver(false)
+                  const f = e.dataTransfer.files?.[0]
+                  if (f && f.name.toLowerCase().endsWith('.pdf')) setFile(f)
+                }}
+                className={cn(
+                  'flex min-h-[120px] cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-6 text-center transition-colors',
+                  dragOver ? 'border-primary bg-primary/5' : 'hover:border-primary/50 hover:bg-muted/40'
+                )}
+              >
+                <FileUp className="h-6 w-6 text-primary" />
+                {file ? (
+                  <>
+                    <span className="text-sm font-medium">{file.name}</span>
+                    <span className="text-xs text-muted-foreground">{(file.size / 1024 / 1024).toFixed(1)} MB — click to change</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-sm font-medium">Drop a PDF here or click to browse</span>
+                    <span className="text-xs text-muted-foreground">Text is extracted server-side — scans without text are not supported</span>
+                  </>
+                )}
+                <input
+                  type="file"
+                  accept="application/pdf,.pdf"
+                  className="sr-only"
+                  aria-label="Choose PDF file"
+                  onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                />
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <Input value={author} onChange={(e) => setAuthor(e.target.value)} placeholder="Author (optional)" aria-label="Author" />
+                <Input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="Tags, comma separated" aria-label="Tags" />
+              </div>
+            </>
+          ) : mode === 'url' ? (
             <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://arxiv.org/abs/…" aria-label="Article URL" autoFocus />
           ) : (
             <>
@@ -322,16 +380,19 @@ function ImportDialog({ open, onOpenChange, onImported }: { open: boolean; onOpe
               )}
             </>
           )}
-          <div className="grid grid-cols-2 gap-3">
-            <Input value={author} onChange={(e) => setAuthor(e.target.value)} placeholder="Author (optional)" aria-label="Author" />
-            <Input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="Tags, comma separated" aria-label="Tags" />
-          </div>
+          {mode === 'url' && (
+            <div className="grid grid-cols-2 gap-3">
+              <Input value={author} onChange={(e) => setAuthor(e.target.value)} placeholder="Author (optional)" aria-label="Author" />
+              <Input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="Tags, comma separated" aria-label="Tags" />
+            </div>
+          )}
         </div>
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={submit} disabled={busy}>
+          <Button onClick={submit} disabled={busy || (mode === 'pdf' && !file)}>
             {busy && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
-            <BookmarkPlus className="mr-1.5 h-4 w-4" /> Add to library
+            <BookmarkPlus className="mr-1.5 h-4 w-4" />
+            {mode === 'pdf' ? (busy ? 'Extracting text…' : 'Upload & extract') : 'Add to library'}
           </Button>
         </div>
       </DialogContent>

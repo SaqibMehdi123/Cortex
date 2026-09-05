@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { api } from '@/lib/client'
 import { useApi } from '@/lib/client'
 import { useMounted } from '@/components/shared'
@@ -10,7 +11,11 @@ import { Label } from '@/components/ui/label'
 import { useTheme } from 'next-themes'
 import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
-import { Sun, Moon, Monitor, Download, FileJson, FileText, CalendarDays, Mail, Info, Palette, User } from 'lucide-react'
+import type { GoogleStatus } from '@/lib/types'
+import {
+  Sun, Moon, Monitor, Download, FileJson, FileText, CalendarDays, Mail, Info, Palette, User,
+  Chrome, RefreshCw, LogOut, Copy, CalendarPlus, Inbox, ShieldCheck, KeyRound,
+} from 'lucide-react'
 
 interface SettingsData {
   id: string
@@ -38,124 +43,14 @@ export function SettingsView() {
     <div className="anim-fade-up mx-auto max-w-2xl space-y-4 pb-8">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
-        <p className="text-sm text-muted-foreground">Theme, digest, sync and data ownership.</p>
+        <p className="text-sm text-muted-foreground">Profile, appearance, Google integrations and data ownership.</p>
       </div>
 
-      {/* Profile */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-sm"><User className="h-4 w-4 text-primary" /> Profile</CardTitle>
-          <CardDescription>Used for your daily greeting.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form
-            className="flex items-end gap-2"
-            onSubmit={(e) => {
-              e.preventDefault()
-              const form = new FormData(e.currentTarget)
-              save({ name: String(form.get('name') ?? '') })
-            }}
-          >
-            <div className="flex-1">
-              <Label htmlFor="name">Display name</Label>
-              <Input id="name" name="name" defaultValue={data?.setting.name} className="mt-1" placeholder="Your name" />
-            </div>
-            <Button type="submit">Save</Button>
-          </form>
-        </CardContent>
-      </Card>
+      <ProfileCard data={data?.setting} save={save} />
+      <AppearanceCard mounted={mounted} theme={theme} setTheme={setTheme} save={save} />
+      <GoogleCard />
+      <DigestCard data={data?.setting} save={save} />
 
-      {/* Appearance */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-sm"><Palette className="h-4 w-4 text-primary" /> Appearance</CardTitle>
-          <CardDescription>Follows your system preference by default. Dark mode is OLED-friendly.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-3 gap-2">
-            {([
-              { key: 'light', label: 'Light', icon: <Sun className="h-4 w-4" /> },
-              { key: 'dark', label: 'Dark', icon: <Moon className="h-4 w-4" /> },
-              { key: 'system', label: 'System', icon: <Monitor className="h-4 w-4" /> },
-            ]).map((opt) => (
-              <button
-                key={opt.key}
-                onClick={() => { setTheme(opt.key); save({ theme: opt.key }) }}
-                className={cn(
-                  'flex min-h-[64px] flex-col items-center justify-center gap-1.5 rounded-xl border text-xs font-medium transition-colors',
-                  mounted && theme === opt.key ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted'
-                )}
-              >
-                {opt.icon} {opt.label}
-              </button>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Daily digest */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-sm"><CalendarDays className="h-4 w-4 text-primary" /> Daily digest</CardTitle>
-          <CardDescription>When your briefing (plan + news digest + deadlines) should be prepared each day.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form
-            className="flex items-end gap-2"
-            onSubmit={(e) => {
-              e.preventDefault()
-              const form = new FormData(e.currentTarget)
-              save({ digestTime: String(form.get('digestTime') ?? '08:00') })
-            }}
-          >
-            <div className="w-36">
-              <Label htmlFor="digest">Digest time</Label>
-              <Input id="digest" name="digestTime" type="time" defaultValue={data?.setting.digestTime ?? '08:00'} className="mt-1" />
-            </div>
-            <Button type="submit">Save</Button>
-          </form>
-        </CardContent>
-      </Card>
-
-      {/* Integrations */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-sm"><Mail className="h-4 w-4 text-primary" /> Integrations</CardTitle>
-          <CardDescription>Gmail reading is available via the AI email parser; Google Calendar export below.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3 text-sm">
-          <div className="flex items-start gap-2.5 rounded-lg border bg-muted/40 p-3">
-            <Mail className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-            <div>
-              <p className="font-medium">Gmail (OAuth)</p>
-              <p className="text-xs text-muted-foreground">
-                Paste job-related emails into Career → Add application and the AI classifies them (opportunity / rejection / interview / offer / deadline).
-                Full OAuth sync connects here once you provide Google API credentials.
-              </p>
-            </div>
-          </div>
-          <div className="flex items-start gap-2.5 rounded-lg border bg-muted/40 p-3">
-            <CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-            <div>
-              <p className="font-medium">Google Calendar sync</p>
-              <p className="text-xs text-muted-foreground">Download tasks with deadlines as an .ics file and import to Google Calendar. Live two-way sync arrives with OAuth.</p>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              className="ml-auto"
-              onClick={() => {
-                window.open('/api/export?format=json', '_blank')
-                toast({ title: 'Tip: import the JSON deadlines into Calendar', description: 'Direct .ics export is coming with OAuth.' })
-              }}
-            >
-              Get deadlines
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Data ownership */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-sm"><Download className="h-4 w-4 text-primary" /> Your data, your rules</CardTitle>
@@ -176,5 +71,236 @@ export function SettingsView() {
         <p>Cortex syncs across your laptop and phone with the same account. Offline edits queue locally and resolve on reconnect — last write wins per field, so nothing is lost silently.</p>
       </div>
     </div>
+  )
+}
+
+function ProfileCard({ data, save }: { data?: SettingsData; save: (patch: Record<string, string>) => Promise<void> }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-sm"><User className="h-4 w-4 text-primary" /> Profile</CardTitle>
+        <CardDescription>Used for your daily greeting.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form
+          className="flex items-end gap-2"
+          onSubmit={(e) => {
+            e.preventDefault()
+            const form = new FormData(e.currentTarget)
+            save({ name: String(form.get('name') ?? '') })
+          }}
+        >
+          <div className="flex-1">
+            <Label htmlFor="name">Display name</Label>
+            <Input id="name" name="name" defaultValue={data?.name} className="mt-1" placeholder="Your name" />
+          </div>
+          <Button type="submit">Save</Button>
+        </form>
+      </CardContent>
+    </Card>
+  )
+}
+
+function AppearanceCard({
+  mounted, theme, setTheme, save,
+}: {
+  mounted: boolean
+  theme: string
+  setTheme: (t: string) => void
+  save: (patch: Record<string, string>) => Promise<void>
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-sm"><Palette className="h-4 w-4 text-primary" /> Appearance</CardTitle>
+        <CardDescription>Follows your system preference by default. Dark mode is OLED-friendly.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-3 gap-2">
+          {([
+            { key: 'light', label: 'Light', icon: <Sun className="h-4 w-4" /> },
+            { key: 'dark', label: 'Dark', icon: <Moon className="h-4 w-4" /> },
+            { key: 'system', label: 'System', icon: <Monitor className="h-4 w-4" /> },
+          ]).map((opt) => (
+            <button
+              key={opt.key}
+              onClick={() => { setTheme(opt.key); save({ theme: opt.key }) }}
+              className={cn(
+                'flex min-h-[64px] flex-col items-center justify-center gap-1.5 rounded-xl border text-xs font-medium transition-colors',
+                mounted && theme === opt.key ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted'
+              )}
+            >
+              {opt.icon} {opt.label}
+            </button>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function DigestCard({ data, save }: { data?: SettingsData; save: (patch: Record<string, string>) => Promise<void> }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-sm"><CalendarDays className="h-4 w-4 text-primary" /> Daily digest</CardTitle>
+        <CardDescription>When your briefing (plan + news digest + deadlines) should be prepared each day.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form
+          className="flex items-end gap-2"
+          onSubmit={(e) => {
+            e.preventDefault()
+            const form = new FormData(e.currentTarget)
+            save({ digestTime: String(form.get('digestTime') ?? '08:00') })
+          }}
+        >
+          <div className="w-36">
+            <Label htmlFor="digest">Digest time</Label>
+            <Input id="digest" name="digestTime" type="time" defaultValue={data?.digestTime ?? '08:00'} className="mt-1" />
+          </div>
+          <Button type="submit">Save</Button>
+        </form>
+      </CardContent>
+    </Card>
+  )
+}
+
+// ─── Google OAuth (Gmail + Calendar) ─────────────────────────────────
+
+function GoogleCard() {
+  const { toast } = useToast()
+  const { data: status, reload } = useApi<GoogleStatus>('/api/auth/google/status')
+  const [busy, setBusy] = useState<string | null>(null)
+
+  async function disconnect() {
+    setBusy('disconnect')
+    try {
+      await api.del('/api/auth/google')
+      toast({ title: 'Google account disconnected' })
+      reload()
+    } catch {
+      toast({ title: 'Failed to disconnect', variant: 'destructive' })
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function importGmail() {
+    setBusy('gmail')
+    try {
+      const r = await api.post<{ scanned: number; imported: number; skipped: number; message?: string }>('/api/gmail/import')
+      toast({
+        title: r.imported > 0 ? `${r.imported} applications added to Career` : 'Nothing new to import',
+        description: r.message ?? `Scanned ${r.scanned} recent emails · ${r.skipped} already imported or irrelevant.`,
+      })
+      reload()
+    } catch (e) {
+      toast({ title: 'Gmail import failed', description: e instanceof Error ? e.message : 'Try reconnecting.', variant: 'destructive' })
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function pushCalendar() {
+    setBusy('calendar')
+    try {
+      const r = await api.post<{ pushed: number; skipped: number; message?: string }>('/api/calendar/push')
+      toast({
+        title: r.pushed > 0 ? `${r.pushed} tasks added to Google Calendar` : 'Nothing to push',
+        description: r.message ?? `${r.skipped} skipped (already scheduled or no due date).`,
+      })
+    } catch (e) {
+      toast({ title: 'Calendar push failed', description: e instanceof Error ? e.message : 'Try reconnecting.', variant: 'destructive' })
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  function copyRedirect() {
+    if (status?.redirectUri) {
+      navigator.clipboard.writeText(status.redirectUri)
+      toast({ title: 'Redirect URI copied' })
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-sm"><Chrome className="h-4 w-4 text-primary" /> Google account</CardTitle>
+        <CardDescription>Real OAuth for Gmail (read) and Google Calendar (read + write). Credentials stay on your server.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3 text-sm">
+        {!status ? (
+          <div className="h-20 animate-pulse rounded-lg bg-muted" />
+        ) : !status.configured ? (
+          /* ── Setup guide ── */
+          <div className="space-y-3">
+            <div className="flex items-start gap-2.5 rounded-lg border border-warning/40 bg-warning/5 p-3">
+              <KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+              <div className="text-xs leading-relaxed">
+                <p className="font-medium text-foreground">Google API credentials needed (one-time setup)</p>
+                <ol className="mt-1.5 list-decimal space-y-1 pl-4 text-muted-foreground">
+                  <li>Go to <span className="font-mono text-xs">console.cloud.google.com</span> → create/select a project.</li>
+                  <li>APIs &amp; Services → Library → enable <b>Gmail API</b> and <b>Google Calendar API</b>.</li>
+                  <li>OAuth consent screen → External → add yourself as a test user.</li>
+                  <li>Credentials → Create OAuth client ID → <b>Web application</b>; add the redirect URI below.</li>
+                  <li>Put the client ID &amp; secret into <span className="font-mono text-xs">.env</span> as <span className="font-mono text-xs">GOOGLE_CLIENT_ID</span> and <span className="font-mono text-xs">GOOGLE_CLIENT_SECRET</span>, then restart the app.</li>
+                </ol>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 rounded-lg border bg-muted/40 p-2.5">
+              <code className="min-w-0 flex-1 truncate text-xs">{status.redirectUri ?? 'https://your-app-url/api/auth/google/callback'}</code>
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={copyRedirect} aria-label="Copy redirect URI">
+                <Copy className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">Scopes requested: <span className="font-mono">gmail.readonly</span>, <span className="font-mono">calendar.readonly</span>, <span className="font-mono">calendar.events</span> — read-only mail, no deletion, no sending.</p>
+          </div>
+        ) : status.connected ? (
+          /* ── Connected ── */
+          <div className="space-y-3">
+            <div className="flex items-center gap-3 rounded-lg border bg-muted/40 p-3">
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-success/15 text-success">
+                <ShieldCheck className="h-5 w-5" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-medium">{status.email ?? 'Google account'}</p>
+                <p className="text-xs text-muted-foreground">Gmail (read) &amp; Calendar (read/write) connected · tokens auto-refresh</p>
+              </div>
+              <Button variant="outline" size="sm" onClick={disconnect} disabled={busy === 'disconnect'}>
+                <LogOut className="mr-1.5 h-3.5 w-3.5" /> Disconnect
+              </Button>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Button variant="outline" onClick={importGmail} disabled={busy === 'gmail'}>
+                {busy === 'gmail' ? <RefreshCw className="mr-1.5 h-4 w-4 animate-spin" /> : <Inbox className="mr-1.5 h-4 w-4" />}
+                Scan inbox for applications
+              </Button>
+              <Button variant="outline" onClick={pushCalendar} disabled={busy === 'calendar'}>
+                {busy === 'calendar' ? <RefreshCw className="mr-1.5 h-4 w-4 animate-spin" /> : <CalendarPlus className="mr-1.5 h-4 w-4" />}
+                Push deadline tasks to Calendar
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              “Scan inbox” reads your last 25 emails, keeps only career-relevant ones and files them in Career (opportunity / interview / offer / rejection / deadline). Re-running is safe — duplicates are skipped.
+            </p>
+          </div>
+        ) : (
+          /* ── Configured, not connected ── */
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">Credentials detected. Connect your Google account to scan Gmail for applications and sync deadline tasks with Calendar.</p>
+            <a href="/api/auth/google" className="block">
+              <Button className="w-full"><Chrome className="mr-2 h-4 w-4" /> Connect with Google</Button>
+            </a>
+            <p className="text-xs text-muted-foreground">You will be redirected to Google&apos;s consent screen and returned here.</p>
+          </div>
+        )}
+        <div className="flex items-center gap-2 border-t pt-3 text-xs text-muted-foreground">
+          <Mail className="h-3.5 w-3.5" />
+          Prefer not to use OAuth? You can still paste any email into Career → Add application for AI classification.
+        </div>
+      </CardContent>
+    </Card>
   )
 }

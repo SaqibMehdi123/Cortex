@@ -53,3 +53,26 @@ Stage Summary:
 - Design tokens match DESIGN_SPEC.md exactly (indigo accent, 12px cards, OLED dark, Literata reading, spring motion, reduced-motion)
 - Known honest limitations: Gmail OAuth & Google Calendar two-way sync are placeholder flows (email paste-parser + JSON export instead); PDF/EPUB import is metadata-only until text is pasted; voice capture uses browser SpeechRecognition where available
 - Key files: prisma/schema.prisma, src/lib/{sm2,store,nav-config,confetti,timeago,types,client}.ts, src/components/{app-shell,command-bar,copilot-dock,quick-capture,focus-timer,shared,theme-provider,ui.tsx}, src/components/views/*.tsx (11), src/app/api/** (30+), scripts/seed.ts
+
+---
+Task ID: 4
+Agent: Main agent (Super Z)
+Task: Respond to user feedback — real news/papers (no dummy data), UI overhaul, fix empty Reader tab, real Gmail/Calendar OAuth, PDF text extraction
+
+Work Log:
+- Diagnosed complaints: news came from generic web_search (stale/homogenized), Reader nav item rendered no view (page.tsx had no 'reader' branch), seed demo data still present, OAuth/PDF were placeholders, UI execution disliked
+- Replaced news engine with REAL feeds: curl-tested 19 sources, kept 9 verified-live RSS (OpenAI, Hugging Face, Google DeepMind, Microsoft Research, NVIDIA, TechCrunch AI, TLDR AI, Import AI, Ahead of AI) in src/lib/feeds.ts; rewrote /api/news/fetch with rss-parser (parallel, per-source error isolation, URL dedupe, utm-stripping, batched 3-line AI digests for 15 newest); /api/news gained server-side range filter (day/week/month/year) + source facet counts
+- Built papers pipeline: new Paper model (arxivId unique, abstract, upvotes, AI analysis fields); POST /api/papers/fetch pulls Hugging Face Daily Papers API (paperswithcode.com was sunset in 2025 → HF is its successor) + arXiv Atom API (cs.AI/CL/LG/CV), dedupes, auto-analyzes top-3 upvoted; src/lib/paper-analysis.ts LLM produces structured {tldr, problem, innovation, results[], whyItMatters}; POST /api/papers/[id]/analyze on demand; POST /api/papers/[id] saves paper into Library as Document (opens in Reader)
+- PDF extraction: POST /api/documents/pdf (multipart) uses pdf-parse v2 (PDFParse class, dynamic import + serverExternalPackages), cleans hyphenation/control chars, extracts meta title + pages + text; verified 15-page arXiv PDF → 39,936 chars; import dialog gained drag-and-drop PDF tab
+- Google OAuth for real: src/lib/google.ts (scopes gmail.readonly + calendar.readonly + calendar.events, auto token refresh via refresh_token), routes /api/auth/google (302 consent), /callback (code exchange + userinfo + persist), /status (configured/connected/redirectUri always derived), DELETE disconnect+revoke; POST /api/gmail/import (last 25 inbox msgs 60d → AI classification → Opportunity upsert, gmailId dedupe); GET /api/calendar (upcoming events), POST /api/calendar/push (due-date tasks → events, title dedupe); Settings shows step-by-step credential setup with copyable redirect URI
+- Wiped ALL demo data (scripts/wipe.ts) and made scripts/seed.ts a no-op by design; db pushed with new schema (Paper, Setting.googleAuth/googleEmail, Opportunity.gmailId)
+- UI overhaul: globals.css refined light/dark tokens (deeper OLED #0e0e10, cleaner borders, semantic color fixes), new utilities (card-lift hover, text-gradient, skeleton-shimmer, shadow-lift); sidebar rebuilt — grouped WORKSPACE/INTELLIGENCE/SYSTEM sections, active left-indicator bar, gradient logo, prominent search pill, tighter 232px width; PageHeader + polished EmptyState in shared.tsx; News & Papers view fully rewritten (two tabs, favicon-rich cards via Google s2, filters: category/source/saved/range for news; range/sort/saved for papers; expandable Problem/Innovation/Results breakdown; Save-to-Library → Reader)
+- Fixed Reader tab: new ReaderHome view (Continue reading + Reading queue + counts) registered in page.tsx — the tab was previously dead because no view was bound to it
+- Career view: Scan Gmail button (+ auto-jump to Settings when not connected); Settings rewritten with real Google account card (setup guide/connect/connected states, inbox scan, calendar push); added missing api.put helper (latent bug — settings save would have crashed)
+- Fixed hydration mismatch on theme toggle (SSR/client Sun-vs-Moon) with CSS-only dark: variant swap; cleared stale .next cache; fresh-session page errors = 0
+
+Stage Summary:
+- Verified live: 98 real articles from 9 feeds with AI 3-line digests; 79 real papers (HF+arXiv), top-3 auto-analyzed + on-demand analyze working; PDF upload extracted 15 pages/39.9k chars; OAuth status callback/setup flows correct; news & papers filters work (Today→This year)
+- DB is clean of dummy data (user creates own content; one user-created doc "Elite Slide Mastery" appeared mid-test and was preserved)
+- Lint clean; browser-verified desktop 1440×900 light+dark, iPhone 14 mobile; zero console/page errors in fresh session
+- For the user: to activate Gmail/Calendar, add GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET to .env (redirect URI shown in Settings → Google account)

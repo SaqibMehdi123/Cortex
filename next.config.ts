@@ -2,7 +2,8 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
-  /* config options here */
+  // pdf-parse ships pdf.js internals — keep it out of the bundler
+  serverExternalPackages: ["pdf-parse"],
   typescript: {
     ignoreBuildErrors: true,
   },
