@@ -17,6 +17,8 @@ const PUBLIC_APIS = [
   '/api/auth/resend-code',
   '/api/auth/forgot-password',
   '/api/auth/reset-password',
+  // pre-login code screens check whether the server can deliver email at all
+  '/api/auth/mail-status',
 ]
 
 export async function middleware(req: NextRequest) {

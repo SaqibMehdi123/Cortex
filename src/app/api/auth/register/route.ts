@@ -6,7 +6,7 @@ import {
   hashCode,
   CODE_TTL_MINUTES,
 } from '@/lib/auth'
-import { sendCodeEmail } from '@/lib/mailer'
+import { sendCodeEmail, emailResponseFields } from '@/lib/mailer'
 
 // POST /api/auth/register — create an account, then require email verification.
 // The account starts unverified and NO session is issued: the client moves to
@@ -48,12 +48,12 @@ export async function POST(req: NextRequest) {
             expiresAt: new Date(Date.now() + CODE_TTL_MINUTES * 60 * 1000),
           },
         })
-        const { delivered } = await sendCodeEmail(email, existing.name, code, 'verify')
+        const result = await sendCodeEmail(email, existing.name, code, 'verify')
         return NextResponse.json(
           {
             needsVerification: true,
             email,
-            ...(delivered ? {} : { devCode: code }),
+            ...emailResponseFields(result, code),
             resendHint: 'An account with this email already exists but was never verified — we sent a fresh code.',
           },
           { status: 200 }
@@ -81,13 +81,13 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    const { delivered } = await sendCodeEmail(email, name, code, 'verify')
+    const result = await sendCodeEmail(email, name, code, 'verify')
 
     return NextResponse.json(
       {
         needsVerification: true,
         email,
-        ...(delivered ? {} : { devCode: code }),
+        ...emailResponseFields(result, code),
       },
       { status: 201 }
     )

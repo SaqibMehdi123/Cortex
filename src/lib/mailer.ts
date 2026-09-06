@@ -1,22 +1,58 @@
-// Outgoing email for verification codes. Uses real SMTP when SMTP_HOST (and
-// credentials) are configured in the environment; otherwise the email content
-// is written to the server log and the caller surfaces the code in the UI as
-// a clearly-labelled development fallback — so the flow works end-to-end on a
-// machine with no mail server.
+// Outgoing email for verification / password-reset codes.
+//
+// Two delivery channels, tried in this order:
+//   1. Resend HTTPS API  — set RESEND_API_KEY (no SMTP ports, no domain needed
+//      to mail your own address; free tier is enough for a personal tool)
+//   2. Raw SMTP          — set SMTP_HOST + SMTP_USER + SMTP_PASS
+//      (Gmail users: create an App Password, regular passwords are rejected)
+//
+// If neither is configured the email content is printed to the server log and
+// the caller receives { delivered: false, reason: 'not_configured' } — the
+// verification code is NEVER returned to the browser unless the operator
+// explicitly opts in with AUTH_DEV_CODE_FALLBACK=true (local development only).
 //
 // Environment (all optional):
-//   SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_SECURE ("true" for 465),
-//   MAIL_FROM (e.g. "Cortex <no-reply@yourdomain.com>")
+//   RESEND_API_KEY            preferred channel
+//   SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_SECURE ("true" for 465)
+//   MAIL_FROM                 e.g. "Cortex <no-reply@yourdomain.com>"
+//                             (Resend default: onboarding@resend.dev — may only
+//                              send to your own account email until a domain
+//                              is verified)
+//   AUTH_DEV_CODE_FALLBACK    "true" → API responses may include devCode
+//                             when delivery is impossible (DEV ONLY)
+
+export type MailReason = 'not_configured' | 'send_failed'
 
 export interface SendCodeResult {
-  delivered: boolean // true = actually sent via SMTP
-  reason?: 'not_configured' | 'send_failed'
+  delivered: boolean // true = handed to a real mail provider
+  reason?: MailReason
 }
 
-const smtpConfigured = () =>
-  Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS)
+export function mailConfigured(): boolean {
+  return Boolean(process.env.RESEND_API_KEY || (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS))
+}
 
-function codeEmailHtml(name: string, code: string, kind: 'verify' | 'reset'): string {
+/** Explicit operator opt-in to show codes in the UI (local dev only). */
+export function devCodeAllowed(): boolean {
+  return process.env.AUTH_DEV_CODE_FALLBACK === 'true'
+}
+
+/**
+ * Build the response fields every code-sending route returns, in one place so
+ * the security rule lives in a single spot:
+ *   - emailSent / emailError always describe what actually happened
+ *   - devCode is present ONLY when delivery failed AND the operator turned the
+ *     dev fallback on — never by default, never in production configs
+ */
+export function emailResponseFields(result: SendCodeResult, code: string) {
+  return {
+    emailSent: result.delivered,
+    ...(result.delivered ? {} : { emailError: result.reason }),
+    ...(result.delivered || !devCodeAllowed() ? {} : { devCode: code }),
+  }
+}
+
+const codeEmailHtml = (name: string, code: string, kind: 'verify' | 'reset'): string => {
   const heading = kind === 'verify' ? 'Verify your email' : 'Reset your password'
   const intro =
     kind === 'verify'
@@ -34,6 +70,56 @@ function codeEmailHtml(name: string, code: string, kind: 'verify' | 'reset'): st
 </body></html>`
 }
 
+const logDevBanner = (to: string, subject: string, code: string) => {
+  console.log(
+    [
+      '',
+      '┌─────────────────────────────────────────────────',
+      `│  DEV EMAIL (no mail provider configured)`,
+      `│  to:      ${to}`,
+      `│  subject: ${subject}`,
+      `│  code:    ${code}`,
+      '└─────────────────────────────────────────────────',
+      '',
+    ].join('\n')
+  )
+}
+
+async function sendViaResend(to: string, from: string, subject: string, html: string): Promise<boolean> {
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ from, to: [to], subject, html }),
+    signal: AbortSignal.timeout(15_000),
+  })
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '')
+    console.error(`Resend send failed (${res.status}):`, detail.slice(0, 400))
+    return false
+  }
+  return true
+}
+
+async function sendViaSmtp(to: string, from: string, subject: string, html: string): Promise<boolean> {
+  // Dynamic import keeps nodemailer out of any edge/bundled path.
+  const nodemailer = await import('nodemailer')
+  const port = Number(process.env.SMTP_PORT || 587)
+  const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port,
+    secure: process.env.SMTP_SECURE === 'true' || port === 465,
+    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+    connectionTimeout: 15_000,
+    greetingTimeout: 15_000,
+    socketTimeout: 20_000,
+  })
+  await transporter.sendMail({ from, to, subject, html })
+  return true
+}
+
 export async function sendCodeEmail(
   to: string,
   name: string,
@@ -43,42 +129,31 @@ export async function sendCodeEmail(
   const subject = kind === 'verify' ? 'Your Cortex verification code' : 'Your Cortex password reset code'
   const html = codeEmailHtml(name, code, kind)
 
-  if (!smtpConfigured()) {
-    // Development fallback: print a clearly-marked banner to the server log.
-    console.log(
-      [
-        '',
-        '┌─────────────────────────────────────────────────',
-        `│  DEV EMAIL (SMTP not configured)`,
-        `│  to:      ${to}`,
-        `│  subject: ${subject}`,
-        `│  code:    ${code}`,
-        '└─────────────────────────────────────────────────',
-        '',
-      ].join('\n')
-    )
+  const resendKey = process.env.RESEND_API_KEY
+  const smtpReady = Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS)
+
+  if (!resendKey && !smtpReady) {
+    logDevBanner(to, subject, code)
     return { delivered: false, reason: 'not_configured' }
   }
 
+  const from = process.env.MAIL_FROM || (resendKey ? 'Cortex <onboarding@resend.dev>' : String(process.env.SMTP_USER))
+
   try {
-    // Dynamic import keeps nodemailer out of any edge/bundled path.
-    const nodemailer = await import('nodemailer')
-    const port = Number(process.env.SMTP_PORT || 587)
-    const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port,
-      secure: process.env.SMTP_SECURE === 'true' || port === 465,
-      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-    })
-    await transporter.sendMail({
-      from: process.env.MAIL_FROM || process.env.SMTP_USER,
-      to,
-      subject,
-      html,
-    })
-    return { delivered: true }
+    const delivered = resendKey ? await sendViaResend(to, from, subject, html) : await sendViaSmtp(to, from, subject, html)
+    if (delivered) return { delivered: true }
+    // Provider exists but rejected/failed — fall through to SMTP when both are set.
+    if (resendKey && smtpReady) {
+      try {
+        await sendViaSmtp(to, from, subject, html)
+        return { delivered: true }
+      } catch (e2) {
+        console.error('SMTP fallback send failed:', e2)
+      }
+    }
+    return { delivered: false, reason: 'send_failed' }
   } catch (e) {
-    console.error('SMTP send failed:', e)
+    console.error('Email send failed:', e)
     return { delivered: false, reason: 'send_failed' }
   }
 }

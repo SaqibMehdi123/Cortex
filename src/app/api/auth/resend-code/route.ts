@@ -6,7 +6,7 @@ import {
   CODE_RESEND_COOLDOWN_SECONDS,
   CODE_TTL_MINUTES,
 } from '@/lib/auth'
-import { sendCodeEmail } from '@/lib/mailer'
+import { sendCodeEmail, emailResponseFields } from '@/lib/mailer'
 
 type Purpose = 'email_verify' | 'password_reset'
 
@@ -24,9 +24,10 @@ export async function POST(req: NextRequest) {
     }
 
     const user = await db.user.findUnique({ where: { email } })
-    // Do not reveal whether the account exists.
+    // Do not reveal whether the account exists; pretend success like the
+    // forgot-password route does for unknown addresses.
     if (!user || (purpose === 'email_verify' && user.emailVerified)) {
-      return NextResponse.json({ sent: true })
+      return NextResponse.json({ sent: true, emailSent: true })
     }
 
     const latest = await db.verificationCode.findFirst({
@@ -57,14 +58,14 @@ export async function POST(req: NextRequest) {
       }),
     ])
 
-    const { delivered } = await sendCodeEmail(
+    const result = await sendCodeEmail(
       user.email,
       user.name,
       code,
       purpose === 'email_verify' ? 'verify' : 'reset'
     )
 
-    return NextResponse.json({ sent: true, ...(delivered ? {} : { devCode: code }) })
+    return NextResponse.json({ sent: true, ...emailResponseFields(result, code) })
   } catch (e) {
     console.error('POST /api/auth/resend-code error', e)
     return NextResponse.json({ error: 'Could not send the code. Try again.' }, { status: 500 })

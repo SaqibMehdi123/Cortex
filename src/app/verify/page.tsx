@@ -7,7 +7,7 @@ import { CortexLogo } from '@/components/logo'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Loader2, MailCheck, ArrowRight } from 'lucide-react'
+import { Loader2, MailCheck, ArrowRight, MailWarning } from 'lucide-react'
 import { api } from '@/lib/client'
 
 export default function VerifyPage() {
@@ -26,6 +26,7 @@ function VerifyForm() {
   const [code, setCode] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [devCode, setDevCode] = useState<string | null>(null)
+  const [mailIssue, setMailIssue] = useState<'not_configured' | 'send_failed' | null>(null)
   const [busy, setBusy] = useState(false)
   const [cooldown, setCooldown] = useState(0)
 
@@ -38,6 +39,14 @@ function VerifyForm() {
 
   useEffect(() => {
     setCooldown(45)
+    // Warn up-front when this server can't send email at all — the user would
+    // otherwise wait on a message that can never arrive.
+    api
+      .get<{ configured: boolean }>('/api/auth/mail-status')
+      .then((s) => {
+        if (!s.configured) setMailIssue('not_configured')
+      })
+      .catch(() => {})
   }, [])
 
   async function verify(e: React.FormEvent) {
@@ -62,8 +71,13 @@ function VerifyForm() {
     setError(null)
     setBusy(true)
     try {
-      const res = await api.post<{ devCode?: string }>('/api/auth/resend-code', { email, purpose: 'email_verify' })
+      const res = await api.post<{
+        emailSent?: boolean
+        emailError?: 'not_configured' | 'send_failed'
+        devCode?: string
+      }>('/api/auth/resend-code', { email, purpose: 'email_verify' })
       if (res.devCode) setDevCode(res.devCode)
+      setMailIssue(res.emailSent === false ? (res.emailError ?? 'send_failed') : null)
       setCooldown(60)
     } catch (err) {
       // 429 cooldown — show it, but a previously sent code may still be valid.
@@ -122,9 +136,23 @@ function VerifyForm() {
               />
             </div>
 
+            {mailIssue === 'not_configured' && (
+              <div className="rounded-lg bg-amber-500/10 px-3 py-2.5 text-xs leading-relaxed text-amber-600 dark:text-amber-400">
+                <span className="font-semibold">Email isn't set up on this server yet.</span> No code can arrive until a
+                mail provider is added — put <span className="font-mono">RESEND_API_KEY</span> or SMTP credentials in the
+                server's <span className="font-mono">.env</span> (see <span className="font-mono">EMAIL-SETUP.md</span>)
+                and then send a new code. For local testing the code is printed in the server log.
+              </div>
+            )}
+            {mailIssue === 'send_failed' && (
+              <div className="flex items-start gap-2 rounded-lg bg-danger/10 px-3 py-2.5 text-xs leading-relaxed text-danger">
+                <MailWarning className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span>The email couldn't be sent — the mail provider rejected it. Check the server's mail settings and try again.</span>
+              </div>
+            )}
             {devCode && (
               <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-600 dark:text-amber-400">
-                Dev mode — email delivery isn't configured on this server, so here is your code:{' '}
+                Dev fallback (AUTH_DEV_CODE_FALLBACK=true) — your code:{' '}
                 <span className="font-mono font-bold tracking-widest">{devCode}</span>
               </p>
             )}
