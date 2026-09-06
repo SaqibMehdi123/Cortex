@@ -66,6 +66,16 @@ Then open http://localhost:3000 — you'll land on a signup page. Create an acco
 
 Every account is a fully isolated workspace. Documents, highlights, goals, tasks, plans, notes, the news feed, saved papers, flashcards, the career pipeline, mindmaps, focus sessions, even the fetched job listings — each table carries an owner id and every query is scoped by the signed-in session, so two people on the same install see two completely different apps. Fetching news or papers as a new user builds your feed from the same live sources without touching anyone else's read/saved state. Deleting an account cascades its data.
 
+**Email verification & password reset.** New signups get a 6-digit code by email before the account is activated (10-minute expiry, 5 wrong attempts lock the code, one code per minute). Forgot your password? The sign-in page links to a reset flow that emails a fresh code and lets you pick a new password. On a laptop with no mail server the code shows up right in the UI and the server log, clearly labelled as a dev fallback; to send real mail, add SMTP to `.env`:
+
+```dotenv
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=you@gmail.com
+SMTP_PASS=your-app-password
+MAIL_FROM="Cortex <you@gmail.com>"
+```
+
 ### Optional: session secret
 
 Development works without it, but if you deploy Cortex anywhere, set `AUTH_SECRET` in `.env` (e.g. `openssl rand -base64 32`) so session cookies are signed with your own key.

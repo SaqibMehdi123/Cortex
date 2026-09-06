@@ -10,7 +10,11 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
     headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) },
   })
   const data = await res.json().catch(() => ({}))
-  if (!res.ok) throw new Error((data as { error?: string }).error || `Request failed (${res.status})`)
+  if (!res.ok) {
+    const err = new Error((data as { error?: string }).error || `Request failed (${res.status})`) as Error & { status?: number }
+    err.status = res.status
+    throw err
+  }
   return data as T
 }
 

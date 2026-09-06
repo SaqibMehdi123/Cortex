@@ -23,8 +23,11 @@ export default function SignupPage() {
     setError(null)
     setBusy(true)
     try {
-      await api.post('/api/auth/register', { name, email, password })
-      router.replace('/')
+      // 201 = fresh account, 200 = leftover unverified account got a fresh code.
+      // Either way the next step is entering the emailed 6-digit code.
+      const res = await api.post<{ needsVerification?: boolean; resendHint?: string }>('/api/auth/register', { name, email, password })
+      const hint = res.resendHint ? `&hint=${encodeURIComponent(res.resendHint)}` : ''
+      router.replace(`/verify?email=${encodeURIComponent(email.trim())}${hint}`)
       router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not create the account.')
@@ -91,6 +94,9 @@ export default function SignupPage() {
               {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <ArrowRight className="mr-1.5 h-4 w-4" />}
               Create account
             </Button>
+            <p className="text-center text-[11px] text-muted-foreground">
+              We'll email you a 6-digit code to verify your address — no spam, ever.
+            </p>
           </form>
         </div>
 

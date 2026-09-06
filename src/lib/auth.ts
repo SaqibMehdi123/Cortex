@@ -79,6 +79,25 @@ export async function verifyPassword(password: string, stored: string): Promise<
   return timingSafeEqual(b64url(bits), expected)
 }
 
+// ─── Verification codes (email verification & password reset) ───────
+
+// Uniformly random 6-digit code (100000–999999) from the CSPRNG.
+export function generateVerificationCode(): string {
+  const buf = crypto.getRandomValues(new Uint32Array(1))
+  return String(100000 + (buf[0] % 900000))
+}
+
+// Codes are stored hashed (SHA-256, peppered with AUTH_SECRET) so a leaked
+// database copy never contains a usable code.
+export async function hashCode(code: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', enc.encode(`cortex-code:${getSecret()}:${code}`))
+  return b64url(digest)
+}
+
+export const CODE_TTL_MINUTES = 10
+export const CODE_MAX_ATTEMPTS = 5
+export const CODE_RESEND_COOLDOWN_SECONDS = 60
+
 // ─── Session tokens ──────────────────────────────────────────────────
 
 export async function createSessionToken(userId: string): Promise<string> {

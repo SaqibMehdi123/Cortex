@@ -24,11 +24,13 @@ function LoginForm() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [needsVerification, setNeedsVerification] = useState(false)
   const [busy, setBusy] = useState(false)
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
+    setNeedsVerification(false)
     setBusy(true)
     try {
       await api.post('/api/auth/login', { email, password })
@@ -36,7 +38,20 @@ function LoginForm() {
       router.replace(next && next.startsWith('/') ? next : '/')
       router.refresh()
     } catch (err) {
+      // 403 = the account never finished email verification — offer a way out.
+      if ((err as { status?: number }).status === 403) setNeedsVerification(true)
       setError(err instanceof Error ? err.message : 'Could not sign in.')
+      setBusy(false)
+    }
+  }
+
+  async function sendVerifyCode() {
+    setBusy(true)
+    try {
+      // 429 (cooldown) is fine — a previously sent code may still be valid.
+      await api.post('/api/auth/resend-code', { email: email.trim().toLowerCase(), purpose: 'email_verify' }).catch(() => {})
+      router.push(`/verify?email=${encodeURIComponent(email.trim().toLowerCase())}`)
+    } finally {
       setBusy(false)
     }
   }
@@ -82,6 +97,17 @@ function LoginForm() {
             </div>
 
             {error && <p className="rounded-lg bg-danger/10 px-3 py-2 text-xs text-danger">{error}</p>}
+            {needsVerification && (
+              <Button type="button" variant="outline" className="w-full" disabled={busy} onClick={sendVerifyCode}>
+                Send a verification code
+              </Button>
+            )}
+
+            <div className="flex justify-end">
+              <Link href="/forgot-password" className="text-xs text-muted-foreground hover:text-primary hover:underline">
+                Forgot password?
+              </Link>
+            </div>
 
             <Button type="submit" disabled={busy} className="w-full">
               {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <ArrowRight className="mr-1.5 h-4 w-4" />}

@@ -340,31 +340,49 @@ model FocusSession {
 // ─── Accounts & auth ────────────────────────────────────────────────
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  name         String
-  passwordHash String // pbkdf2$iterations$salt$hash (Web Crypto, no native deps)
-  createdAt    DateTime @default(now())
+  id            String   @id @default(cuid())
+  email         String   @unique
+  name          String
+  passwordHash  String // pbkdf2$iterations$salt$hash (Web Crypto, no native deps)
+  emailVerified Boolean  @default(false) // new signups verify via a 6-digit email code
+  createdAt     DateTime @default(now())
 
-  documents       Document[]
-  highlights      Highlight[]
-  chatMessages    ChatMessage[]
-  notes           Note[]
-  goals           Goal[]
-  milestones      Milestone[]
-  tasks           Task[]
-  plans           Plan[]
-  newsArticles    NewsArticle[]
-  customSources   CustomSource[]
-  papers          Paper[]
-  opportunities   Opportunity[]
-  jobListings     JobListing[]
-  mindmaps        MindMap[]
-  flashcards      Flashcard[]
-  reviewLogs      ReviewLog[]
-  readingSessions ReadingSession[]
-  focusSessions   FocusSession[]
-  setting         Setting?
+  documents         Document[]
+  highlights        Highlight[]
+  chatMessages      ChatMessage[]
+  notes             Note[]
+  goals             Goal[]
+  milestones        Milestone[]
+  tasks             Task[]
+  plans             Plan[]
+  newsArticles      NewsArticle[]
+  customSources     CustomSource[]
+  papers            Paper[]
+  opportunities     Opportunity[]
+  jobListings       JobListing[]
+  mindmaps          MindMap[]
+  flashcards        Flashcard[]
+  reviewLogs        ReviewLog[]
+  readingSessions   ReadingSession[]
+  focusSessions     FocusSession[]
+  setting           Setting?
+  verificationCodes VerificationCode[]
+}
+
+// 6-digit verification codes (email verification & password reset).
+// Only a salted/peppered SHA-256 hash of the code is stored — never the code.
+model VerificationCode {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  purpose   String // 'email_verify' | 'password_reset'
+  codeHash  String
+  expiresAt DateTime
+  usedAt    DateTime?
+  attempts  Int       @default(0) // invalid after 5 wrong entries
+  createdAt DateTime  @default(now())
+
+  @@index([userId, purpose])
 }
 
 // ─── Workspace settings ────────────────────────────────────────────

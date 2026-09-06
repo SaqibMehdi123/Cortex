@@ -7,8 +7,17 @@ import { SESSION_COOKIE, verifySessionToken } from '@/lib/auth'
 // Excluded: the auth pages themselves, the auth endpoints, the Google OAuth
 // integration routes (their callback must work independently), and static files.
 
-const PUBLIC_PAGES = new Set(['/login', '/signup'])
-const PUBLIC_APIS = ['/api/auth/register', '/api/auth/login', '/api/auth/logout', '/api/auth/google']
+const PUBLIC_PAGES = new Set(['/login', '/signup', '/verify', '/forgot-password'])
+const PUBLIC_APIS = [
+  '/api/auth/register',
+  '/api/auth/login',
+  '/api/auth/logout',
+  '/api/auth/google',
+  '/api/auth/verify-email',
+  '/api/auth/resend-code',
+  '/api/auth/forgot-password',
+  '/api/auth/reset-password',
+]
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl

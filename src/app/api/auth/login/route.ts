@@ -3,6 +3,8 @@ import { db } from '@/lib/db'
 import { createSessionToken, verifyPassword, SESSION_COOKIE, SESSION_COOKIE_OPTIONS } from '@/lib/auth'
 
 // POST /api/auth/login — verify credentials and start a session.
+// Accounts that never finished email verification get 403 with a distinct
+// code so the login page can offer "send a new code" instead of a dead end.
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
@@ -16,6 +18,13 @@ export async function POST(req: NextRequest) {
     const user = await db.user.findUnique({ where: { email } })
     if (!user || !(await verifyPassword(password, user.passwordHash))) {
       return NextResponse.json({ error: 'Wrong email or password.' }, { status: 401 })
+    }
+
+    if (!user.emailVerified) {
+      return NextResponse.json(
+        { error: 'Verify your email first — we can send you a fresh code.', code: 'email_not_verified' },
+        { status: 403 }
+      )
     }
 
     const res = NextResponse.json({ user: { id: user.id, name: user.name, email: user.email } })
