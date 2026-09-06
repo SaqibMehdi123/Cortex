@@ -257,13 +257,33 @@ export function DashboardView() {
               <p className="py-6 text-center text-sm text-muted-foreground">No stories yet — fetch the latest AI news.</p>
             ) : (
               data.newsDigest.map((n) => (
-                <a key={n.id} href={n.url} target="_blank" rel="noreferrer" className="group block rounded-lg p-2 transition-colors hover:bg-muted">
+                <a
+                  key={n.id}
+                  href={n.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="group block rounded-xl border px-3 py-2.5 transition-colors hover:border-primary/30 hover:bg-muted/50"
+                >
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <span className="font-semibold text-foreground">{n.source ?? 'Web'}</span>
-                    · {n.category}
+                    <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide">{n.category}</span>
                   </div>
-                  <p className="mt-0.5 line-clamp-1 text-sm font-medium group-hover:text-primary">{n.title}</p>
-                  {n.summary && <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{n.summary}</p>}
+                  <p className="mt-1 line-clamp-1 text-sm font-medium group-hover:text-primary">{n.title}</p>
+                  {n.summary && (
+                    <div className="mt-1.5 space-y-1">
+                      {n.summary
+                        .split('\n')
+                        .map((line) => line.trim())
+                        .filter(Boolean)
+                        .slice(0, 3)
+                        .map((line, i) => (
+                          <p key={i} className="flex items-start gap-1.5 text-xs leading-relaxed text-muted-foreground">
+                            <span className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-muted-foreground/40" />
+                            <span className="line-clamp-1">{line}</span>
+                          </p>
+                        ))}
+                    </div>
+                  )}
                 </a>
               ))
             )}
