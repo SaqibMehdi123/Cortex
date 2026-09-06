@@ -5,7 +5,7 @@ import { api, todayISO, fmtDate } from '@/lib/client'
 import { useUI } from '@/lib/nav-config'
 import type { DashboardData, Task } from '@/lib/types'
 import { useApi } from '@/lib/client'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { ProgressRing, SwipeTaskRow, PriorityDot, EmptyState, SkeletonCard, colorHex } from '@/components/shared'
 import { Badge } from '@/components/ui/badge'
@@ -97,14 +97,16 @@ export function DashboardView() {
       </div>
 
       {/* Copilot briefing card */}
-      <Card className="transition-shadow hover:shadow-soft">
-        <CardHeader className="flex-row items-center justify-between space-y-0 pb-2">
+      <Card className="gap-4 py-5 transition-shadow hover:shadow-soft">
+        <CardHeader>
           <CardTitle className="flex items-center gap-2 text-sm">
             Daily briefing
           </CardTitle>
-          <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setCopilotOpen(true)}>
-            Ask Copilot <ChevronRight className="h-3.5 w-3.5" />
-          </Button>
+          <CardAction>
+            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setCopilotOpen(true)}>
+              Ask Copilot <ChevronRight className="h-3.5 w-3.5" />
+            </Button>
+          </CardAction>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
           <div className="flex flex-wrap gap-2">
@@ -146,12 +148,14 @@ export function DashboardView() {
 
       <div className="grid gap-5 lg:grid-cols-2">
         {/* Today's timeline */}
-        <Card className="transition-shadow hover:shadow-soft">
-          <CardHeader className="flex-row items-center justify-between space-y-0 pb-3">
+        <Card className="gap-4 py-5 transition-shadow hover:shadow-soft">
+          <CardHeader>
             <CardTitle className="text-sm">Today&apos;s timeline</CardTitle>
-            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setView('plans')}>
-              Plans <ChevronRight className="h-3.5 w-3.5" />
-            </Button>
+            <CardAction>
+              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setView('plans')}>
+                Plans <ChevronRight className="h-3.5 w-3.5" />
+              </Button>
+            </CardAction>
           </CardHeader>
           <CardContent className="space-y-2">
             {data.todayTasks.length === 0 && data.todayPlans.length === 0 ? (
@@ -206,12 +210,14 @@ export function DashboardView() {
         </Card>
 
         {/* Progress rings */}
-        <Card className="transition-shadow hover:shadow-soft">
-          <CardHeader className="flex-row items-center justify-between space-y-0 pb-3">
+        <Card className="gap-4 py-5 transition-shadow hover:shadow-soft">
+          <CardHeader>
             <CardTitle className="text-sm">Active goals</CardTitle>
-            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setView('goals')}>
-              Goals <ChevronRight className="h-3.5 w-3.5" />
-            </Button>
+            <CardAction>
+              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setView('goals')}>
+                Goals <ChevronRight className="h-3.5 w-3.5" />
+              </Button>
+            </CardAction>
           </CardHeader>
           <CardContent>
             {data.goals.length === 0 ? (
@@ -243,14 +249,16 @@ export function DashboardView() {
         </Card>
 
         {/* News digest */}
-        <Card className="transition-shadow hover:shadow-soft">
-          <CardHeader className="flex-row items-center justify-between space-y-0 pb-3">
+        <Card className="gap-4 py-5 transition-shadow hover:shadow-soft">
+          <CardHeader>
             <CardTitle className="flex items-center gap-2 text-sm">
               <Newspaper className="h-4 w-4 text-primary" /> News digest
             </CardTitle>
-            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setView('news')}>
-              Radar <ChevronRight className="h-3.5 w-3.5" />
-            </Button>
+            <CardAction>
+              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setView('news')}>
+                Radar <ChevronRight className="h-3.5 w-3.5" />
+              </Button>
+            </CardAction>
           </CardHeader>
           <CardContent className="space-y-2.5">
             {data.newsDigest.length === 0 ? (
@@ -291,8 +299,8 @@ export function DashboardView() {
         </Card>
 
         {/* Deadlines */}
-        <Card className="transition-shadow hover:shadow-soft">
-          <CardHeader className="flex-row items-center justify-between space-y-0 pb-3">
+        <Card className="gap-4 py-5 transition-shadow hover:shadow-soft">
+          <CardHeader>
             <CardTitle className="flex items-center gap-2 text-sm">
               <CalendarClock className="h-4 w-4 text-primary" /> Deadlines
             </CardTitle>
@@ -325,14 +333,16 @@ export function DashboardView() {
 
       {/* Continue reading */}
       {data.continueReading.length > 0 && (
-        <Card className="transition-shadow hover:shadow-soft">
-          <CardHeader className="flex-row items-center justify-between space-y-0 pb-3">
+        <Card className="gap-4 py-5 transition-shadow hover:shadow-soft">
+          <CardHeader>
             <CardTitle className="flex items-center gap-2 text-sm">
               <BookOpen className="h-4 w-4 text-primary" /> Continue reading
             </CardTitle>
-            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setView('library')}>
-              Library <ChevronRight className="h-3.5 w-3.5" />
-            </Button>
+            <CardAction>
+              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setView('library')}>
+                Library <ChevronRight className="h-3.5 w-3.5" />
+              </Button>
+            </CardAction>
           </CardHeader>
           <CardContent>
             <div className="grid gap-3 sm:grid-cols-2">
