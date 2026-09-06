@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { useToast } from '@/hooks/use-toast'
-import { useNewsAutoFetch } from '@/hooks/use-news-auto-fetch'
+import { useAutoSync } from '@/hooks/use-auto-sync'
 import { cn } from '@/lib/utils'
 import { EmptyState, PageHeader, SkeletonCard } from '@/components/shared'
 import { timeAgo } from '@/lib/timeago'
@@ -89,15 +89,20 @@ function NewsTab() {
 
   // Auto-refresh: empty feed or data older than 3h triggers a silent background
   // fetch (first visit included) — the manual button below stays for instant pulls.
-  const { autoFetching, lastFetchedAt, manualFetch } = useNewsAutoFetch(() => {
-    reload()
-    toast({ title: 'News refreshed', description: 'New stories were pulled in the background.' })
+  const { autoFetching, lastFetchedAt, manualSync } = useAutoSync({
+    key: 'news',
+    statusEndpoint: '/api/news/status',
+    fetchEndpoint: '/api/news/fetch',
+    onAutoFetched: () => {
+      reload()
+      toast({ title: 'News refreshed', description: 'New stories were pulled in the background.' })
+    },
   })
 
   async function fetchNews() {
     setFetching(true)
     try {
-      const r = await manualFetch()
+      const r = await manualSync()
       if (!r) {
         toast({ title: 'News fetch failed', description: 'Try again in a moment.', variant: 'destructive' })
       } else {
@@ -443,17 +448,36 @@ function PapersTab() {
 
   const papers = data?.papers ?? []
 
+  // Hybrid auto-sync: first visit (empty library) or data older than 3h quietly
+  // syncs in the background; the manual button always force-runs.
+  const { autoFetching: autoSyncing, lastFetchedAt: papersLastFetchedAt, manualSync } = useAutoSync({
+    key: 'papers',
+    statusEndpoint: '/api/papers/status',
+    fetchEndpoint: '/api/papers/fetch',
+    onAutoFetched: (r) => {
+      const totalNew = typeof r.totalNew === 'number' ? r.totalNew : 0
+      if (totalNew > 0) {
+        reload()
+        toast({ title: 'Papers refreshed', description: `${totalNew} new papers arrived from Hugging Face & arXiv.` })
+      }
+    },
+  })
+
   async function syncPapers() {
     setSyncing(true)
     try {
-      const r = await api.post<{ totalNew: number; analyzed: number }>('/api/papers/fetch')
-      toast({
-        title: `${r.totalNew} new papers from Hugging Face & arXiv`,
-        description: r.analyzed > 0 ? `Top ${r.analyzed} community favorites were auto-analyzed (problem, innovation, results).` : undefined,
-      })
+      const r = await manualSync()
+      if (!r) {
+        toast({ title: 'Paper sync failed', description: 'Try again in a moment.', variant: 'destructive' })
+      } else {
+        const totalNew = typeof r.totalNew === 'number' ? r.totalNew : 0
+        const analyzed = typeof r.analyzed === 'number' ? r.analyzed : 0
+        toast({
+          title: `${totalNew} new papers from Hugging Face & arXiv`,
+          description: analyzed > 0 ? `Top ${analyzed} community favorites were auto-analyzed (problem, innovation, results).` : undefined,
+        })
+      }
       reload()
-    } catch {
-      toast({ title: 'Paper sync failed', description: 'Try again in a moment.', variant: 'destructive' })
     } finally {
       setSyncing(false)
     }
@@ -466,10 +490,14 @@ function PapersTab() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        <Button size="sm" className="h-9" onClick={syncPapers} disabled={syncing}>
-          {syncing ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-1.5 h-4 w-4" />}
+        <Button size="sm" className="h-9" onClick={syncPapers} disabled={syncing || autoSyncing}>
+          {(syncing || autoSyncing) ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-1.5 h-4 w-4" />}
           Sync papers
         </Button>
+        {papersLastFetchedAt && !syncing && !autoSyncing && (
+          <span className="text-xs text-muted-foreground">Updated {timeAgo(papersLastFetchedAt)}</span>
+        )}
+        {autoSyncing && <span className="text-xs text-muted-foreground">Syncing in background…</span>}
         <p className="hidden text-xs text-muted-foreground sm:block">Hugging Face Daily Papers + arXiv cs.AI / cs.CL / cs.LG / cs.CV</p>
         <div className="relative ml-auto w-full sm:w-52">
           <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />

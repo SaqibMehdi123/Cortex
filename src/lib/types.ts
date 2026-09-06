@@ -201,6 +201,7 @@ export interface JobListing {
   id: string
   company: string
   role: string
+  roleFamily: string | null // research | engineering | data | product | design | gtm | ops | other
   type: string // job | internship | research
   location: string | null
   source: string
@@ -222,6 +223,37 @@ export interface ListingIndex {
   total: number
   counts: Record<string, number>
   sources: Array<{ name: string; count: number }>
+  roleFamilies: Array<{ family: string; count: number }>
+}
+
+export interface Scholarship {
+  id: string
+  title: string
+  provider: string
+  url: string
+  level: string // masters | phd | other
+  country: string | null
+  funding: string | null
+  summary: string | null
+  source: string
+  saved: boolean
+  fetchedAt: string
+  createdAt: string
+}
+
+export interface ScholarshipIndex {
+  items: Scholarship[]
+  total: number
+  counts: Record<string, number>
+  sources: Array<{ name: string; count: number }>
+}
+
+export interface ScholarshipFetchResult {
+  ok?: boolean
+  added: number
+  total: number
+  skipped?: string
+  perSource?: Array<{ name: string; ok: boolean; count: number }>
 }
 
 export interface MindmapNode {

@@ -1,6 +1,8 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getSessionUser, unauthorized } from '@/lib/auth-server'
+import { beginSync, stampSync, abortSync } from '@/lib/sync-guard'
+import { classifyRoleFamily } from '@/lib/job-families'
 
 // POST /api/opportunities/fetch — pull jobs, internships and research positions
 // from authentic, keyless public sources:
@@ -20,6 +22,7 @@ const PER_SOURCE_CAP = 150
 type Listing = {
   company: string
   role: string
+  roleFamily: string
   type: 'job' | 'internship' | 'research'
   location: string | null
   source: string
@@ -82,6 +85,7 @@ async function fetchGreenhouse(board: string, company: string): Promise<Listing[
   return jobs.slice(0, PER_SOURCE_CAP).map((j) => ({
     company,
     role: j.title.trim(),
+    roleFamily: classifyRoleFamily(j.title),
     type: classify(j.title),
     location: j.location?.name?.trim() || null,
     source: `${company} (Greenhouse)`,
@@ -102,6 +106,7 @@ async function fetchLever(board: string, company: string): Promise<Listing[]> {
   return (data ?? []).slice(0, PER_SOURCE_CAP).map((j) => ({
     company,
     role: j.text.trim(),
+    roleFamily: classifyRoleFamily(j.text),
     type: classify(j.text),
     location: j.categories?.location?.trim() || null,
     source: `${company} (Lever)`,
@@ -122,6 +127,7 @@ async function fetchRemoteOK(): Promise<Listing[]> {
     out.push({
       company: String(r.company ?? 'Unknown').trim(),
       role,
+      roleFamily: classifyRoleFamily(role),
       type: classify(role),
       location: (String(r.location ?? '').trim() || 'Remote') || null,
       source: 'RemoteOK',
@@ -152,6 +158,7 @@ async function fetchRemotive(): Promise<Listing[]> {
     out.push({
       company: j.company_name.trim(),
       role,
+      roleFamily: classifyRoleFamily(role),
       type: classify(role),
       location: j.candidate_required_location?.trim() || 'Remote',
       source: 'Remotive',
@@ -164,10 +171,25 @@ async function fetchRemotive(): Promise<Listing[]> {
   return out
 }
 
-export async function POST() {
+export async function POST(req: NextRequest) {
+  let userId: string | null = null
   try {
     const user = await getSessionUser()
     if (!user) return unauthorized()
+    userId = user.id
+
+    let force = false
+    try {
+      const body = (await req.json()) as { force?: boolean }
+      force = body?.force === true
+    } catch {} // empty body = auto sync
+
+    // Auto-sync guardrails: 5-min cooldown for automatic calls, one run at a
+    // time per account. Manual clicks send force:true and skip the cooldown.
+    const guard = await beginSync(user.id, 'jobs', force)
+    if (guard.skip) {
+      return NextResponse.json({ added: 0, skipped: guard.reason, total: 0, sources: [], lastFetchedAt: guard.lastFetchedAt })
+    }
 
     const tasks: Array<{ name: string; run: () => Promise<Listing[]> }> = [
       ...GREENHOUSE_BOARDS.map((b) => ({ name: b.company, run: () => fetchGreenhouse(b.board, b.company) })),
@@ -211,6 +233,7 @@ export async function POST() {
             userId: user.id,
             company: l.company,
             role: l.role,
+            roleFamily: l.roleFamily,
             type: l.type,
             location: l.location,
             source: l.source,
@@ -224,9 +247,14 @@ export async function POST() {
     }
 
     const total = await db.jobListing.count({ where: { userId: user.id } })
-    return NextResponse.json({ added, total, sources })
+    const lastFetchedAt = await stampSync(user.id, 'jobs')
+    return NextResponse.json({ added, total, sources, lastFetchedAt })
   } catch (e) {
     console.error('POST /api/opportunities/fetch error', e)
     return NextResponse.json({ error: 'Failed to fetch opportunities' }, { status: 500 })
+  } finally {
+    // Error path never stamps — always make sure the lock is released.
+    // (No-op if stampSync already released it.)
+    if (userId) abortSync(userId, 'jobs')
   }
 }

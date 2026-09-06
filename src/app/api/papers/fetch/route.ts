@@ -1,8 +1,9 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import Parser from 'rss-parser'
 import { db } from '@/lib/db'
 import { analyzePaper } from '@/lib/paper-analysis'
 import { getSessionUser, unauthorized } from '@/lib/auth-server'
+import { beginSync, stampSync, abortSync } from '@/lib/sync-guard'
 
 export const maxDuration = 60
 
@@ -22,10 +23,24 @@ const MAX_AGE_DAYS = 30
 // Papers + the arXiv announcement API (paperswithcode.com was sunset in 2025
 // and redirects to Hugging Face, which now hosts the paper+code index).
 // Each account keeps its own paper feed (per-user dedupe + saved state).
-export async function POST() {
+export async function POST(req: NextRequest) {
+  let userId: string | null = null
   try {
     const user = await getSessionUser()
     if (!user) return unauthorized()
+    userId = user.id
+
+    let force = false
+    try {
+      const body = (await req.json()) as { force?: boolean }
+      force = body?.force === true
+    } catch {} // empty body = auto sync
+
+    // Hybrid auto-sync guardrails (same contract as the news feed).
+    const guard = await beginSync(user.id, 'papers', force)
+    if (guard.skip) {
+      return NextResponse.json({ ok: true, skipped: guard.reason, totalNew: 0, analyzed: 0, lastFetchedAt: guard.lastFetchedAt })
+    }
 
     const collected = new Map<string, {
       arxivId: string
@@ -116,7 +131,8 @@ export async function POST() {
     }
 
     if (collected.size === 0) {
-      return NextResponse.json({ ok: true, totalNew: 0, message: 'No papers returned from Hugging Face or arXiv right now.' })
+      const lastFetchedAt = await stampSync(user.id, 'papers')
+      return NextResponse.json({ ok: true, totalNew: 0, lastFetchedAt, message: 'No papers returned from Hugging Face or arXiv right now.' })
     }
 
     // Dedupe against this user's existing feed
@@ -149,9 +165,13 @@ export async function POST() {
       }
     }
 
-    return NextResponse.json({ ok: true, totalNew: fresh.length, analyzed })
+    const lastFetchedAt = await stampSync(user.id, 'papers')
+    return NextResponse.json({ ok: true, totalNew: fresh.length, analyzed, lastFetchedAt })
   } catch (e) {
     console.error('POST /api/papers/fetch error', e)
     return NextResponse.json({ error: 'Failed to fetch papers. Try again.' }, { status: 500 })
+  } finally {
+    // Error path never stamps — always release the lock (no-op if stamped).
+    if (userId) abortSync(userId, 'papers')
   }
 }

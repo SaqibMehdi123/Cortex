@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { api, fmtDate, daysUntil, useApi } from '@/lib/client'
-import type { Opportunity, JobListing, ListingIndex, ListingFetchResult } from '@/lib/types'
+import type { Opportunity, JobListing, ListingIndex, ListingFetchResult, Scholarship, ScholarshipIndex, ScholarshipFetchResult } from '@/lib/types'
 import { timeAgo } from '@/lib/timeago'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -15,9 +15,10 @@ import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
 import { SkeletonCard, EmptyState } from '@/components/shared'
 import { useUI } from '@/lib/nav-config'
+import { useAutoSync } from '@/hooks/use-auto-sync'
 import {
   Briefcase, Plus, Loader2, Mail, Clock, FileText, Trash2, GripVertical, MailWarning, Inbox,
-  Radar, Search, ExternalLink, Bookmark, BookmarkCheck, MapPin, RefreshCw,
+  Radar, Search, ExternalLink, Bookmark, BookmarkCheck, MapPin, RefreshCw, GraduationCap, Landmark,
 } from 'lucide-react'
 
 const STAGES = [
@@ -42,6 +43,18 @@ const TYPE_STYLE: Record<string, string> = {
   research: 'bg-success/10 text-success',
 }
 
+// Discover role-group filter labels (server classifies titles into families).
+const FAMILY_LABELS: Record<string, string> = {
+  research: 'Research',
+  engineering: 'Engineering',
+  data: 'Data & AI',
+  product: 'Product',
+  design: 'Design',
+  gtm: 'Sales & Marketing',
+  ops: 'Operations',
+  other: 'Other roles',
+}
+
 function companyAvatar(company: string) {
   let hash = 0
   for (let i = 0; i < company.length; i++) hash = (hash * 31 + company.charCodeAt(i)) >>> 0
@@ -58,7 +71,7 @@ function companyAvatar(company: string) {
 }
 
 export function CareerView() {
-  const [tab, setTab] = useState<'pipeline' | 'discover'>('pipeline')
+  const [tab, setTab] = useState<'pipeline' | 'discover' | 'scholarships'>('pipeline')
 
   return (
     <div className="anim-fade-up space-y-4 pb-8">
@@ -68,7 +81,9 @@ export function CareerView() {
           <p className="text-sm text-muted-foreground">
             {tab === 'pipeline'
               ? 'Internship & job pipeline.'
-              : 'Live listings from authentic sources — save any into your pipeline.'}
+              : tab === 'discover'
+                ? 'Live listings from authentic sources — save any into your pipeline.'
+                : 'Masters & PhD scholarships, fellowships and funded programs, refreshed for you.'}
           </p>
         </div>
         <div className="flex items-center gap-1 rounded-xl border bg-muted/40 p-1">
@@ -90,10 +105,19 @@ export function CareerView() {
           >
             <Radar className="h-3.5 w-3.5" /> Discover
           </button>
+          <button
+            onClick={() => setTab('scholarships')}
+            className={cn(
+              'flex min-h-[32px] items-center gap-1.5 rounded-lg px-3 text-xs font-medium transition-colors',
+              tab === 'scholarships' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            <GraduationCap className="h-3.5 w-3.5" /> Scholarships
+          </button>
         </div>
       </div>
 
-      {tab === 'pipeline' ? <PipelineTab /> : <DiscoverTab />}
+      {tab === 'pipeline' ? <PipelineTab /> : tab === 'discover' ? <DiscoverTab /> : <ScholarshipsTab />}
     </div>
   )
 }
@@ -413,6 +437,7 @@ const TYPE_LABELS: Array<{ key: string; label: string }> = [
 function DiscoverTab() {
   const { toast } = useToast()
   const [type, setType] = useState('')
+  const [family, setFamily] = useState('')
   const [source, setSource] = useState('')
   const [search, setSearch] = useState('')
   const [q, setQ] = useState('')
@@ -429,27 +454,47 @@ function DiscoverTab() {
   const url = useMemo(() => {
     const p = new URLSearchParams()
     if (type) p.set('type', type)
+    if (family) p.set('family', family)
     if (source) p.set('source', source)
     if (q.trim()) p.set('q', q.trim())
     if (savedOnly) p.set('saved', '1')
     const s = p.toString()
     return `/api/opportunities/listings${s ? `?${s}` : ''}`
-  }, [type, source, q, savedOnly])
+  }, [type, family, source, q, savedOnly])
 
   const { data, loading, reload } = useApi<ListingIndex>(url)
+
+  // Hybrid auto-sync: first visit (empty board) or data older than 3h quietly
+  // refreshes in the background; the manual button always force-runs.
+  const { autoFetching, lastFetchedAt, manualSync } = useAutoSync({
+    key: 'jobs',
+    statusEndpoint: '/api/opportunities/status',
+    fetchEndpoint: '/api/opportunities/fetch',
+    onAutoFetched: (r) => {
+      const added = typeof r.added === 'number' ? r.added : 0
+      if (added > 0) {
+        reload()
+        toast({ title: 'Listings refreshed', description: `${added} new opportunities arrived from official boards.` })
+      }
+    },
+  })
 
   async function fetchListings() {
     setFetching(true)
     try {
-      const r = await api.post<ListingFetchResult>('/api/opportunities/fetch', {})
-      const ok = r.sources.filter((s) => s.ok).length
-      toast({
-        title: r.added > 0 ? `${r.added} new listings fetched` : 'Already up to date',
-        description: `${r.total} listings on the board · ${ok}/${r.sources.length} sources responded.`,
-      })
+      const r = await manualSync()
+      if (!r) {
+        toast({ title: 'Fetch failed', description: 'Try again in a moment.', variant: 'destructive' })
+      } else {
+        const added = typeof r.added === 'number' ? r.added : 0
+        const sources = (r.sources as Array<{ name: string; ok: boolean; count: number }> | undefined) ?? []
+        const ok = sources.filter((s) => s.ok).length
+        toast({
+          title: added > 0 ? `${added} new listings fetched` : 'Already up to date',
+          description: `${(typeof r.total === 'number' ? r.total : 0)} listings on the board · ${ok}/${sources.length} sources responded.`,
+        })
+      }
       reload()
-    } catch (e) {
-      toast({ title: 'Fetch failed', description: e instanceof Error ? e.message : 'Try again in a moment.', variant: 'destructive' })
     } finally {
       setFetching(false)
     }
@@ -471,18 +516,23 @@ function DiscoverTab() {
   const listings = data?.listings ?? []
   const counts = data?.counts ?? {}
   const total = data?.total ?? 0
+  const roleFamilies = data?.roleFamilies ?? []
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-xs text-muted-foreground">
           Pulled live from official company ATS boards (Anthropic, Mistral AI, Databricks, Together AI, Scale AI, Figure AI, Imbue) and
-          the RemoteOK & Remotive public job APIs. Nothing is invented — every card links to the real posting.
+          the RemoteOK & Remotive public job APIs. Refreshes automatically every few hours — or force a pull anytime.
         </p>
-        <Button onClick={fetchListings} disabled={fetching}>
-          {fetching ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-1.5 h-4 w-4" />}
-          {fetching ? 'Fetching…' : 'Fetch latest'}
-        </Button>
+        <div className="flex items-center gap-2">
+          {lastFetchedAt && !fetching && !autoFetching && <span className="hidden text-xs text-muted-foreground sm:inline">Updated {timeAgo(lastFetchedAt)}</span>}
+          {autoFetching && <span className="hidden text-xs text-muted-foreground sm:inline">Refreshing in background…</span>}
+          <Button onClick={fetchListings} disabled={fetching || autoFetching}>
+            {(fetching || autoFetching) ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-1.5 h-4 w-4" />}
+            {fetching ? 'Fetching…' : 'Fetch latest'}
+          </Button>
+        </div>
       </div>
 
       {/* filters */}
@@ -538,22 +588,57 @@ function DiscoverTab() {
         </div>
       </div>
 
+      {/* role filter — groups titles into families (Engineering, Research, …) */}
+      {roleFamilies.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="mr-1 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <Briefcase className="h-3 w-3" /> Role
+          </span>
+          <button
+            onClick={() => setFamily('')}
+            className={cn(
+              'rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
+              family === '' ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted',
+            )}
+          >
+            All roles
+          </button>
+          {roleFamilies.map((f) => (
+            <button
+              key={f.family}
+              onClick={() => setFamily(family === f.family ? '' : f.family)}
+              className={cn(
+                'rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
+                family === f.family ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted',
+              )}
+            >
+              {FAMILY_LABELS[f.family] ?? f.family}
+              <span className="ml-1 text-[10px] opacity-70">{f.count}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       {loading ? (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {[1, 2, 3, 4, 5, 6].map((i) => <SkeletonCard key={i} className="h-32" />)}
         </div>
       ) : total === 0 ? (
         <EmptyState
-          icon={<Radar className="h-5 w-5" />}
-          title="No listings fetched yet"
-          description="Hit “Fetch latest” to pull live jobs, internships and research positions from official company boards and public job APIs. Everything arrives with a direct link to the real posting."
-          action={{ label: fetching ? 'Fetching…' : 'Fetch opportunities', onClick: fetchListings }}
+          icon={autoFetching ? <Loader2 className="h-5 w-5 animate-spin" /> : <Radar className="h-5 w-5" />}
+          title={autoFetching ? 'Fetching opportunities…' : 'No listings yet'}
+          description={
+            autoFetching
+              ? 'Pulling live jobs, internships and research positions from official company boards and public job APIs — this runs automatically the first time you visit.'
+              : 'Your board refreshes automatically every few hours, or hit “Fetch latest” to pull live jobs, internships and research positions from official company boards and public job APIs right now. Every card links to the real posting.'
+          }
+          action={autoFetching ? undefined : { label: fetching ? 'Fetching…' : 'Fetch opportunities', onClick: fetchListings }}
         />
       ) : listings.length === 0 ? (
         <EmptyState
           icon={<Search className="h-5 w-5" />}
           title="Nothing matches these filters"
-          description="Try a different type, source, or clear the search."
+          description="Try a different role, type, source, or clear the search."
         />
       ) : (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -602,6 +687,240 @@ function DiscoverTab() {
               </CardContent>
             </Card>
           ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ═══════════════════════ SCHOLARSHIPS TAB ═══════════════════════
+
+const LEVEL_META: Record<string, { label: string; style: string }> = {
+  masters: { label: 'Masters', style: 'bg-primary/10 text-primary' },
+  phd: { label: 'PhD', style: 'bg-success/10 text-success' },
+  other: { label: 'Opportunity', style: 'bg-muted text-muted-foreground' },
+}
+
+function ScholarshipsTab() {
+  const { toast } = useToast()
+  const [level, setLevel] = useState('')
+  const [savedOnly, setSavedOnly] = useState(false)
+  const [search, setSearch] = useState('')
+  const [q, setQ] = useState('')
+  const [fetching, setFetching] = useState(false)
+  const [busyId, setBusyId] = useState<string | null>(null)
+
+  useEffect(() => {
+    const t = setTimeout(() => setQ(search), 300)
+    return () => clearTimeout(t)
+  }, [search])
+
+  const url = useMemo(() => {
+    const p = new URLSearchParams()
+    if (level) p.set('level', level)
+    if (savedOnly) p.set('saved', '1')
+    if (q.trim()) p.set('q', q.trim())
+    const s = p.toString()
+    return `/api/scholarships${s ? `?${s}` : ''}`
+  }, [level, savedOnly, q])
+
+  const { data, loading, reload } = useApi<ScholarshipIndex>(url)
+
+  // Hybrid auto-sync (same contract as news/papers/jobs): first visit fetches
+  // immediately, data older than 3h refreshes in the background.
+  const { autoFetching, lastFetchedAt, manualSync } = useAutoSync({
+    key: 'scholarships',
+    statusEndpoint: '/api/scholarships/status',
+    fetchEndpoint: '/api/scholarships/fetch',
+    onAutoFetched: (r) => {
+      const added = typeof r.added === 'number' ? r.added : 0
+      if (added > 0) {
+        reload()
+        toast({ title: 'Scholarships refreshed', description: `${added} new funded programs and fellowships arrived.` })
+      }
+    },
+  })
+
+  async function fetchScholarships() {
+    setFetching(true)
+    try {
+      const r = await manualSync()
+      if (!r) {
+        toast({ title: 'Fetch failed', description: 'Try again in a moment.', variant: 'destructive' })
+      } else {
+        const added = typeof r.added === 'number' ? r.added : 0
+        const per = (r.perSource as Array<{ name: string; ok: boolean; count: number }> | undefined) ?? []
+        const ok = per.filter((s) => s.ok).length
+        toast({
+          title: added > 0 ? `${added} new scholarships fetched` : 'Already up to date',
+          description: `${typeof r.total === 'number' ? r.total : 0} opportunities on file · ${ok}/${per.length} sources responded.`,
+        })
+      }
+      reload()
+    } finally {
+      setFetching(false)
+    }
+  }
+
+  async function toggleSave(s: Scholarship) {
+    setBusyId(s.id)
+    try {
+      await api.patch(`/api/scholarships/${s.id}`, { saved: !s.saved })
+      if (!s.saved) toast({ title: 'Saved', description: 'Kept on your scholarships shortlist.' })
+      reload()
+    } catch {
+      toast({ title: 'Could not update', variant: 'destructive' })
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  const items = data?.items ?? []
+  const counts = data?.counts ?? {}
+  const total = data?.total ?? 0
+  const LEVELS = [
+    { key: '', label: 'All' },
+    { key: 'masters', label: 'Masters' },
+    { key: 'phd', label: 'PhD' },
+  ]
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-xs text-muted-foreground">
+          Masters & PhD scholarships, fellowships and funded programs from Scholarships Corner, Fully Funded Scholarships and
+          Opportunity Desk. The list refreshes itself every few hours — save anything worth applying to.
+        </p>
+        <div className="flex items-center gap-2">
+          {lastFetchedAt && !fetching && !autoFetching && <span className="hidden text-xs text-muted-foreground sm:inline">Updated {timeAgo(lastFetchedAt)}</span>}
+          {autoFetching && <span className="hidden text-xs text-muted-foreground sm:inline">Refreshing in background…</span>}
+          <Button size="sm" className="h-9" onClick={fetchScholarships} disabled={fetching || autoFetching}>
+            {(fetching || autoFetching) ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-1.5 h-4 w-4" />}
+            {fetching ? 'Fetching…' : 'Fetch latest'}
+          </Button>
+        </div>
+      </div>
+
+      {/* filters */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5">
+          {LEVELS.map((l) => (
+            <button
+              key={l.key}
+              onClick={() => setLevel(l.key)}
+              className={cn(
+                'rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
+                level === l.key ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted',
+              )}
+            >
+              {l.label}
+              {l.key && counts[l.key] ? <span className="ml-1 text-[10px] opacity-70">{counts[l.key]}</span> : null}
+            </button>
+          ))}
+          <button
+            onClick={() => setSavedOnly(!savedOnly)}
+            className={cn(
+              'flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
+              savedOnly ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted',
+            )}
+          >
+            <BookmarkCheck className="h-3.5 w-3.5" /> Saved
+          </button>
+        </div>
+        <div className="relative ml-auto">
+          <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search scholarships…"
+            className="h-9 w-44 pl-8 text-xs"
+            aria-label="Search scholarships"
+          />
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {[1, 2, 3, 4, 5, 6].map((i) => <SkeletonCard key={i} className="h-36" />)}
+        </div>
+      ) : total === 0 ? (
+        <EmptyState
+          icon={autoFetching ? <Loader2 className="h-5 w-5 animate-spin" /> : <GraduationCap className="h-5 w-5" />}
+          title={autoFetching ? 'Fetching scholarships…' : 'No scholarships yet'}
+          description={
+            autoFetching
+              ? 'Pulling masters & PhD scholarships, fellowships and funded programs from curated scholarship feeds — this runs automatically the first time you visit.'
+              : 'Your list refreshes automatically every few hours, or hit “Fetch latest” to pull masters & PhD scholarships and funded programs from Scholarships Corner, Fully Funded Scholarships and Opportunity Desk right now.'
+          }
+          action={autoFetching ? undefined : { label: fetching ? 'Fetching…' : 'Fetch scholarships', onClick: fetchScholarships }}
+        />
+      ) : items.length === 0 ? (
+        <EmptyState
+          icon={<Search className="h-5 w-5" />}
+          title="Nothing matches these filters"
+          description="Try a different level or clear the search."
+        />
+      ) : (
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {items.map((s) => {
+            const meta = LEVEL_META[s.level] ?? LEVEL_META.other
+            return (
+              <Card key={s.id} className="group border transition-shadow hover:shadow-soft">
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide', meta.style)}>
+                      {meta.label}
+                    </span>
+                    <button
+                      onClick={() => toggleSave(s)}
+                      disabled={busyId === s.id}
+                      className={cn(
+                        'flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border transition-colors',
+                        s.saved ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted',
+                      )}
+                      aria-label={s.saved ? 'Saved' : 'Save scholarship'}
+                      title={s.saved ? 'Saved' : 'Save to shortlist'}
+                    >
+                      {s.saved ? <BookmarkCheck className="h-3.5 w-3.5" /> : <Bookmark className="h-3.5 w-3.5" />}
+                    </button>
+                  </div>
+                  <a
+                    href={s.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-2 block line-clamp-2 text-sm font-semibold leading-snug hover:text-primary"
+                  >
+                    {s.title}
+                  </a>
+                  {s.summary && <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-muted-foreground">{s.summary}</p>}
+                  <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                    {s.funding && (
+                      <span className="flex items-center gap-1 rounded-full bg-warning/10 px-2 py-0.5 text-[10px] font-medium text-warning">
+                        <Landmark className="h-3 w-3" /> {s.funding}
+                      </span>
+                    )}
+                    {s.country && (
+                      <span className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+                        <MapPin className="h-3 w-3" /> {s.country}
+                      </span>
+                    )}
+                    <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">{s.provider}</span>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
+                    <span>{timeAgo(s.createdAt)}</span>
+                    <a
+                      href={s.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex shrink-0 items-center gap-1 font-medium text-primary hover:underline"
+                    >
+                      Apply <ExternalLink className="h-3 w-3" />
+                    </a>
+                  </div>
+                </CardContent>
+              </Card>
+            )
+          })}
         </div>
       )}
     </div>

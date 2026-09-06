@@ -14,7 +14,7 @@ import { Progress } from '@/components/ui/progress'
 import { Sparkles, BookOpen, Newspaper, CalendarClock, Layers, Flame, Zap, AlertTriangle, Clock3, Sun, Moon as MoonIcon, Sunset, Target, ChevronRight, Timer, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
-import { useNewsAutoFetch } from '@/hooks/use-news-auto-fetch'
+import { useAutoSync } from '@/hooks/use-auto-sync'
 import { fireConfetti } from '@/lib/confetti'
 
 function greeting() {
@@ -36,8 +36,13 @@ export function DashboardView() {
 
   // First visit / stale feed: quietly pull news in the background so the digest
   // card is never a dead end. Dashboard refreshes itself when the fetch lands.
-  const { autoFetching: newsAutoFetching } = useNewsAutoFetch(() => {
-    reload()
+  const { autoFetching: newsAutoFetching } = useAutoSync({
+    key: 'news',
+    statusEndpoint: '/api/news/status',
+    fetchEndpoint: '/api/news/fetch',
+    onAutoFetched: () => {
+      reload()
+    },
   })
 
   const g = greeting()
