@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import Parser from 'rss-parser'
 import { db } from '@/lib/db'
 import ZAI from 'z-ai-web-dev-sdk'
@@ -6,6 +6,12 @@ import { CURATED_FEEDS, stripHtml, type FeedSource } from '@/lib/feeds'
 import { getSessionUser, unauthorized } from '@/lib/auth-server'
 
 export const maxDuration = 120
+
+// Auto-refresh guardrails: one fetch per user at a time, and auto (non-forced)
+// calls are rate-limited so a stuck interval or multiple tabs can't hammer the
+// RSS feeds or burn AI summary tokens. Manual clicks always send force:true.
+const AUTO_COOLDOWN_MS = 5 * 60_000
+const runningFetches = new Set<string>()
 
 const parser = new Parser({
   timeout: 20000,
@@ -31,10 +37,34 @@ const MAX_AGE_DAYS = 90
 // POST /api/news/fetch — pull REAL stories from curated RSS feeds + the user's
 // custom sources. Every account gets its own feed copy so read/saved state and
 // dedupe stay personal.
-export async function POST() {
+// Body (optional): { force?: boolean } — manual button sends force:true to skip
+// the auto-refresh cooldown; automatic refreshes omit it.
+export async function POST(req: NextRequest) {
+  let userId: string | null = null
   try {
     const user = await getSessionUser()
     if (!user) return unauthorized()
+    userId = user.id
+
+    let force = false
+    try {
+      const body = (await req.json()) as { force?: boolean }
+      force = body?.force === true
+    } catch {} // empty body = auto refresh
+
+    // Slim session shape → grab the fetch timestamp separately (one indexed row).
+    const { lastNewsFetchAt } = (await db.user.findUnique({
+      where: { id: user.id },
+      select: { lastNewsFetchAt: true },
+    })) ?? { lastNewsFetchAt: null }
+
+    if (runningFetches.has(user.id)) {
+      return NextResponse.json({ ok: true, skipped: 'in_progress', totalNew: 0, lastFetchedAt: lastNewsFetchAt })
+    }
+    if (!force && lastNewsFetchAt && Date.now() - lastNewsFetchAt.getTime() < AUTO_COOLDOWN_MS) {
+      return NextResponse.json({ ok: true, skipped: 'cooldown', totalNew: 0, lastFetchedAt: lastNewsFetchAt })
+    }
+    runningFetches.add(user.id)
 
     const customSources = await db.customSource.findMany({ where: { userId: user.id, enabled: true } })
 
@@ -92,7 +122,9 @@ export async function POST() {
     }
     const collected = Array.from(byUrl.values())
     if (collected.length === 0) {
-      return NextResponse.json({ ok: true, totalNew: 0, perSource, message: 'No new stories found in any feed.' })
+      const lastFetchedAt = new Date()
+      await db.user.update({ where: { id: user.id }, data: { lastNewsFetchAt: lastFetchedAt } })
+      return NextResponse.json({ ok: true, totalNew: 0, perSource, lastFetchedAt, message: 'No new stories found in any feed.' })
     }
 
     // Dedupe against this user's existing feed in one query
@@ -158,9 +190,13 @@ export async function POST() {
     }
 
     const unreadCount = await db.newsArticle.count({ where: { userId: user.id, read: false } })
-    return NextResponse.json({ ok: true, totalNew: fresh.length, perSource, unreadCount })
+    const lastFetchedAt = new Date()
+    await db.user.update({ where: { id: user.id }, data: { lastNewsFetchAt: lastFetchedAt } })
+    return NextResponse.json({ ok: true, totalNew: fresh.length, perSource, unreadCount, lastFetchedAt })
   } catch (e) {
     console.error('POST /api/news/fetch error', e)
     return NextResponse.json({ error: 'Failed to fetch news. Try again.' }, { status: 500 })
+  } finally {
+    if (userId) runningFetches.delete(userId)
   }
 }

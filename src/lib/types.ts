@@ -131,6 +131,7 @@ export interface NewsArticle {
   summary: string | null
   category: string
   publishedAt: string | null
+  createdAt: string
   read: boolean
   saved: boolean
 }

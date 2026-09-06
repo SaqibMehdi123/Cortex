@@ -11,9 +11,10 @@ import { ProgressRing, SwipeTaskRow, PriorityDot, EmptyState, SkeletonCard, colo
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Progress } from '@/components/ui/progress'
-import { Sparkles, BookOpen, Newspaper, CalendarClock, Layers, Flame, Zap, AlertTriangle, Clock3, Sun, Moon as MoonIcon, Sunset, Target, ChevronRight, Timer } from 'lucide-react'
+import { Sparkles, BookOpen, Newspaper, CalendarClock, Layers, Flame, Zap, AlertTriangle, Clock3, Sun, Moon as MoonIcon, Sunset, Target, ChevronRight, Timer, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
+import { useNewsAutoFetch } from '@/hooks/use-news-auto-fetch'
 import { fireConfetti } from '@/lib/confetti'
 
 function greeting() {
@@ -30,8 +31,14 @@ export function DashboardView() {
   const setCopilotOpen = useUI((s) => s.setCopilotOpen)
   const setFocusTask = useUI((s) => s.setFocusTask)
   const { toast } = useToast()
-  const { data, loading, setData } = useApi<DashboardData>('/api/dashboard')
+  const { data, loading, setData, reload } = useApi<DashboardData>('/api/dashboard')
   const [completingIds, setCompletingIds] = useState<Set<string>>(new Set())
+
+  // First visit / stale feed: quietly pull news in the background so the digest
+  // card is never a dead end. Dashboard refreshes itself when the fetch lands.
+  const { autoFetching: newsAutoFetching } = useNewsAutoFetch(() => {
+    reload()
+  })
 
   const g = greeting()
 
@@ -262,7 +269,10 @@ export function DashboardView() {
           </CardHeader>
           <CardContent className="space-y-2.5">
             {data.newsDigest.length === 0 ? (
-              <p className="py-6 text-center text-sm text-muted-foreground">No stories yet — fetch the latest AI news.</p>
+              <p className="flex items-center justify-center gap-2 py-6 text-center text-sm text-muted-foreground">
+                {newsAutoFetching && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                {newsAutoFetching ? 'Fetching the latest AI news…' : 'No stories yet — hit Fetch latest on the News radar.'}
+              </p>
             ) : (
               data.newsDigest.map((n) => (
                 <a

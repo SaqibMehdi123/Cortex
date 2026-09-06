@@ -345,6 +345,7 @@ model User {
   name          String
   passwordHash  String // pbkdf2$iterations$salt$hash (Web Crypto, no native deps)
   emailVerified Boolean  @default(false) // new signups verify via a 6-digit email code
+  lastNewsFetchAt DateTime? // last successful RSS pull — drives auto-refresh (empty/stale > 3h triggers a background fetch)
   createdAt     DateTime @default(now())
 
   documents         Document[]

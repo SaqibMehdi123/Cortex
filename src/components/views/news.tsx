@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { api, fmtDate, useApi } from '@/lib/client'
-import type { NewsArticle, Paper, FetchSourceResult } from '@/lib/types'
+import type { NewsArticle, Paper } from '@/lib/types'
 import { useUI } from '@/lib/nav-config'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { useToast } from '@/hooks/use-toast'
+import { useNewsAutoFetch } from '@/hooks/use-news-auto-fetch'
 import { cn } from '@/lib/utils'
 import { EmptyState, PageHeader, SkeletonCard } from '@/components/shared'
 import { timeAgo } from '@/lib/timeago'
@@ -86,18 +87,27 @@ function NewsTab() {
 
   const articles = data?.articles ?? []
 
+  // Auto-refresh: empty feed or data older than 3h triggers a silent background
+  // fetch (first visit included) — the manual button below stays for instant pulls.
+  const { autoFetching, lastFetchedAt, manualFetch } = useNewsAutoFetch(() => {
+    reload()
+    toast({ title: 'News refreshed', description: 'New stories were pulled in the background.' })
+  })
+
   async function fetchNews() {
     setFetching(true)
     try {
-      const r = await api.post<{ totalNew: number; perSource: FetchSourceResult[] }>('/api/news/fetch')
-      const okSources = r.perSource.filter((s) => s.ok).length
-      toast({
-        title: `Fetched ${r.totalNew} new stories from real feeds`,
-        description: `${okSources}/${r.perSource.length} sources responded. OpenAI, DeepMind, Hugging Face, TLDR AI, Import AI…`,
-      })
+      const r = await manualFetch()
+      if (!r) {
+        toast({ title: 'News fetch failed', description: 'Try again in a moment.', variant: 'destructive' })
+      } else {
+        const okSources = r.perSource?.filter((s) => s.ok).length ?? 0
+        toast({
+          title: `Fetched ${r.totalNew} new stories from real feeds`,
+          description: `${okSources}/${r.perSource?.length ?? 0} sources responded. OpenAI, DeepMind, Hugging Face, TLDR AI, Import AI…`,
+        })
+      }
       reload()
-    } catch {
-      toast({ title: 'News fetch failed', description: 'Try again in a moment.', variant: 'destructive' })
     } finally {
       setFetching(false)
     }
@@ -125,13 +135,17 @@ function NewsTab() {
     <div className="space-y-4">
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2">
-        <Button size="sm" className="h-9" onClick={fetchNews} disabled={fetching}>
-          {fetching ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-1.5 h-4 w-4" />}
+        <Button size="sm" className="h-9" onClick={fetchNews} disabled={fetching || autoFetching}>
+          {(fetching || autoFetching) ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-1.5 h-4 w-4" />}
           Fetch latest
         </Button>
         <Button variant="outline" size="sm" className="h-9" onClick={() => setSourcesOpen(true)}>
           <Settings2 className="mr-1.5 h-4 w-4" /> Sources
         </Button>
+        {lastFetchedAt && !fetching && !autoFetching && (
+          <span className="hidden text-xs text-muted-foreground sm:inline">Updated {timeAgo(lastFetchedAt)}</span>
+        )}
+        {autoFetching && <span className="hidden text-xs text-muted-foreground sm:inline">Refreshing in background…</span>}
         <div className="relative ml-auto w-full sm:w-52">
           <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search stories…" className="h-9 pl-9 text-xs" aria-label="Search news" />
@@ -196,14 +210,22 @@ function NewsTab() {
         </div>
       ) : articles.length === 0 ? (
         <EmptyState
-          icon={<Newspaper className="h-5 w-5" />}
-          title={q || savedOnly || source !== 'all' ? 'Nothing matches these filters' : 'No stories fetched yet'}
+          icon={autoFetching ? <Loader2 className="h-5 w-5 animate-spin" /> : <Newspaper className="h-5 w-5" />}
+          title={
+            q || savedOnly || source !== 'all'
+              ? 'Nothing matches these filters'
+              : autoFetching
+                ? 'Fetching your first stories…'
+                : 'No stories available yet'
+          }
           description={
             q || savedOnly || source !== 'all'
               ? 'Try widening the time range or clearing filters.'
-              : 'Hit “Fetch latest” to pull real stories straight from OpenAI, DeepMind, Hugging Face, Microsoft Research, TLDR AI, Import AI and more — each with a 3-line AI digest.'
+              : autoFetching
+                ? 'Pulling real stories straight from OpenAI, DeepMind, Hugging Face, Microsoft Research, TLDR AI, Import AI and more — this runs automatically the first time you visit.'
+                : 'Your feed refreshes automatically every few hours, or hit “Fetch latest” to pull real stories from OpenAI, DeepMind, Hugging Face, Microsoft Research, TLDR AI, Import AI and more right now — each with a 3-line AI digest.'
           }
-          action={q || savedOnly || source !== 'all' ? undefined : { label: 'Fetch latest now', onClick: fetchNews }}
+          action={q || savedOnly || source !== 'all' || autoFetching ? undefined : { label: 'Fetch latest now', onClick: fetchNews }}
         />
       ) : (
         <div className="grid gap-3 lg:grid-cols-2">
