@@ -182,19 +182,6 @@ export function Workflow() {
                       >
                         {s.desc}
                       </p>
-
-                      {/* ghost step number */}
-                      <span
-                        aria-hidden
-                        className={cn(
-                          'pointer-events-none absolute -bottom-5 font-display text-[6.5rem] font-semibold leading-none',
-                          even ? 'lg:-right-3' : 'lg:-left-3',
-                          '-right-2 opacity-[0.07]'
-                        )}
-                        style={{ color: accent }}
-                      >
-                        {s.n}
-                      </span>
                     </div>
                   </Reveal>
                 </li>

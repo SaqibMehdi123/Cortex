@@ -56,9 +56,9 @@ export function Reveal({
 }
 
 /**
- * Section header with a real identity: colored eyebrow pill, oversized serif
- * display title, and a giant ghost index behind it — you always know which
- * section you're looking at.
+ * Section header with a single, quiet identity: the index appears exactly
+ * once — inside a small accent chip beside the label — followed by a hairline
+ * rule that ties the marker to the content below.
  */
 export function SectionHeader({
   index,
@@ -79,40 +79,23 @@ export function SectionHeader({
 }) {
   return (
     <div className={cn('relative', center && 'text-center', className)}>
-      {/* giant ghost index — the section's signature */}
-      <span
-        aria-hidden
-        className="ghost-num font-display"
-        style={{ ['--ghost-accent' as string]: accent }}
-      >
-        {index}
-      </span>
-
       <Reveal>
-        <span
-          className={cn(
-            'eyebrow-pill inline-flex items-center gap-2.5 rounded-full border py-1.5 pl-3 pr-4',
-            center && 'mx-auto'
-          )}
-          style={{
-            borderColor: `color-mix(in srgb, ${accent} 30%, transparent)`,
-            background: `color-mix(in srgb, ${accent} 7%, transparent)`,
-          }}
-        >
-          <span className="relative flex h-2 w-2">
-            <span
-              className="ping-dot absolute inline-flex h-full w-full rounded-full"
-              style={{ background: accent }}
-            />
-            <span
-              className="relative inline-flex h-2 w-2 rounded-full"
-              style={{ background: accent }}
-            />
+        <div className={cn('flex items-center gap-3.5', center && 'justify-center')}>
+          <span
+            className="sec-chip font-mono tabular-nums"
+            style={{ ['--sec-accent' as string]: accent }}
+          >
+            {index}
           </span>
-          <span className="font-mono text-[11.5px] font-medium uppercase tracking-[0.2em] text-foreground/80">
-            {index} · {label}
+          <span className="whitespace-nowrap font-mono text-[12px] font-semibold uppercase tracking-[0.26em] text-foreground/80">
+            {label}
           </span>
-        </span>
+          <span
+            aria-hidden
+            className="sec-rule hidden flex-1 sm:block"
+            style={{ ['--sec-accent' as string]: accent }}
+          />
+        </div>
       </Reveal>
 
       <Reveal delay={80}>
