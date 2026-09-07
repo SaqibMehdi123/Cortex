@@ -21,6 +21,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
 import ReactMarkdown from 'react-markdown'
+import { PdfCanvasViewer } from '@/components/pdf-viewer'
 import {
   ArrowLeft, Send, Highlighter, StickyNote, Layers, Share2, Loader2,
   X, Trash2, CheckCircle2, BookOpen, FileText, PanelRightOpen, ExternalLink, Download, Sparkles,
@@ -37,7 +38,8 @@ interface SelInfo {
 type RailTab = 'chat' | 'summary' | 'highlights'
 
 // ─── Reader — opens INSIDE the app shell as a section ────────────────
-// PDFs render in an embedded browser-native viewer (original layout,
+// PDFs render through a pdf.js canvas viewer (mobile browsers don't render
+// PDFs inside iframes — this works identically everywhere, original layout,
 // images and fonts preserved); text documents use the comfortable
 // reading column. A side rail holds AI chat, summary and highlights.
 export function ReaderView() {
@@ -120,7 +122,7 @@ export function ReaderView() {
     }
   }, [readerDocId, doc])
 
-  // Scroll-driven progress (text mode only — the native PDF viewer can't expose scroll)
+  // Scroll-driven progress (text mode only — page-based PDF scroll is tracked by the pdf.js viewer)
   const onScroll = useCallback(() => {
     if (mode !== 'text') return
     const el = scrollRef.current
@@ -591,7 +593,8 @@ export function ReaderView() {
               ))}
             </div>
           ) : isPdf && mode === 'original' ? (
-            /* Embedded browser-PDF window — a section of the page, native rendering */
+            /* Embedded pdf.js viewer — canvas rendering works on every browser
+               (mobile ones don't render PDFs in iframes) */
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border bg-muted/40 shadow-soft">
               <div className="flex items-center gap-2 border-b bg-background/95 px-3 py-2">
                 <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -604,12 +607,8 @@ export function ReaderView() {
                   <Download className="h-3 w-3" /> Save
                 </a>
               </div>
-              {/* Native browser PDF viewer — zoom, thumbnails, search just work */}
-              <iframe
-                src={fileUrl}
-                title={`PDF viewer — ${doc?.title ?? 'document'}`}
-                className="min-h-0 w-full flex-1 bg-muted/40"
-              />
+              {/* pdf.js canvas pages — zoom, page nav, lazy render */}
+              <PdfCanvasViewer url={fileUrl} />
             </div>
           ) : (
             /* Text reading column (articles, extracted text, pasted content) */

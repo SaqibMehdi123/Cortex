@@ -59,11 +59,12 @@ export function SettingsView() {
           <CardTitle className="flex items-center gap-2 text-sm"><Download className="h-4 w-4 text-primary" /> Your data, your rules</CardTitle>
           <CardDescription>Privacy-first: export everything, anytime. Data lives in your own database.</CardDescription>
         </CardHeader>
-        <CardContent className="flex gap-2">
-          <a href="/api/export?format=json" download className="flex-1">
+        {/* stack on mobile — two labeled buttons side by side can't fit 390px */}
+        <CardContent className="flex flex-col gap-2 sm:flex-row">
+          <a href="/api/export?format=json" download className="sm:flex-1">
             <Button variant="outline" className="w-full"><FileJson className="mr-1.5 h-4 w-4" /> Export JSON</Button>
           </a>
-          <a href="/api/export?format=md" download className="flex-1">
+          <a href="/api/export?format=md" download className="sm:flex-1">
             <Button variant="outline" className="w-full"><FileText className="mr-1.5 h-4 w-4" /> Export Markdown</Button>
           </a>
         </CardContent>

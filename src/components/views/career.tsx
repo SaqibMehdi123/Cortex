@@ -588,35 +588,57 @@ function DiscoverTab() {
         </div>
       </div>
 
-      {/* role filter — groups titles into families (Engineering, Research, …) */}
+      {/* role filter — groups titles into families (Engineering, Research, …).
+          Phones get a compact dropdown: 8+ pills wrap into 4+ rows on a 390px
+          viewport and bury the listings. Desktop keeps the tappable pills. */}
       {roleFamilies.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="mr-1 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-            <Briefcase className="h-3 w-3" /> Role
-          </span>
-          <button
-            onClick={() => setFamily('')}
-            className={cn(
-              'rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
-              family === '' ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted',
-            )}
-          >
-            All roles
-          </button>
-          {roleFamilies.map((f) => (
+        <>
+          <div className="flex items-center gap-2 sm:hidden">
+            <span className="flex shrink-0 items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <Briefcase className="h-3 w-3" /> Role
+            </span>
+            <select
+              value={family}
+              onChange={(e) => setFamily(e.target.value)}
+              className="h-9 min-w-0 flex-1 rounded-md border bg-background px-2 text-xs"
+              aria-label="Filter by role family"
+            >
+              <option value="">All roles</option>
+              {roleFamilies.map((f) => (
+                <option key={f.family} value={f.family}>
+                  {FAMILY_LABELS[f.family] ?? f.family} ({f.count})
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="hidden flex-wrap items-center gap-1.5 sm:flex">
+            <span className="mr-1 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <Briefcase className="h-3 w-3" /> Role
+            </span>
             <button
-              key={f.family}
-              onClick={() => setFamily(family === f.family ? '' : f.family)}
+              onClick={() => setFamily('')}
               className={cn(
                 'rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
-                family === f.family ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted',
+                family === '' ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted',
               )}
             >
-              {FAMILY_LABELS[f.family] ?? f.family}
-              <span className="ml-1 text-[10px] opacity-70">{f.count}</span>
+              All roles
             </button>
-          ))}
-        </div>
+            {roleFamilies.map((f) => (
+              <button
+                key={f.family}
+                onClick={() => setFamily(family === f.family ? '' : f.family)}
+                className={cn(
+                  'rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
+                  family === f.family ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted',
+                )}
+              >
+                {FAMILY_LABELS[f.family] ?? f.family}
+                <span className="ml-1 text-[10px] opacity-70">{f.count}</span>
+              </button>
+            ))}
+          </div>
+        </>
       )}
 
       {loading ? (

@@ -120,7 +120,9 @@ export function PlansView() {
           <h1 className="text-2xl font-bold tracking-tight">Plans</h1>
           <p className="text-sm text-muted-foreground">Year → Quarter → Month → Week → Day, with milestones and tasks.</p>
         </div>
-        <div className="flex items-center gap-2">
+        {/* full-width row on mobile; labels collapse to icons — three labeled
+            controls + the view toggle can't fit a 390px viewport in one line */}
+        <div className="flex w-full items-center gap-2 sm:w-auto">
           <div className="flex overflow-hidden rounded-lg border">
             <button onClick={() => setMode('outline')} className={cn('flex h-9 items-center gap-1.5 whitespace-nowrap px-3 text-xs font-medium transition-colors', mode === 'outline' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted')} aria-label="Outline view">
               <LayoutList className="h-4 w-4" /> Outline
@@ -129,17 +131,17 @@ export function PlansView() {
               <KanbanSquare className="h-4 w-4" /> Kanban
             </button>
           </div>
-          <Button variant="outline" onClick={() => setTemplatesOpen(true)}>
-            <Wand2 className="mr-1.5 h-4 w-4" /> Templates
+          <Button variant="outline" className="px-2.5" onClick={() => setTemplatesOpen(true)} aria-label="Browse plan templates">
+            <Wand2 className="h-4 w-4" /> <span className="hidden sm:inline">Templates</span>
           </Button>
-          <Button onClick={() => setAddOpen(true)}>
-            <Plus className="mr-1.5 h-4 w-4" /> Plan
+          <Button className="px-2.5" onClick={() => setAddOpen(true)} aria-label="New plan">
+            <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Plan</span>
           </Button>
         </div>
       </div>
 
       {/* Week strip — drag tasks here to reschedule */}
-      <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
+      <div className="grid grid-cols-7 gap-1 sm:gap-2">
         {week.map((d) => {
           const iso = d.toISOString().slice(0, 10)
           const isToday = iso === todayISO()
@@ -159,14 +161,15 @@ export function PlansView() {
                 }
               }}
               className={cn(
-                'flex min-h-[64px] flex-col items-center justify-center gap-0.5 rounded-xl border bg-card p-1.5 transition-colors sm:min-h-[72px]',
+                'flex min-h-[58px] flex-col items-center justify-center gap-0.5 rounded-xl border bg-card p-1 transition-colors sm:min-h-[72px] sm:p-1.5',
                 isSel && 'border-primary bg-primary/5',
                 isToday && !isSel && 'border-primary/40'
               )}
             >
-              <span className="text-[10px] font-medium uppercase text-muted-foreground">{d.toLocaleDateString('en-US', { weekday: 'short' })}</span>
-              <span className={cn('text-base font-bold', isToday && 'text-primary')}>{d.getDate()}</span>
-              <span className="h-1 w-1 rounded-full bg-primary/40" aria-hidden />
+              {/* narrow single letter on phones, short name from sm up */}
+              <span className="text-[10px] font-medium uppercase text-muted-foreground sm:hidden" aria-hidden>{d.toLocaleDateString('en-US', { weekday: 'narrow' })}</span>
+              <span className="hidden text-[10px] font-medium uppercase text-muted-foreground sm:inline">{d.toLocaleDateString('en-US', { weekday: 'short' })}</span>
+              <span className={cn('text-base font-bold sm:text-lg', isToday && 'text-primary')}>{d.getDate()}</span>
             </button>
           )
         })}
