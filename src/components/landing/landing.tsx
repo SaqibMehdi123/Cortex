@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { LandingNav } from './nav'
 import { LandingHero } from './hero'
-import { SourcesMarquee, FeatureIndex, StatLine } from './features'
+import { SourcesMarquee, PlatformBento, StatLine } from './features'
 import { Workflow, CopilotSection } from './flow'
 import { Faq, FinalCta, LandingFooter } from './closing'
 
@@ -56,45 +56,88 @@ export function Reveal({
 }
 
 /**
- * Editorial section header — mono index + hairline rule, tight sans title
- * left, lede right. Left-aligned on purpose: no more centered AI cadence.
+ * Section header with a real identity: colored eyebrow pill, oversized serif
+ * display title, and a giant ghost index behind it — you always know which
+ * section you're looking at.
  */
 export function SectionHeader({
   index,
   label,
   title,
   lede,
+  accent = 'var(--chart-1)',
+  center = false,
+  className,
 }: {
   index: string
   label: string
   title: React.ReactNode
   lede?: string
+  accent?: string
+  center?: boolean
+  className?: string
 }) {
   return (
-    <div className="border-t border-border pt-5">
+    <div className={cn('relative', center && 'text-center', className)}>
+      {/* giant ghost index — the section's signature */}
+      <span
+        aria-hidden
+        className="ghost-num font-display"
+        style={{ ['--ghost-accent' as string]: accent }}
+      >
+        {index}
+      </span>
+
       <Reveal>
-        <div className="flex items-center gap-4">
-          <span className="font-mono text-[11px] text-muted-foreground">{index}</span>
-          <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
-            {label}
+        <span
+          className={cn(
+            'eyebrow-pill inline-flex items-center gap-2.5 rounded-full border py-1.5 pl-3 pr-4',
+            center && 'mx-auto'
+          )}
+          style={{
+            borderColor: `color-mix(in srgb, ${accent} 30%, transparent)`,
+            background: `color-mix(in srgb, ${accent} 7%, transparent)`,
+          }}
+        >
+          <span className="relative flex h-2 w-2">
+            <span
+              className="ping-dot absolute inline-flex h-full w-full rounded-full"
+              style={{ background: accent }}
+            />
+            <span
+              className="relative inline-flex h-2 w-2 rounded-full"
+              style={{ background: accent }}
+            />
           </span>
-          <span className="h-px flex-1 bg-border" />
-        </div>
+          <span className="font-mono text-[11.5px] font-medium uppercase tracking-[0.2em] text-foreground/80">
+            {index} · {label}
+          </span>
+        </span>
       </Reveal>
-      <div className="mt-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between md:gap-12">
-        <Reveal delay={60}>
-          <h2 className="max-w-xl text-[1.65rem] font-semibold leading-[1.15] tracking-[-0.022em] text-foreground sm:text-[2.1rem]">
-            {title}
-          </h2>
+
+      <Reveal delay={80}>
+        <h2
+          className={cn(
+            'mt-6 max-w-3xl font-display text-[clamp(2.3rem,5vw,3.6rem)] font-medium leading-[1.06] tracking-[-0.025em] text-foreground',
+            center && 'mx-auto'
+          )}
+        >
+          {title}
+        </h2>
+      </Reveal>
+
+      {lede ? (
+        <Reveal delay={150}>
+          <p
+            className={cn(
+              'mt-5 max-w-xl text-[16.5px] leading-relaxed text-muted-foreground',
+              center && 'mx-auto'
+            )}
+          >
+            {lede}
+          </p>
         </Reveal>
-        {lede ? (
-          <Reveal delay={140}>
-            <p className="max-w-sm text-[15px] leading-relaxed text-muted-foreground md:pb-1 md:text-right">
-              {lede}
-            </p>
-          </Reveal>
-        ) : null}
-      </div>
+      ) : null}
     </div>
   )
 }
@@ -106,7 +149,7 @@ export function Landing({ authed, firstName }: { authed: boolean; firstName: str
       <main className="flex-1">
         <LandingHero authed={authed} firstName={firstName} />
         <SourcesMarquee />
-        <FeatureIndex />
+        <PlatformBento />
         <StatLine />
         <Workflow />
         <CopilotSection />

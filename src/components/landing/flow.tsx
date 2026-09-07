@@ -3,99 +3,203 @@
 import { useEffect, useRef, useState } from 'react'
 import { Reveal, SectionHeader } from './landing'
 import { spotlightHandlers, useTypewriterLoop } from './motion'
-import { BrainCircuit, CornerDownRight } from 'lucide-react'
+import { BrainCircuit, CalendarCheck2, CornerDownRight, Layers, ScanSearch, Zap } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-/* ── Workflow — numbered steps, line draws on scroll ──────────────────── */
+/* ── Workflow — scroll-driven timeline; the line fills as you scroll ──── */
 
 const STEPS = [
   {
     n: '01',
+    icon: Zap,
     title: 'Capture',
-    desc: 'Clip it the second it appears — quick capture and ⌘K from anywhere.',
+    desc: 'Clip it the second it appears. Quick capture and ⌘K from anywhere — no context switch, no friction.',
   },
   {
     n: '02',
+    icon: ScanSearch,
     title: 'Understand',
-    desc: 'Reader mode, plus a copilot that has read everything you saved.',
+    desc: 'Reader mode plus a copilot that has read everything you saved. Ask it, summarize with it, connect through it.',
   },
   {
     n: '03',
+    icon: Layers,
     title: 'Retain',
-    desc: 'Cards and maps on an SM-2 schedule. Memory that compounds.',
+    desc: 'Flashcards and mindmaps on an SM-2 schedule. Memory that compounds instead of rotting in a folder.',
   },
   {
     n: '04',
+    icon: CalendarCheck2,
     title: 'Act',
-    desc: 'Plan the week; let the radar hand you jobs and scholarships.',
+    desc: 'Plan the week, run the focus timer, and let the radar hand you the right jobs and scholarships.',
   },
 ]
 
-function useInView<T extends HTMLElement>(threshold = 0.35) {
-  const ref = useRef<T>(null)
-  const [seen, setSeen] = useState(false)
-  useEffect(() => {
-    const el = ref.current
-    if (!el) return
-    const io = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting) {
-          setSeen(true)
-          io.disconnect()
-        }
-      },
-      { threshold }
-    )
-    io.observe(el)
-    return () => io.disconnect()
-  }, [threshold])
-  return { ref, seen }
-}
+const FLOW_ACCENTS = ['var(--chart-1)', 'var(--chart-2)', 'var(--chart-3)', 'var(--chart-5)']
 
 export function Workflow() {
-  const { ref, seen } = useInView<HTMLDivElement>()
+  const trackRef = useRef<HTMLDivElement>(null)
+  const [active, setActive] = useState(-1)
+
+  useEffect(() => {
+    const track = trackRef.current
+    if (!track) return
+
+    let raf = 0
+    const update = () => {
+      raf = 0
+      const r = track.getBoundingClientRect()
+      // a focal line ~62% down the viewport drives the fill
+      const focus = window.innerHeight * 0.62
+      const p = Math.min(1, Math.max(0, (focus - r.top) / r.height))
+      track.style.setProperty('--flow', p.toFixed(4))
+
+      let idx = -1
+      track.querySelectorAll<HTMLElement>('[data-node]').forEach((node) => {
+        const nr = node.getBoundingClientRect()
+        const passed = nr.top + nr.height / 2 <= focus
+        node.classList.toggle('node-on', passed)
+        if (passed) idx = Number(node.dataset.node)
+      })
+      setActive((prev) => (prev === idx ? prev : idx))
+    }
+
+    const onScroll = () => {
+      if (!raf) raf = requestAnimationFrame(update)
+    }
+
+    update()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    window.addEventListener('resize', onScroll)
+    return () => {
+      window.removeEventListener('scroll', onScroll)
+      window.removeEventListener('resize', onScroll)
+      if (raf) cancelAnimationFrame(raf)
+    }
+  }, [])
 
   return (
-    <section id="workflow" className="scroll-mt-20 py-20 sm:py-24">
+    <section id="workflow" className="relative scroll-mt-20 py-24 sm:py-32">
       <div className="mx-auto max-w-6xl px-5 sm:px-8">
         <SectionHeader
           index="02"
           label="Workflow"
-          title={<>A loop, not a graveyard of notes.</>}
-          lede="Most tools stop at storage. Cortex closes the loop from thought to finished work."
+          accent="var(--chart-2)"
+          title={
+            <>
+              A loop, not a{' '}
+              <em className="font-display italic text-[var(--chart-2)]">graveyard of notes.</em>
+            </>
+          }
+          lede="Most tools stop at storage. Cortex closes the loop from first thought to finished work — scroll and watch it run."
         />
 
-        <div ref={ref} className="relative mt-14">
-          {/* connecting line — draws itself when scrolled into view */}
+        <div ref={trackRef} className="relative mt-16 lg:mt-24" style={{ ['--flow' as string]: 0 }}>
+          {/* the spine */}
           <div
             aria-hidden
-            className={cn(
-              'draw-line absolute left-0 right-0 top-[9px] hidden h-px bg-gradient-to-r from-[var(--chart-1)] via-[var(--chart-2)] to-[var(--chart-3)] opacity-60 lg:block',
-              seen && 'drawn'
-            )}
-          />
-          <ol className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4 lg:gap-8">
-            {STEPS.map((s, i) => (
-              <Reveal key={s.n} delay={i * 110}>
-                <li>
+            className="absolute bottom-2 left-[21px] top-2 w-px bg-border lg:left-1/2 lg:-translate-x-1/2"
+          >
+            <div
+              className="flow-fill h-full w-full origin-top"
+              style={{ transform: 'scaleY(var(--flow, 0))' }}
+            />
+          </div>
+
+          <ol className="flex flex-col gap-12 lg:gap-4">
+            {STEPS.map((s, i) => {
+              const even = i % 2 === 0
+              const accent = FLOW_ACCENTS[i % FLOW_ACCENTS.length]
+              const on = active >= i
+              return (
+                <li key={s.n} className="relative lg:grid lg:min-h-[210px] lg:grid-cols-2 lg:gap-28">
+                  {/* node on the spine */}
                   <span
+                    data-node={i}
+                    aria-hidden
+                    className="flow-node absolute left-0 top-1 z-10 lg:left-1/2 lg:-translate-x-1/2"
+                    style={{ ['--node-accent' as string]: accent }}
+                  >
+                    <span className="flow-node-core" />
+                  </span>
+
+                  {/* step card — alternates sides of the spine */}
+                  <Reveal
                     className={cn(
-                      'relative z-10 block h-[19px] w-[19px] rounded-full border-2 bg-background transition-colors duration-500',
-                      seen ? 'border-[var(--chart-1)]' : 'border-border'
+                      'pl-16 lg:pl-0',
+                      even ? 'lg:col-start-1' : 'lg:col-start-2'
                     )}
-                  />
-                  <p className="mt-5 font-mono text-[10.5px] tracking-[0.18em] text-muted-foreground">
-                    {s.n}
-                  </p>
-                  <h3 className="mt-1.5 text-[17px] font-semibold tracking-[-0.015em] text-foreground">
-                    {s.title}
-                  </h3>
-                  <p className="mt-1.5 max-w-[240px] text-[13.5px] leading-relaxed text-muted-foreground">
-                    {s.desc}
-                  </p>
+                  >
+                    <div
+                      {...spotlightHandlers()}
+                      className={cn(
+                        'spot tool-card relative max-w-xl overflow-hidden rounded-2xl border bg-card p-6 transition-all duration-500 sm:p-7',
+                        on
+                          ? 'border-transparent shadow-[0_18px_50px_-20px_rgb(0_0_0/0.25)]'
+                          : 'border-border opacity-[0.82]'
+                      )}
+                      style={
+                        {
+                          ['--tool-accent' as string]: accent,
+                          ...(on
+                            ? {
+                                borderColor: `color-mix(in srgb, ${accent} 42%, transparent)`,
+                                boxShadow: `0 18px 50px -20px color-mix(in srgb, ${accent} 45%, transparent)`,
+                              }
+                            : {}),
+                        } as React.CSSProperties
+                      }
+                    >
+                      <span aria-hidden className="tool-glow" />
+                      <div
+                        className={cn(
+                          'flex items-center gap-4',
+                          even && 'lg:flex-row-reverse lg:text-right'
+                        )}
+                      >
+                        <span
+                          className="tool-tile inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border"
+                        >
+                          <s.icon className="h-[22px] w-[22px]" />
+                        </span>
+                        <div className={cn(even && 'lg:flex lg:flex-col lg:items-end')}>
+                          <p
+                            className="font-mono text-[11px] font-semibold tracking-[0.22em] tabular-nums"
+                            style={{ color: accent }}
+                          >
+                            STEP {s.n}
+                          </p>
+                          <h3 className="font-display text-[1.7rem] font-medium leading-tight tracking-[-0.02em] text-foreground">
+                            {s.title}
+                          </h3>
+                        </div>
+                      </div>
+                      <p
+                        className={cn(
+                          'mt-3 text-[14.5px] leading-relaxed text-muted-foreground',
+                          even && 'lg:text-right'
+                        )}
+                      >
+                        {s.desc}
+                      </p>
+
+                      {/* ghost step number */}
+                      <span
+                        aria-hidden
+                        className={cn(
+                          'pointer-events-none absolute -bottom-5 font-display text-[6.5rem] font-semibold leading-none',
+                          even ? 'lg:-right-3' : 'lg:-left-3',
+                          '-right-2 opacity-[0.07]'
+                        )}
+                        style={{ color: accent }}
+                      >
+                        {s.n}
+                      </span>
+                    </div>
+                  </Reveal>
                 </li>
-              </Reveal>
-            ))}
+              )
+            })}
           </ol>
         </div>
       </div>
@@ -140,23 +244,31 @@ export function CopilotSection() {
   const reply = REPLIES[text]
 
   return (
-    <section id="copilot" className="scroll-mt-20 border-t border-border/70 py-20 sm:py-24">
-      <div className="mx-auto grid max-w-6xl items-center gap-14 px-5 sm:px-8 lg:grid-cols-2 lg:gap-16">
+    <section id="copilot" className="relative scroll-mt-20 border-y border-border/70 bg-secondary/25 py-24 sm:py-32">
+      <div className="mx-auto grid max-w-6xl items-center gap-16 px-5 sm:px-8 lg:grid-cols-2 lg:gap-20">
         <div>
           <SectionHeader
             index="03"
             label="Copilot"
-            title={<>An assistant that read everything you did.</>}
+            accent="var(--chart-5)"
+            title={
+              <>
+                An assistant that read{' '}
+                <em className="font-display italic text-[var(--chart-5)]">
+                  everything you did.
+                </em>
+              </>
+            }
             lede="Not a chatbot bolted onto a file list — a dock that knows your library, plans and goals."
           />
           <div className="mt-10 flex flex-col">
             {POINTS.map((p, i) => (
               <Reveal key={p.title} delay={i * 90}>
                 <div className="flex gap-4 border-b border-border/70 py-4 first:pt-0 last:border-0">
-                  <span className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--chart-1)]" />
+                  <span className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--chart-5)]" />
                   <div>
-                    <h3 className="text-[14.5px] font-medium text-foreground">{p.title}</h3>
-                    <p className="mt-0.5 text-[13.5px] leading-relaxed text-muted-foreground">
+                    <h3 className="text-[15.5px] font-medium text-foreground">{p.title}</h3>
+                    <p className="mt-0.5 text-[14.5px] leading-relaxed text-muted-foreground">
                       {p.desc}
                     </p>
                   </div>
@@ -169,7 +281,7 @@ export function CopilotSection() {
         <Reveal delay={140}>
           <div
             {...spotlightHandlers()}
-            className="spot relative overflow-hidden rounded-xl border border-border bg-card shadow-[0_30px_90px_-30px_rgb(0_0_0/0.3)]"
+            className="spot relative overflow-hidden rounded-2xl border border-border bg-card shadow-[0_30px_90px_-30px_rgb(0_0_0/0.3)]"
           >
             {/* header */}
             <div className="flex items-center gap-2 border-b border-border bg-background/70 px-4 py-2.5">
@@ -184,22 +296,28 @@ export function CopilotSection() {
             </div>
 
             {/* conversation */}
-            <div className="flex min-h-[280px] flex-col gap-3 p-4 sm:p-5">
-              <div className="max-w-[88%] self-end rounded-lg rounded-br-sm bg-primary px-3.5 py-2.5 text-[12.5px] leading-relaxed text-primary-foreground">
-                {text}
-                <span className="type-caret ml-0.5 inline-block h-3.5 w-[2px] translate-y-[2px] bg-current" />
-              </div>
+            <div className="flex min-h-[290px] flex-col gap-3 p-4 sm:p-5">
+              {text ? (
+                <div className="max-w-[88%] self-end rounded-lg rounded-br-sm bg-primary px-3.5 py-2.5 text-[13px] leading-relaxed text-primary-foreground">
+                  {text}
+                  <span className="type-caret ml-0.5 inline-block h-3.5 w-[2px] translate-y-[2px] bg-current" />
+                </div>
+              ) : (
+                <div className="flex h-[46px] items-center justify-end">
+                  <span className="type-caret inline-block h-4 w-[2px] bg-muted-foreground/40" />
+                </div>
+              )}
 
               <div
                 className={cn(
-                  'max-w-[88%] self-start rounded-lg rounded-bl-sm border border-border bg-background/70 px-3.5 py-2.5 text-[12.5px] leading-relaxed text-foreground transition-all duration-500',
+                  'max-w-[88%] self-start rounded-lg rounded-bl-sm border border-border bg-background/70 px-3.5 py-2.5 text-[13px] leading-relaxed text-foreground transition-all duration-500',
                   reply ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-1 opacity-0'
                 )}
               >
                 {reply ?? ''}
               </div>
 
-              <div className="mt-auto flex items-center gap-2 rounded-lg border border-border bg-background/50 px-3 py-2 text-[12px] text-muted-foreground">
+              <div className="mt-auto flex items-center gap-2 rounded-lg border border-border bg-background/50 px-3 py-2 text-[12.5px] text-muted-foreground">
                 <CornerDownRight className="h-3.5 w-3.5" />
                 Ask anything you&rsquo;ve saved
                 <span className="ml-auto rounded border border-border px-1 font-mono text-[9px]">

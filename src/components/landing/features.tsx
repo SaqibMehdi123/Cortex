@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import React from 'react'
 import { Reveal, SectionHeader } from './landing'
 import { spotlightHandlers, useCountUp } from './motion'
 import { BRAND_LOGOS, BrandMark } from './brand-logos'
@@ -8,12 +8,12 @@ import {
   BookOpen,
   Briefcase,
   CalendarRange,
-  ChartLine,
   Command,
+  Crosshair,
   Layers,
   Radar,
   Share2,
-  Target,
+  ChartLine,
   Zap,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -26,21 +26,21 @@ export function SourcesMarquee() {
     <section aria-label="Sources" className="mt-2 border-y border-border/70 bg-secondary/30">
       <div className="mx-auto max-w-6xl px-5 py-10 sm:px-8">
         <Reveal>
-          <p className="text-center font-mono text-[10.5px] uppercase tracking-[0.18em] text-muted-foreground">
+          <p className="text-center text-[12.5px] font-medium uppercase tracking-[0.22em] text-muted-foreground">
             The radar reads 97+ sources, so you don&rsquo;t have to
           </p>
         </Reveal>
         <Reveal delay={100}>
-          <div className="marquee marquee-mask mt-6 overflow-hidden">
+          <div className="marquee marquee-mask mt-7 overflow-hidden">
             <div className="marquee-track flex w-max items-center gap-12 pr-12">
               {row.map((logo, i) => (
                 <span
                   key={`${logo.title}-${i}`}
-                  className="flex items-center gap-2 text-muted-foreground/60 transition-colors duration-300 hover:text-foreground"
+                  className="flex items-center gap-2.5 text-muted-foreground/55 transition-colors duration-300 hover:text-foreground"
                   title={logo.title}
                 >
-                  <BrandMark logo={logo} size={17} />
-                  <span className="whitespace-nowrap text-[13px] font-medium">{logo.title}</span>
+                  <BrandMark logo={logo} size={19} />
+                  <span className="whitespace-nowrap text-[14px] font-medium">{logo.title}</span>
                 </span>
               ))}
             </div>
@@ -51,146 +51,222 @@ export function SourcesMarquee() {
   )
 }
 
-/* ── Feature index — editorial rows, hairline dividers ────────────────── */
+/* ── Platform bento — ten tools as living cards ───────────────────────── */
 
-interface FeatureRow {
+interface Tool {
   icon: React.ReactNode
   title: string
   desc: string
   tag: string
+  accent: string
+  span: string // tailwind col-span classes
+  featured?: 'radar' | 'career'
 }
 
-const GROUPS: { label: string; rows: FeatureRow[] }[] = [
+const TOOLS: Tool[] = [
   {
-    label: 'Workspace',
-    rows: [
-      {
-        icon: <BookOpen className="h-4 w-4" />,
-        title: 'Library & reader',
-        desc: 'Save papers and articles, read them clean, and keep every highlight searchable.',
-        tag: 'reader',
-      },
-      {
-        icon: <CalendarRange className="h-4 w-4" />,
-        title: 'Weekly plans',
-        desc: 'Time-block the week in minutes; unfinished work carries over in one click.',
-        tag: 'weekly',
-      },
-      {
-        icon: <Target className="h-4 w-4" />,
-        title: 'Goals & milestones',
-        desc: 'Progress rings that fill from real work — not manual updates.',
-        tag: 'progress',
-      },
-      {
-        icon: <Zap className="h-4 w-4" />,
-        title: 'Instant capture',
-        desc: 'A global quick-capture plus ⌘K means no thought ever escapes.',
-        tag: '⌘K',
-      },
-    ],
+    icon: <Radar className="h-[22px] w-[22px]" />,
+    title: 'AI news radar',
+    desc: '97+ sources re-read every few hours. Each story lands pre-summarized, ranked by what it changes for you.',
+    tag: 'auto-refresh',
+    accent: 'var(--chart-1)',
+    span: 'sm:col-span-2 lg:col-span-3',
+    featured: 'radar',
   },
   {
-    label: 'Intelligence',
-    rows: [
-      {
-        icon: <Radar className="h-4 w-4" />,
-        title: 'AI news radar',
-        desc: '97+ sources auto-refreshed every few hours, each story summarized before you open it.',
-        tag: 'auto',
-      },
-      {
-        icon: <Briefcase className="h-4 w-4" />,
-        title: 'Career radar',
-        desc: 'Jobs matched to your profile, plus a masters & PhD scholarship feed — fetched for you.',
-        tag: 'match',
-      },
-      {
-        icon: <Share2 className="h-4 w-4" />,
-        title: 'Mindmaps',
-        desc: 'Drag notes into spatial maps and watch structure emerge from the mess.',
-        tag: 'canvas',
-      },
-      {
-        icon: <Layers className="h-4 w-4" />,
-        title: 'Flashcards',
-        desc: 'Cards grown from whatever you read, scheduled by the SM-2 algorithm.',
-        tag: 'sm-2',
-      },
-      {
-        icon: <ChartLine className="h-4 w-4" />,
-        title: 'Analytics',
-        desc: 'Streaks, pace and review load. Signal, not guilt.',
-        tag: 'stats',
-      },
-    ],
+    icon: <Briefcase className="h-[22px] w-[22px]" />,
+    title: 'Career radar',
+    desc: 'Jobs matched to your profile, plus a live masters & PhD scholarship feed.',
+    tag: 'match',
+    accent: 'var(--chart-3)',
+    span: 'sm:col-span-2 lg:col-span-3',
+    featured: 'career',
+  },
+  {
+    icon: <BookOpen className="h-[22px] w-[22px]" />,
+    title: 'Library & reader',
+    desc: 'Save papers and articles, read them clean, keep every highlight searchable.',
+    tag: 'reader',
+    accent: 'var(--chart-2)',
+    span: 'lg:col-span-2',
+  },
+  {
+    icon: <CalendarRange className="h-[22px] w-[22px]" />,
+    title: 'Weekly plans',
+    desc: 'Time-block the week in minutes; unfinished work carries over in one click.',
+    tag: 'weekly',
+    accent: 'var(--chart-4)',
+    span: 'lg:col-span-2',
+  },
+  {
+    icon: <Zap className="h-[22px] w-[22px]" />,
+    title: 'Instant capture',
+    desc: 'A global quick-capture plus ⌘K means no thought ever escapes.',
+    tag: '⌘K',
+    accent: 'var(--chart-5)',
+    span: 'lg:col-span-2',
+  },
+  {
+    icon: <Crosshair className="h-[22px] w-[22px]" />,
+    title: 'Goals & milestones',
+    desc: 'Progress rings that fill from real work — not manual updates.',
+    tag: 'progress',
+    accent: 'var(--chart-1)',
+    span: 'lg:col-span-2',
+  },
+  {
+    icon: <Share2 className="h-[22px] w-[22px]" />,
+    title: 'Mindmaps',
+    desc: 'Drag notes into spatial maps and watch structure emerge from the mess.',
+    tag: 'canvas',
+    accent: 'var(--chart-2)',
+    span: 'lg:col-span-2',
+  },
+  {
+    icon: <Layers className="h-[22px] w-[22px]" />,
+    title: 'Flashcards',
+    desc: 'Cards grown from whatever you read, scheduled by the SM-2 algorithm.',
+    tag: 'sm-2',
+    accent: 'var(--chart-3)',
+    span: 'lg:col-span-2',
+  },
+  {
+    icon: <ChartLine className="h-[22px] w-[22px]" />,
+    title: 'Analytics',
+    desc: 'Streaks, pace and review load. Signal, not guilt.',
+    tag: 'stats',
+    accent: 'var(--chart-4)',
+    span: 'lg:col-span-3',
+  },
+  {
+    icon: <Command className="h-[22px] w-[22px]" />,
+    title: 'Command bar',
+    desc: 'Focus timer, copilot dock and ⌘K — woven through every view, not bolted on.',
+    tag: 'system-wide',
+    accent: 'var(--chart-5)',
+    span: 'lg:col-span-3',
   },
 ]
 
-function Row({ row, index }: { row: FeatureRow; index: number }) {
+/* Featured visuals — small live scenes instead of dead space */
+
+function RadarVisual() {
   return (
-    <div
-      {...spotlightHandlers()}
-      className="spot group flex items-center gap-4 border-b border-border/70 py-4 transition-colors first:pt-0 hover:bg-muted/30 sm:gap-5 sm:px-3"
-    >
-      <span className="w-6 shrink-0 font-mono text-[10.5px] text-muted-foreground/60">
-        {String(index + 1).padStart(2, '0')}
-      </span>
-      <span className="shrink-0 text-muted-foreground transition-colors group-hover:text-foreground">
-        {row.icon}
-      </span>
-      <div className="min-w-0 flex-1">
-        <h3 className="text-[14.5px] font-medium tracking-[-0.01em] text-foreground">{row.title}</h3>
-        <p className="mt-0.5 text-[13px] leading-relaxed text-muted-foreground">{row.desc}</p>
-      </div>
-      <span className="hidden shrink-0 rounded border border-border px-1.5 py-0.5 font-mono text-[9.5px] uppercase tracking-wider text-muted-foreground sm:block">
-        {row.tag}
-      </span>
+    <div aria-hidden className="relative mx-auto mt-7 h-32 w-32">
+      <span className="radar-ring absolute inset-0" />
+      <span className="radar-ring absolute inset-[18%]" />
+      <span className="radar-ring absolute inset-[36%]" />
+      <span className="radar-sweep absolute inset-0" />
+      <span className="radar-blip left-[24%] top-[30%]" style={{ animationDelay: '0.4s' }} />
+      <span className="radar-blip left-[62%] top-[22%]" style={{ animationDelay: '1.3s' }} />
+      <span className="radar-blip left-[55%] top-[64%]" style={{ animationDelay: '2.1s' }} />
+      <span className="radar-crosshair" />
     </div>
   )
 }
 
-export function FeatureIndex() {
-  let n = 0
+const MATCHES = [
+  { role: 'ML Engineer — Zürich', fit: 0.91, note: 'visa sponsored' },
+  { role: 'Research Asst — ETH', fit: 0.84, note: 'funded' },
+  { role: 'Data Scientist — Berlin', fit: 0.76, note: 'hybrid' },
+]
+
+function CareerVisual() {
   return (
-    <section id="platform" className="scroll-mt-20 py-20 sm:py-24">
+    <div aria-hidden className="mt-7 flex flex-col gap-3">
+      {MATCHES.map((m, i) => (
+        <div key={m.role} className="flex items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-baseline justify-between gap-2">
+              <p className="truncate text-[12.5px] font-medium text-foreground">{m.role}</p>
+              <span
+                className="shrink-0 font-mono text-[11px] font-semibold tabular-nums"
+                style={{ color: 'var(--chart-3)' }}
+              >
+                {Math.round(m.fit * 100)}%
+              </span>
+            </div>
+            <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
+              <div
+                className="bar-fill h-full rounded-full"
+                style={{
+                  ['--w' as string]: m.fit,
+                  ['--wd' as string]: `${0.25 + i * 0.18}s`,
+                  background: 'var(--chart-3)',
+                }}
+              />
+            </div>
+          </div>
+          <span className="shrink-0 rounded border border-border px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wide text-muted-foreground">
+            {m.note}
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function ToolCard({ tool, index }: { tool: Tool; index: number }) {
+  return (
+    <div
+      {...spotlightHandlers()}
+      className={cn(
+        'tool-card spot group relative flex h-full flex-col overflow-hidden rounded-2xl border border-border bg-card p-6 sm:p-7'
+      )}
+      style={{ ['--tool-accent' as string]: tool.accent }}
+    >
+      {/* hover corner glow */}
+      <span aria-hidden className="tool-glow" />
+
+      <div className="flex items-start justify-between gap-3">
+        <span className="tool-tile inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border">
+          {tool.icon}
+        </span>
+        <span className="flex items-center gap-2">
+          <span className="font-mono text-[10px] text-muted-foreground/50 tabular-nums">
+            {String(index + 1).padStart(2, '0')}
+          </span>
+          <span className="tool-tag rounded-full border px-2.5 py-1 font-mono text-[9.5px] uppercase tracking-[0.14em]">
+            {tool.tag}
+          </span>
+        </span>
+      </div>
+
+      <h3 className="mt-5 text-[17px] font-semibold tracking-[-0.015em] text-foreground">
+        {tool.title}
+      </h3>
+      <p className="mt-1.5 text-[14px] leading-relaxed text-muted-foreground">{tool.desc}</p>
+
+      {tool.featured === 'radar' ? <RadarVisual /> : null}
+      {tool.featured === 'career' ? <CareerVisual /> : null}
+    </div>
+  )
+}
+
+export function PlatformBento() {
+  return (
+    <section id="platform" className="relative scroll-mt-20 py-24 sm:py-32">
       <div className="mx-auto max-w-6xl px-5 sm:px-8">
         <SectionHeader
           index="01"
           label="Platform"
-          title={<>Ten tools that used to be ten apps.</>}
-          lede="Everything below ships in one account, syncs across your devices and works offline."
+          accent="var(--chart-1)"
+          title={
+            <>
+              Ten tools that used to be{' '}
+              <em className="font-display italic text-[var(--chart-1)]">ten apps.</em>
+            </>
+          }
+          lede="One account, every module unlocked, synced across devices and ready offline. Stop paying rent on chaos."
         />
 
-        <div className="mt-12 grid gap-x-12 gap-y-12 lg:grid-cols-2">
-          {GROUPS.map((g, gi) => (
-            <Reveal key={g.label} delay={gi * 90}>
-              <div>
-                <div className="mb-2 flex items-baseline justify-between border-b border-foreground/20 pb-2">
-                  <h3 className="font-mono text-[10.5px] uppercase tracking-[0.18em] text-foreground">
-                    {g.label}
-                  </h3>
-                  <span className="font-mono text-[10px] text-muted-foreground">
-                    {String(g.rows.length).padStart(2, '0')} modules
-                  </span>
-                </div>
-                <div>
-                  {g.rows.map((r) => (
-                    <Row key={r.title} row={r} index={n++} />
-                  ))}
-                </div>
-              </div>
+        <div className="mt-14 grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-6">
+          {TOOLS.map((t, i) => (
+            <Reveal key={t.title} delay={(i % 3) * 90} className={cn('h-full', t.span)}>
+              <ToolCard tool={t} index={i} />
             </Reveal>
           ))}
         </div>
-
-        {/* scholarship note — inline strip, no cute card */}
-        <Reveal delay={80}>
-          <p className="mt-10 flex items-center gap-2 border-t border-border pt-6 text-[13px] text-muted-foreground">
-            <Command className="h-3.5 w-3.5" />
-            Plus a focus timer, AI copilot dock and command bar — woven through every view, not bolted on.
-          </p>
-        </Reveal>
       </div>
     </section>
   )
@@ -211,25 +287,42 @@ function StatCell({
   label: string
   started: boolean
 }) {
-  const counted = useCountUp(value ?? 0, started && value !== undefined)
   return (
-    <div className="flex flex-col items-center gap-1 py-6 sm:py-8">
-      <span className="font-mono text-[1.7rem] tracking-tight text-foreground sm:text-4xl">
-        {plain ?? counted}
-        {suffix}
-      </span>
-      <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+    <div className="flex flex-col items-center gap-1.5 py-8 sm:py-10">
+      <StatNumber value={value} suffix={suffix} plain={plain} started={started} />
+      <span className="font-mono text-[10.5px] uppercase tracking-[0.18em] text-muted-foreground">
         {label}
       </span>
     </div>
   )
 }
 
-export function StatLine() {
-  const ref = useRef<HTMLDivElement>(null)
-  const [started, setStarted] = useState(false)
+function StatNumber({
+  value,
+  suffix,
+  plain,
+  started,
+}: {
+  value?: number
+  suffix?: string
+  plain?: string
+  started: boolean
+}) {
+  const counted = useCountUp(value ?? 0, started && value !== undefined)
+  return (
+    <span className="font-display text-[2.5rem] font-medium leading-none tracking-[-0.02em] text-foreground tabular-nums sm:text-[3.4rem]">
+      {plain ?? counted}
+      {suffix ? <span className="text-[var(--chart-1)]">{suffix}</span> : null}
+    </span>
+  )
+}
 
-  useEffect(() => {
+
+export function StatLine() {
+  const ref = React.useRef<HTMLDivElement>(null)
+  const [started, setStarted] = React.useState(false)
+
+  React.useEffect(() => {
     const el = ref.current
     if (!el) return
     const io = new IntersectionObserver(

@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { CortexMark } from '@/components/logo'
-import { Reveal } from './landing'
+import { Reveal, SectionHeader } from './landing'
 import { ArrowRight, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -31,31 +31,31 @@ const FAQS = [
 
 function FaqRow({ q, a, open, onToggle }: { q: string; a: string; open: boolean; onToggle: () => void }) {
   return (
-    <div className="border-b border-border/70">
+    <div className="border-b border-border/70 last:border-0">
       <button
         type="button"
         onClick={onToggle}
         aria-expanded={open}
-        className="group flex w-full items-center justify-between gap-4 py-4 text-left"
+        className="group flex w-full items-center justify-between gap-4 py-5 text-left"
       >
-        <span className="text-[15px] font-medium tracking-[-0.01em] text-foreground transition-colors group-hover:text-primary">
+        <span className="text-[15.5px] font-medium tracking-[-0.01em] text-foreground transition-colors group-hover:text-primary">
           {q}
         </span>
         <Plus
           className={cn(
-            'h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-300',
-            open && 'rotate-45'
+            'h-4.5 w-4.5 shrink-0 text-muted-foreground transition-transform duration-300',
+            open && 'rotate-45 text-primary'
           )}
         />
       </button>
       <div
         className={cn(
           'grid transition-all duration-300 ease-out',
-          open ? 'grid-rows-[1fr] pb-4 opacity-100' : 'grid-rows-[0fr] opacity-0'
+          open ? 'grid-rows-[1fr] pb-5 opacity-100' : 'grid-rows-[0fr] opacity-0'
         )}
       >
         <div className="overflow-hidden">
-          <p className="max-w-xl text-[13.5px] leading-relaxed text-muted-foreground">{a}</p>
+          <p className="max-w-xl text-[14.5px] leading-relaxed text-muted-foreground">{a}</p>
         </div>
       </div>
     </div>
@@ -66,22 +66,24 @@ export function Faq() {
   const [open, setOpen] = useState(0)
 
   return (
-    <section id="faq" className="scroll-mt-20 border-t border-border/70 py-20 sm:py-24">
+    <section id="faq" className="scroll-mt-20 py-24 sm:py-32">
       <div className="mx-auto max-w-6xl px-5 sm:px-8">
-        <div className="grid gap-12 lg:grid-cols-[280px_1fr] lg:gap-20">
-          <div>
-            <p className="font-mono text-[11px] text-muted-foreground">04</p>
-            <h2 className="mt-3 text-[1.65rem] font-semibold leading-[1.15] tracking-[-0.022em] text-foreground sm:text-[2.1rem]">
-              Questions,
-              <br />
-              answered.
-            </h2>
-            <p className="mt-3 text-[13.5px] leading-relaxed text-muted-foreground">
-              Something else on your mind? The copilot reads the docs.
-            </p>
-          </div>
-          <Reveal delay={80}>
-            <div className="border-t border-border/70">
+        <div className="grid gap-12 lg:grid-cols-[380px_1fr] lg:gap-20">
+          <SectionHeader
+            index="04"
+            label="FAQ"
+            accent="var(--chart-4)"
+            title={
+              <>
+                Questions,
+                <br />
+                <em className="font-display italic text-[var(--chart-4)]">answered.</em>
+              </>
+            }
+            lede="Something else on your mind? The copilot reads the docs."
+          />
+          <Reveal delay={80} className="lg:pt-3">
+            <div className="rounded-2xl border border-border bg-card px-6 sm:px-8">
               {FAQS.map((f, i) => (
                 <FaqRow
                   key={i}
@@ -113,19 +115,19 @@ export function FinalCta({ authed }: { authed: boolean }) {
 
       <div className="relative mx-auto flex max-w-6xl flex-col items-center px-5 text-center sm:px-8">
         <Reveal>
-          <h2 className="max-w-2xl text-4xl font-semibold leading-[1.05] tracking-[-0.035em] text-foreground sm:text-6xl">
+          <h2 className="max-w-2xl font-display text-[clamp(2.6rem,6vw,4.5rem)] font-medium leading-[1.04] tracking-[-0.03em] text-foreground">
             Your second brain,
             <br />
-            <span className="text-muted-foreground">ready in minutes.</span>
+            <em className="italic text-[var(--chart-1)]">ready in minutes.</em>
           </h2>
         </Reveal>
         <Reveal delay={100}>
-          <p className="mt-4 max-w-sm text-[15px] leading-relaxed text-muted-foreground">
+          <p className="mt-5 max-w-md text-[16.5px] leading-relaxed text-muted-foreground">
             Set it up once. Let it compound for years.
           </p>
         </Reveal>
-        <Reveal delay={180} className="mt-8">
-          <Button asChild className="sheen h-11 rounded-lg px-6 text-[14.5px]">
+        <Reveal delay={180} className="mt-9">
+          <Button asChild className="sheen h-12 rounded-lg px-7 text-[15px]">
             <Link href={authed ? '/app' : '/signup'}>
               {authed ? 'Open Cortex' : 'Start for free'}
               <ArrowRight className="ml-1 h-4 w-4" />
