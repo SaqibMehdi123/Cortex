@@ -73,3 +73,8 @@ server.log
 /mini-services/
 /tests/
 /Caddyfile
+# agent dev artifacts
+/agent-ctx
+/worklog.md
+/dev.log
+/server.log

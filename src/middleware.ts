@@ -7,7 +7,7 @@ import { SESSION_COOKIE, verifySessionToken } from '@/lib/auth'
 // Excluded: the auth pages themselves, the auth endpoints, the Google OAuth
 // integration routes (their callback must work independently), and static files.
 
-const PUBLIC_PAGES = new Set(['/login', '/signup', '/verify', '/forgot-password'])
+const PUBLIC_PAGES = new Set(['/', '/login', '/signup', '/verify', '/forgot-password'])
 const PUBLIC_APIS = [
   '/api/auth/register',
   '/api/auth/login',

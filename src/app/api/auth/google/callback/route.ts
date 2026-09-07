@@ -11,8 +11,8 @@ export async function GET(req: NextRequest) {
   const error = new URL(req.url).searchParams.get('error')
   const state = new URL(req.url).searchParams.get('state') ?? ''
 
-  if (error) return NextResponse.redirect(`${origin}/?google=denied:${encodeURIComponent(error)}`)
-  if (!code) return NextResponse.redirect(`${origin}/?google=error:no_code`)
+  if (error) return NextResponse.redirect(`${origin}/app?google=denied:${encodeURIComponent(error)}`)
+  if (!code) return NextResponse.redirect(`${origin}/app?google=error:no_code`)
 
   // The user id that started the flow rides in `state`; fall back to the
   // current session cookie (same browser) if the state is malformed.
@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
   }
   if (!stateUserId) {
     const sessionUser = await getSessionUser()
-    if (!sessionUser) return NextResponse.redirect(`${origin}/?google=error:no_session`)
+    if (!sessionUser) return NextResponse.redirect(`${origin}/app?google=error:no_session`)
     stateUserId = sessionUser.id
   }
 
@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
     if (!tokenRes.ok) {
       const detail = await tokenRes.text()
       console.error('google token exchange failed', detail.slice(0, 300))
-      return NextResponse.redirect(`${origin}/?google=error:token_exchange`)
+      return NextResponse.redirect(`${origin}/app?google=error:token_exchange`)
     }
     const tokens = (await tokenRes.json()) as {
       access_token: string
@@ -81,9 +81,9 @@ export async function GET(req: NextRequest) {
       },
     })
 
-    return NextResponse.redirect(`${origin}/?google=connected${name ? `&name=${encodeURIComponent(name)}` : ''}`)
+    return NextResponse.redirect(`${origin}/app?google=connected${name ? `&name=${encodeURIComponent(name)}` : ''}`)
   } catch (e) {
     console.error('GET /api/auth/google/callback error', e)
-    return NextResponse.redirect(`${origin}/?google=error:callback_failed`)
+    return NextResponse.redirect(`${origin}/app?google=error:callback_failed`)
   }
 }

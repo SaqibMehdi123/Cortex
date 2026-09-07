@@ -1,55 +1,9 @@
-'use client'
+import { getSessionUser } from '@/lib/auth-server'
+import { Landing } from '@/components/landing/landing'
 
-import { AppShell } from '@/components/app-shell'
-import { CommandBar } from '@/components/command-bar'
-import { CopilotDock } from '@/components/copilot-dock'
-import { QuickCapture } from '@/components/quick-capture'
-import { FocusTimer } from '@/components/focus-timer'
-import { ReaderView } from '@/components/views/reader'
-import { DashboardView } from '@/components/views/dashboard'
-import { LibraryView } from '@/components/views/library'
-import { PlansView } from '@/components/views/plans'
-import { GoalsView } from '@/components/views/goals'
-import { NewsView } from '@/components/views/news'
-import { CareerView } from '@/components/views/career'
-import { MindmapView } from '@/components/views/mindmap'
-import { FlashcardsView } from '@/components/views/flashcards'
-import { AnalyticsView } from '@/components/views/analytics'
-import { SettingsView } from '@/components/views/settings'
-import { useUI } from '@/lib/nav-config'
-
-export default function Home() {
-  const view = useUI((s) => s.view)
-  const readerDocId = useUI((s) => s.readerDocId)
-
-  return (
-    <>
-      <AppShell>
-        {/* Reader is a section of the app (not a full-window overlay):
-            the sidebar and site chrome stay visible around it. */}
-        {readerDocId ? (
-          <ReaderView />
-        ) : (
-          <>
-            {view === 'dashboard' && <DashboardView />}
-            {view === 'library' && <LibraryView />}
-            {view === 'plans' && <PlansView />}
-            {view === 'goals' && <GoalsView />}
-            {view === 'news' && <NewsView />}
-            {view === 'career' && <CareerView />}
-            {view === 'mindmap' && <MindmapView />}
-            {view === 'flashcards' && <FlashcardsView />}
-            {view === 'analytics' && <AnalyticsView />}
-            {view === 'settings' && <SettingsView />}
-          </>
-        )}
-      </AppShell>
-
-      {/* Overlays */}
-      <CopilotDock />
-      <QuickCapture />
-      <FocusTimer />
-      <CommandBar />
-    </>
-  )
+// Public marketing landing page. Signed-in visitors still see it (so the page
+// stays shareable) but every CTA points straight into the workspace at /app.
+export default async function HomePage() {
+  const user = await getSessionUser()
+  return <Landing authed={!!user} firstName={user?.name?.split(' ')[0] ?? null} />
 }

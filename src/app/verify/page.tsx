@@ -56,9 +56,9 @@ function VerifyForm() {
     try {
       const res = await api.post<{ alreadyVerified?: boolean }>('/api/auth/verify-email', { email, code })
       if (res.alreadyVerified) {
-        router.replace('/')
+        router.replace('/app')
       } else {
-        router.replace('/')
+        router.replace('/app')
       }
       router.refresh()
     } catch (err) {

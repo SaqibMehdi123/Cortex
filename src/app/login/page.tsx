@@ -35,7 +35,7 @@ function LoginForm() {
     try {
       await api.post('/api/auth/login', { email, password })
       const next = params.get('next')
-      router.replace(next && next.startsWith('/') ? next : '/')
+      router.replace(next && next.startsWith('/') ? next : '/app')
       router.refresh()
     } catch (err) {
       // 403 = the account never finished email verification — offer a way out.
