@@ -34,6 +34,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const setCaptureOpen = useUI((s) => s.setCaptureOpen)
   const setCopilotOpen = useUI((s) => s.setCopilotOpen)
   const copilotOpen = useUI((s) => s.copilotOpen)
+  const readerDocId = useUI((s) => s.readerDocId)
+  const setReaderChatOpen = useUI((s) => s.setReaderChatOpen)
   const mobileMoreOpen = useUI((s) => s.mobileMoreOpen)
   const setMobileMoreOpen = useUI((s) => s.setMobileMoreOpen)
   const { resolvedTheme, setTheme } = useTheme()
@@ -349,7 +351,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {/* ── Mobile FABs ── */}
         <div className="fixed bottom-20 right-4 z-40 flex flex-col gap-3 lg:hidden">
           <button
-            onClick={() => setCopilotOpen(true)}
+            onClick={() => (readerDocId ? setReaderChatOpen(true) : setCopilotOpen(true))}
             className="flex h-12 w-12 items-center justify-center rounded-full border bg-card shadow-soft transition-transform active:scale-95"
             aria-label="Open AI Copilot"
           >

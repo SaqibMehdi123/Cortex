@@ -16,6 +16,9 @@ interface UIState {
   focusTask: { id: string; title: string; goalId?: string | null } | null
   /** one-shot page jump for the reader (Copilot citation → open the book at that page) */
   readerJumpPage: number | null
+  /** minimal in-reader AI popup (book open → the Copilot icon opens this
+      instead of the right dock; only ever shown via an icon click) */
+  readerChatOpen: boolean
   /** true once the persisted slice (view / readerDocId) has been restored on this tab */
   hydrated: boolean
   setView: (v: ViewKey) => void
@@ -28,6 +31,7 @@ interface UIState {
   setMobileMoreOpen: (open: boolean) => void
   setFocusTask: (t: { id: string; title: string; goalId?: string | null } | null) => void
   setReaderJumpPage: (p: number | null) => void
+  setReaderChatOpen: (open: boolean) => void
 }
 
 // `view` + `readerDocId` + sidebarCollapsed survive a reload so the workspace
@@ -48,10 +52,11 @@ export const useUI = create<UIState>()(
       mobileMoreOpen: false,
       focusTask: null,
       readerJumpPage: null,
+      readerChatOpen: false,
       hydrated: false,
-      setView: (v) => set({ view: v, mobileMoreOpen: false, readerDocId: null }),
+      setView: (v) => set({ view: v, mobileMoreOpen: false, readerDocId: null, readerChatOpen: false }),
       openReader: (docId) => set({ readerDocId: docId }),
-      closeReader: () => set({ readerDocId: null }),
+      closeReader: () => set({ readerDocId: null, readerChatOpen: false }),
       setCopilotOpen: (open) => set({ copilotOpen: open }),
       setCaptureOpen: (open, type) => set({ captureOpen: open, captureType: type ?? 'note' }),
       setCommandOpen: (open) => set({ commandOpen: open }),
@@ -59,6 +64,7 @@ export const useUI = create<UIState>()(
       setMobileMoreOpen: (open) => set({ mobileMoreOpen: open }),
       setFocusTask: (t) => set({ focusTask: t }),
       setReaderJumpPage: (p) => set({ readerJumpPage: p }),
+      setReaderChatOpen: (open) => set({ readerChatOpen: open }),
     }),
     {
       name: 'cortex-ui',

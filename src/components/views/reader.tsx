@@ -155,13 +155,14 @@ export function ReaderView() {
   const viewerRef = useRef<PdfViewerHandle | null>(null)
   const jumpNonce = useRef(0)
   const [pdfJump, setPdfJump] = useState<{ page: number; nonce: number } | null>(null)
-  // Fullscreen reading (state lives in the pdf viewer) + the AI popup that
-  // floats above the immersive overlay. The popup reuses the rail's chat
-  // body, so messages/input/citations are the exact same conversation.
+  // Fullscreen reading (state lives in the pdf viewer) + the minimal AI chat
+  // popup, driven by the shared `readerChatOpen` store flag: with a book open
+  // the app-level Copilot icons open THIS instead of the right dock, and the
+  // fullscreen overlay carries its own toggle (app chrome is covered there).
+  // The popup reuses the rail's chat body — one conversation, every host.
   const [pdfFullscreen, setPdfFullscreen] = useState(false)
-  const [fsChatOpen, setFsChatOpen] = useState(false)
-  const fsChatOpenRef = useRef(false)
-  fsChatOpenRef.current = fsChatOpen
+  const readerChatOpen = useUI((s) => s.readerChatOpen)
+  const setReaderChatOpen = useUI((s) => s.setReaderChatOpen)
 
   const isPdf = !!doc?.filePath
 
@@ -386,19 +387,19 @@ export function ReaderView() {
     setReaderJumpPage(null)
   }, [readerJumpPage, doc, isPdf, applyPdfJump, setReaderJumpPage])
 
-  // ── Fullscreen AI panel ──────────────────────────────────────────
-  // The viewer reports fullscreen transitions; the popup must die with the
-  // immersive mode so state never leaks into the normal view.
+  // ── Minimal AI popup (reader mode) ─────────────────────────────
+  // The viewer reports fullscreen transitions. The popup itself is store-
+  // driven and survives the normal ↔ fullscreen swap — same conversation,
+  // only the anchor point changes.
   const handlePdfFullscreen = useCallback((fs: boolean) => {
     setPdfFullscreen(fs)
-    if (!fs) setFsChatOpen(false)
   }, [])
 
   // Esc while fullscreen: first press minimizes the AI popup (consumed), a
   // second press actually leaves fullscreen — handled by the viewer's guard
   const fsEscapeGuard = useCallback(() => {
-    if (!fsChatOpenRef.current) return false
-    setFsChatOpen(false)
+    if (!useUI.getState().readerChatOpen) return false
+    useUI.getState().setReaderChatOpen(false)
     return true
   }, [])
 
@@ -1011,36 +1012,58 @@ export function ReaderView() {
         </SheetContent>
       </Sheet>
 
-      {/* ── Fullscreen AI panel ──
-          The immersive reader itself is portaled to <body> at z-[60]; this
-          overlay floats above it (z-[70]) with a single AI toggle. Tap the
-          icon → the chat popup opens (same conversation as the side rail);
-          the icon becomes a cross → tap it to minimize. The wrapper is
-          pointer-events-none so PDF scrolling/selection underneath is never
-          blocked; only the popup and the toggle take input. */}
+      {/* ── Minimal AI chat popup (book open) ──
+          Opens ONLY from a Copilot icon click: the app-level Copilot FABs
+          (mobile + desktop) set `readerChatOpen` while a book is open, so
+          the right-side dock / full-screen sheet never fights the reader.
+          Same conversation as the side rail (shared chatBody) and citation
+          chips jump the pages behind it. The wrapper is pointer-events-none
+          so the PDF underneath never loses scrolling or selection. */}
+      {doc && readerChatOpen && createPortal(
+        <div className={cn('pointer-events-none fixed inset-0', pdfFullscreen ? 'z-[70]' : 'z-40')}>
+          <div
+            className={cn(
+              'anim-pop pointer-events-auto absolute flex w-[min(420px,calc(100vw-2rem))] flex-col overflow-hidden rounded-xl border bg-popover shadow-xl',
+              // normal view: clear the floating Copilot / Quick-capture
+              // buttons; fullscreen: sit just above the in-overlay toggle
+              pdfFullscreen
+                ? 'bottom-[4.25rem] right-4 h-[min(560px,calc(100dvh-7.5rem))] sm:right-5'
+                : 'bottom-[13rem] right-4 h-[min(560px,calc(100dvh-15rem))] lg:bottom-[5.5rem] lg:right-5 lg:h-[min(560px,calc(100dvh-9rem))]',
+            )}
+            role="dialog"
+            aria-label="AI chat"
+          >
+            <div className="flex shrink-0 items-center gap-2 border-b px-3 py-2.5">
+              <Sparkles className="h-3.5 w-3.5 shrink-0 text-primary" />
+              <p className="shrink-0 text-xs font-semibold">Ask AI</p>
+              <p className="min-w-0 flex-1 truncate text-right text-[10px] text-muted-foreground">{doc.title}</p>
+              <button
+                onClick={() => setReaderChatOpen(false)}
+                aria-label="Minimize AI chat"
+                title="Minimize"
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <div className="flex min-h-0 flex-1 flex-col">{chatBody}</div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Fullscreen Copilot toggle — the app-level icons are covered by the
+          immersive overlay, so fullscreen carries its own (same Sparkles
+          icon): click opens the popup, the cross minimizes it */}
       {pdfFullscreen && doc && createPortal(
         <div className="pointer-events-none fixed inset-0 z-[70]">
-          {fsChatOpen && (
-            <div
-              className="anim-pop pointer-events-auto absolute bottom-[4.25rem] right-4 flex h-[min(560px,calc(100dvh-7.5rem))] w-[min(420px,calc(100vw-2rem))] flex-col overflow-hidden rounded-xl border bg-popover shadow-xl sm:right-5"
-              role="dialog"
-              aria-label="AI chat"
-            >
-              <div className="flex shrink-0 items-center gap-2 border-b px-3 py-2.5">
-                <Sparkles className="h-3.5 w-3.5 shrink-0 text-primary" />
-                <p className="shrink-0 text-xs font-semibold">Ask AI</p>
-                <p className="min-w-0 flex-1 truncate text-right text-[10px] text-muted-foreground">{doc.title}</p>
-              </div>
-              <div className="flex min-h-0 flex-1 flex-col">{chatBody}</div>
-            </div>
-          )}
           <button
-            onClick={() => setFsChatOpen((o) => !o)}
-            aria-label={fsChatOpen ? 'Minimize AI chat' : 'Open AI chat'}
-            title={fsChatOpen ? 'Minimize AI chat' : 'Ask AI about this book'}
+            onClick={() => setReaderChatOpen(!readerChatOpen)}
+            aria-label={readerChatOpen ? 'Minimize AI chat' : 'Open AI chat'}
+            title={readerChatOpen ? 'Minimize AI chat' : 'Ask AI about this book'}
             className="pointer-events-auto absolute bottom-5 right-4 flex h-11 w-11 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30 transition-transform hover:scale-105 active:scale-95 sm:right-5"
           >
-            {fsChatOpen ? <X className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
+            {readerChatOpen ? <X className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
           </button>
         </div>,
         document.body

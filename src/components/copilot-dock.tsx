@@ -87,6 +87,8 @@ function MarkdownWithCitations({
 export function CopilotDock() {
   const copilotOpen = useUI((s) => s.copilotOpen)
   const setCopilotOpen = useUI((s) => s.setCopilotOpen)
+  const readerDocId = useUI((s) => s.readerDocId)
+  const setReaderChatOpen = useUI((s) => s.setReaderChatOpen)
   const setView = useUI((s) => s.setView)
   const openReader = useUI((s) => s.openReader)
   const setReaderJumpPage = useUIStore((s) => s.setReaderJumpPage)
@@ -277,10 +279,11 @@ export function CopilotDock() {
         </SheetContent>
       </Sheet>
 
-      {/* Floating open button (desktop, when closed) */}
+      {/* Floating open button (desktop, when closed). With a book open the
+          icon opens the minimal in-reader chat popup instead of this dock. */}
       {!copilotOpen && (
         <button
-          onClick={() => setCopilotOpen(true)}
+          onClick={() => (readerDocId ? setReaderChatOpen(true) : setCopilotOpen(true))}
           className="fixed bottom-6 right-6 z-30 hidden h-12 w-12 items-center justify-center rounded-full border bg-card text-primary shadow-soft transition-transform hover:scale-105 active:scale-95 xl:flex"
           aria-label="Open AI Copilot"
         >
