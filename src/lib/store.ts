@@ -19,6 +19,9 @@ interface UIState {
   /** minimal in-reader AI popup (book open → the Copilot icon opens this
       instead of the right dock; only ever shown via an icon click) */
   readerChatOpen: boolean
+  /** one-shot trigger: the floating vertical-stack mindmap icon (app shell)
+      asks the mounted reader to open its "Add to mindmap" dialog */
+  readerMindmapOpen: boolean
   /** true once the persisted slice (view / readerDocId) has been restored on this tab */
   hydrated: boolean
   setView: (v: ViewKey) => void
@@ -32,6 +35,7 @@ interface UIState {
   setFocusTask: (t: { id: string; title: string; goalId?: string | null } | null) => void
   setReaderJumpPage: (p: number | null) => void
   setReaderChatOpen: (open: boolean) => void
+  setReaderMindmapOpen: (open: boolean) => void
 }
 
 // `view` + `readerDocId` + sidebarCollapsed survive a reload so the workspace
@@ -53,10 +57,11 @@ export const useUI = create<UIState>()(
       focusTask: null,
       readerJumpPage: null,
       readerChatOpen: false,
+      readerMindmapOpen: false,
       hydrated: false,
-      setView: (v) => set({ view: v, mobileMoreOpen: false, readerDocId: null, readerChatOpen: false }),
+      setView: (v) => set({ view: v, mobileMoreOpen: false, readerDocId: null, readerChatOpen: false, readerMindmapOpen: false }),
       openReader: (docId) => set({ readerDocId: docId }),
-      closeReader: () => set({ readerDocId: null, readerChatOpen: false }),
+      closeReader: () => set({ readerDocId: null, readerChatOpen: false, readerMindmapOpen: false }),
       setCopilotOpen: (open) => set({ copilotOpen: open }),
       setCaptureOpen: (open, type) => set({ captureOpen: open, captureType: type ?? 'note' }),
       setCommandOpen: (open) => set({ commandOpen: open }),
@@ -65,6 +70,7 @@ export const useUI = create<UIState>()(
       setFocusTask: (t) => set({ focusTask: t }),
       setReaderJumpPage: (p) => set({ readerJumpPage: p }),
       setReaderChatOpen: (open) => set({ readerChatOpen: open }),
+      setReaderMindmapOpen: (open) => set({ readerMindmapOpen: open }),
     }),
     {
       name: 'cortex-ui',

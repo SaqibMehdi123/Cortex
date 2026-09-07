@@ -165,6 +165,16 @@ export function ReaderView() {
   const [pdfFullscreen, setPdfFullscreen] = useState(false)
   const readerChatOpen = useUI((s) => s.readerChatOpen)
   const setReaderChatOpen = useUI((s) => s.setReaderChatOpen)
+  // The floating vertical icon stack (app shell) hosts the mindmap entry —
+  // it flips this one-shot store flag; the mounted reader opens the dialog.
+  const readerMindmapTrigger = useUI((s) => s.readerMindmapOpen)
+  const setReaderMindmapOpen = useUI((s) => s.setReaderMindmapOpen)
+  useEffect(() => {
+    if (readerMindmapTrigger) {
+      setReaderMindmapOpen(false)
+      setMindmapOpen(true)
+    }
+  }, [readerMindmapTrigger, setReaderMindmapOpen])
 
   const isPdf = !!doc?.filePath
 
@@ -681,16 +691,6 @@ export function ReaderView() {
             rows={1}
             aria-label="Ask AI"
           />
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-11 w-11 shrink-0"
-            onClick={() => setMindmapOpen(true)}
-            aria-label="Create mindmap from this document"
-            title="Create mindmap"
-          >
-            <Share2 className="h-4 w-4" />
-          </Button>
           <Button size="icon" className="h-11 w-11 shrink-0" onClick={() => sendAI()} disabled={aiBusy || !aiInput.trim()} aria-label="Send question">
             <Send className="h-4 w-4" />
           </Button>
@@ -930,18 +930,6 @@ export function ReaderView() {
                 jump={pdfJump}
                 onFullscreenChange={handlePdfFullscreen}
                 escapeGuard={fsEscapeGuard}
-                toolbarAction={
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
-                    onClick={() => setMindmapOpen(true)}
-                    aria-label="Create mindmap from this document"
-                    title="Create mindmap"
-                  >
-                    <Share2 className="h-4 w-4" />
-                  </Button>
-                }
               />
             </div>
           ) : (
@@ -1041,11 +1029,12 @@ export function ReaderView() {
           <div
             className={cn(
               'anim-pop pointer-events-auto absolute flex w-[min(420px,calc(100vw-2rem))] flex-col overflow-hidden rounded-xl border bg-popover shadow-xl',
-              // normal view: clear the floating Copilot / Quick-capture
-              // buttons; fullscreen: sit just above the in-overlay toggle
+              // normal view: clear the floating vertical icon stack
+              // (mindmap / Copilot / Quick capture); fullscreen: sit just
+              // above the in-overlay toggle
               pdfFullscreen
                 ? 'bottom-[4.25rem] right-4 h-[min(560px,calc(100dvh-7.5rem))] sm:right-5'
-                : 'bottom-[13rem] right-4 h-[min(560px,calc(100dvh-15rem))] lg:bottom-[5.5rem] lg:right-5 lg:h-[min(560px,calc(100dvh-9rem))]',
+                : 'bottom-[17rem] right-4 h-[min(560px,calc(100dvh-19rem))] lg:bottom-[5.5rem] lg:right-5 lg:h-[min(560px,calc(100dvh-9rem))] xl:bottom-[13rem] xl:h-[min(560px,calc(100dvh-15rem))]',
             )}
             role="dialog"
             aria-label="AI chat"
