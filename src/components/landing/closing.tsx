@@ -1,11 +1,11 @@
 'use client'
 
+import { FaArrowRight, FaPlus } from 'react-icons/fa6'
 import { useState } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { CortexMark } from '@/components/logo'
 import { Reveal, SectionHeader } from './landing'
-import { ArrowRight, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 /* ── FAQ — hairline rows with rotating plus, no accordion chrome ──────── */
@@ -41,7 +41,7 @@ function FaqRow({ q, a, open, onToggle }: { q: string; a: string; open: boolean;
         <span className="text-[15.5px] font-medium tracking-[-0.01em] text-foreground transition-colors group-hover:text-primary">
           {q}
         </span>
-        <Plus
+        <FaPlus
           className={cn(
             'h-4.5 w-4.5 shrink-0 text-muted-foreground transition-transform duration-300',
             open && 'rotate-45 text-primary'
@@ -130,7 +130,7 @@ export function FinalCta({ authed }: { authed: boolean }) {
           <Button asChild className="sheen h-12 rounded-lg px-7 text-[15px]">
             <Link href={authed ? '/app' : '/signup'}>
               {authed ? 'Open Cortex' : 'Start for free'}
-              <ArrowRight className="ml-1 h-4 w-4" />
+              <FaArrowRight className="ml-1 h-4 w-4" />
             </Link>
           </Button>
         </Reveal>

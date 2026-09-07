@@ -1,5 +1,6 @@
 'use client'
 
+import { FaArrowRight, FaCircleCheck, FaKey, FaSpinner, FaTriangleExclamation } from 'react-icons/fa6'
 import { Suspense, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -7,7 +8,6 @@ import { CortexLogo } from '@/components/logo'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Loader2, KeyRound, ArrowRight, CheckCircle2, MailWarning } from 'lucide-react'
 import { api } from '@/lib/client'
 
 export default function ForgotPasswordPage() {
@@ -123,7 +123,7 @@ function ForgotPasswordForm() {
           {step === 'request' && (
             <>
               <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                <KeyRound className="h-5 w-5 text-primary" />
+                <FaKey className="h-5 w-5 text-primary" />
               </div>
               <h1 className="font-display text-xl">Forgot your password?</h1>
               <p className="mt-0.5 text-xs text-muted-foreground">
@@ -153,7 +153,7 @@ function ForgotPasswordForm() {
                 )}
                 {error && <p className="rounded-lg bg-danger/10 px-3 py-2 text-xs text-danger">{error}</p>}
                 <Button type="submit" disabled={busy} className="w-full">
-                  {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <ArrowRight className="mr-1.5 h-4 w-4" />}
+                  {busy ? <FaSpinner className="mr-1.5 h-4 w-4 animate-spin" /> : <FaArrowRight className="mr-1.5 h-4 w-4" />}
                   Send reset code
                 </Button>
               </form>
@@ -222,7 +222,7 @@ function ForgotPasswordForm() {
                 )}
                 {mailIssue === 'send_failed' && (
                   <div className="flex items-start gap-2 rounded-lg bg-danger/10 px-3 py-2.5 text-xs leading-relaxed text-danger">
-                    <MailWarning className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    <FaTriangleExclamation className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                     <span>The email couldn't be sent — the mail provider rejected it. Check the server's mail settings and try again.</span>
                   </div>
                 )}
@@ -235,7 +235,7 @@ function ForgotPasswordForm() {
                 {error && <p className="rounded-lg bg-danger/10 px-3 py-2 text-xs text-danger">{error}</p>}
 
                 <Button type="submit" disabled={busy || code.length !== 6} className="w-full">
-                  {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <ArrowRight className="mr-1.5 h-4 w-4" />}
+                  {busy ? <FaSpinner className="mr-1.5 h-4 w-4 animate-spin" /> : <FaArrowRight className="mr-1.5 h-4 w-4" />}
                   Reset password
                 </Button>
               </form>
@@ -257,7 +257,7 @@ function ForgotPasswordForm() {
           {step === 'done' && (
             <>
               <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500/10">
-                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                <FaCircleCheck className="h-5 w-5 text-emerald-600" />
               </div>
               <h1 className="font-display text-xl">Password updated</h1>
               <p className="mt-0.5 text-xs text-muted-foreground">

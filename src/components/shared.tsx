@@ -1,11 +1,11 @@
 'use client'
 
+import { FaCheck, FaClock } from 'react-icons/fa6'
 import { cn } from '@/lib/utils'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { useRef, useState, useEffect, useSyncExternalStore, type ReactNode } from 'react'
 import { motion, useMotionValue, animate } from 'framer-motion'
-import { Check, Clock } from 'lucide-react'
 import { toast } from '@/hooks/use-toast'
 import type { Task } from '@/lib/types'
 
@@ -153,10 +153,10 @@ export function SwipeTaskRow({
     <div className="relative overflow-hidden rounded-lg">
       {/* action backgrounds */}
       <div className="absolute inset-y-0 right-0 flex w-1/2 items-center justify-end bg-success/15 pr-4 text-success">
-        <Check className="h-5 w-5" />
+        <FaCheck className="h-5 w-5" />
       </div>
       <div className="absolute inset-y-0 left-0 flex w-1/2 items-center bg-warning/15 pl-4 text-warning">
-        <Clock className="h-5 w-5" />
+        <FaClock className="h-5 w-5" />
       </div>
       <motion.div
         drag="x"

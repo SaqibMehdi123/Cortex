@@ -1,5 +1,6 @@
 'use client'
 
+import { FaBullseye, FaCalendarDays, FaCheck, FaChevronDown, FaChevronRight, FaCircleCheck, FaClock, FaEllipsis, FaList, FaPencil, FaPlus, FaSpinner, FaTableColumns, FaTrashCan, FaWandMagicSparkles } from 'react-icons/fa6'
 import { useCallback, useMemo, useState, useEffect } from 'react'
 import { api, todayISO } from '@/lib/client'
 import type { Plan, Task, Goal } from '@/lib/types'
@@ -18,10 +19,6 @@ import { useUI } from '@/lib/nav-config'
 import { cn } from '@/lib/utils'
 import { PriorityDot, EmptyState, SkeletonCard } from '@/components/shared'
 import { motion, AnimatePresence } from 'framer-motion'
-import {
-  ChevronDown, ChevronRight, Plus, LayoutList, KanbanSquare, Trash2, CalendarDays,
-  Wand2, Loader2, Clock, CheckCircle2, Pencil, MoreHorizontal, Check, Target,
-} from 'lucide-react'
 
 type PlanNode = Plan & { children: Plan[] }
 
@@ -125,17 +122,17 @@ export function PlansView() {
         <div className="flex w-full items-center gap-2 sm:w-auto">
           <div className="flex overflow-hidden rounded-lg border">
             <button onClick={() => setMode('outline')} className={cn('flex h-9 items-center gap-1.5 whitespace-nowrap px-3 text-xs font-medium transition-colors', mode === 'outline' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted')} aria-label="Outline view">
-              <LayoutList className="h-4 w-4" /> Outline
+              <FaList className="h-4 w-4" /> Outline
             </button>
             <button onClick={() => setMode('kanban')} className={cn('flex h-9 items-center gap-1.5 whitespace-nowrap border-l px-3 text-xs font-medium transition-colors', mode === 'kanban' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted')} aria-label="Kanban view">
-              <KanbanSquare className="h-4 w-4" /> Kanban
+              <FaTableColumns className="h-4 w-4" /> Kanban
             </button>
           </div>
           <Button variant="outline" className="px-2.5" onClick={() => setTemplatesOpen(true)} aria-label="Browse plan templates">
-            <Wand2 className="h-4 w-4" /> <span className="hidden sm:inline">Templates</span>
+            <FaWandMagicSparkles className="h-4 w-4" /> <span className="hidden sm:inline">Templates</span>
           </Button>
           <Button className="px-2.5" onClick={() => setAddOpen(true)} aria-label="New plan">
-            <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Plan</span>
+            <FaPlus className="h-4 w-4" /> <span className="hidden sm:inline">Plan</span>
           </Button>
         </div>
       </div>
@@ -179,7 +176,7 @@ export function PlansView() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm">
-              <CalendarDays className="h-4 w-4 text-primary" />
+              <FaCalendarDays className="h-4 w-4 text-primary" />
               Tasks for {new Date(`${selectedDay}T12:00:00`).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
             </CardTitle>
           </CardHeader>
@@ -202,7 +199,7 @@ export function PlansView() {
         <div className="space-y-2">
           {data.plans.length === 0 ? (
             <EmptyState
-              icon={<CalendarDays className="h-5 w-5" />}
+              icon={<FaCalendarDays className="h-5 w-5" />}
               title="Build your first plan"
               description="Create a yearly or monthly plan, nest weeks and days under it, then attach tasks. Or start from a template."
               action={{ label: 'Browse templates', onClick: () => setTemplatesOpen(true) }}
@@ -309,7 +306,7 @@ function PlanTitleToggle({ node, onReload }: { node: PlanNode; onReload: () => v
         )}
         aria-label={node.done ? `Mark "${node.title}" as not done` : `Mark "${node.title}" as done`}
       >
-        <Check className="h-3 w-3" />
+        <FaCheck className="h-3 w-3" />
       </button>
       <span className={cn('truncate text-sm font-semibold', node.done && 'text-muted-foreground line-through')} title={node.title}>
         {node.title}
@@ -327,12 +324,12 @@ function PlanRowMenu({ node, onReload, onSetGoal }: { node: PlanNode; onReload: 
           className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground opacity-60 transition-opacity hover:bg-muted hover:opacity-100"
           aria-label={`Actions for ${node.title}`}
         >
-          <MoreHorizontal className="h-4 w-4" />
+          <FaEllipsis className="h-4 w-4" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
         <DropdownMenuItem onClick={() => document.dispatchEvent(new CustomEvent('cortex:rename-plan', { detail: node.id }))}>
-          <Pencil className="mr-2 h-3.5 w-3.5" /> Rename
+          <FaPencil className="mr-2 h-3.5 w-3.5" /> Rename
         </DropdownMenuItem>
         <DropdownMenuItem
           onClick={async () => {
@@ -340,10 +337,10 @@ function PlanRowMenu({ node, onReload, onSetGoal }: { node: PlanNode; onReload: 
             onReload()
           }}
         >
-          <CheckCircle2 className="mr-2 h-3.5 w-3.5" /> {node.done ? 'Mark as not done' : 'Mark as done'}
+          <FaCircleCheck className="mr-2 h-3.5 w-3.5" /> {node.done ? 'Mark as not done' : 'Mark as done'}
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => onSetGoal(node)}>
-          <Target className="mr-2 h-3.5 w-3.5" /> Destination goal…
+          <FaBullseye className="mr-2 h-3.5 w-3.5" /> Destination goal…
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -383,7 +380,7 @@ function PlanNodeRow({
         <div className="flex items-center gap-2 px-3 py-2.5">
           {hasChildren ? (
             <button onClick={() => toggleCollapse(node.id)} className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-muted" aria-label={isCollapsed ? 'Expand' : 'Collapse'}>
-              {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              {isCollapsed ? <FaChevronRight className="h-4 w-4" /> : <FaChevronDown className="h-4 w-4" />}
             </button>
           ) : (
             <span className="w-6 text-center text-sm">{TF_ICON[node.timeframe]}</span>
@@ -396,7 +393,7 @@ function PlanNodeRow({
               className="hidden shrink-0 items-center gap-1 rounded-full bg-sidebar-accent px-2 py-0.5 text-[10px] font-medium text-sidebar-accent-foreground transition-opacity hover:opacity-80 sm:inline-flex"
               title={`Destination goal: ${node.goal.title} — open Goals`}
             >
-              <Target className="h-3 w-3" />
+              <FaBullseye className="h-3 w-3" />
               <span className="max-w-[140px] truncate">{node.goal.title}</span>
             </button>
           )}
@@ -411,10 +408,10 @@ function PlanNodeRow({
             className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground opacity-60 transition-opacity hover:text-danger"
             aria-label="Delete plan"
           >
-            <Trash2 className="h-3.5 w-3.5" />
+            <FaTrashCan className="h-3.5 w-3.5" />
           </button>
           <button onClick={() => setAdding((v) => !v)} className="flex h-7 w-7 items-center justify-center rounded-lg text-primary hover:bg-muted" aria-label="Add task to plan">
-            <Plus className="h-4 w-4" />
+            <FaPlus className="h-4 w-4" />
           </button>
         </div>
 
@@ -516,12 +513,12 @@ function TaskRow({ task, onToggle, onSnooze, draggable }: { task: Task; onToggle
       {task.goal && <span className="hidden shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground lg:inline">{task.goal.title}</span>}
       {task.dueDate && (
         <span className="hidden shrink-0 items-center gap-1 text-[10px] text-muted-foreground sm:flex">
-          <Clock className="h-3 w-3" />
+          <FaClock className="h-3 w-3" />
           {new Date(task.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
         </span>
       )}
       <button onClick={() => onSnooze(task)} className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:bg-muted group-hover:opacity-100" aria-label="Snooze to tomorrow">
-        <Clock className="h-3.5 w-3.5" />
+        <FaClock className="h-3.5 w-3.5" />
       </button>
     </div>
   )
@@ -670,7 +667,7 @@ function AddPlanDialog({ open, onOpenChange, allPlans, onCreated }: { open: bool
             </div>
           </div>
           <div>
-            <label className="flex items-center gap-1 text-xs text-muted-foreground"><Target className="h-3 w-3" /> Destination goal (optional)</label>
+            <label className="flex items-center gap-1 text-xs text-muted-foreground"><FaBullseye className="h-3 w-3" /> Destination goal (optional)</label>
             <Select value={goalId} onValueChange={setGoalId}>
               <SelectTrigger className="mt-1"><SelectValue placeholder="No destination goal" /></SelectTrigger>
               <SelectContent>
@@ -689,7 +686,7 @@ function AddPlanDialog({ open, onOpenChange, allPlans, onCreated }: { open: bool
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button onClick={create} disabled={busy || !title.trim()}>
-            {busy && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />} Create plan
+            {busy && <FaSpinner className="mr-1.5 h-4 w-4 animate-spin" />} Create plan
           </Button>
         </div>
       </DialogContent>
@@ -732,12 +729,12 @@ function TemplatesDialog({ open, onOpenChange, onApplied }: { open: boolean; onO
               }}
               className="flex w-full items-center gap-3 rounded-xl border bg-card p-4 text-left transition-all hover:shadow-soft"
             >
-              <Wand2 className="h-5 w-5 shrink-0 text-primary" />
+              <FaWandMagicSparkles className="h-5 w-5 shrink-0 text-primary" />
               <span className="min-w-0 flex-1">
                 <span className="block text-sm font-semibold">{t.name}</span>
                 <span className="block text-xs text-muted-foreground">{t.description}</span>
               </span>
-              {busyId === t.id && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
+              {busyId === t.id && <FaSpinner className="h-4 w-4 animate-spin text-primary" />}
             </button>
           ))}
         </div>
@@ -778,7 +775,7 @@ function GoalSelectDialog({ node, onClose, onSaved }: { node: PlanNode | null; o
     <Dialog open={!!node} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><Target className="h-4 w-4 text-primary" /> Destination goal</DialogTitle>
+          <DialogTitle className="flex items-center gap-2"><FaBullseye className="h-4 w-4 text-primary" /> Destination goal</DialogTitle>
           <DialogDescription>
             Choose the goal “{node?.title}” is driving toward. Goals stay a separate tab — this only connects the two.
           </DialogDescription>
@@ -798,7 +795,7 @@ function GoalSelectDialog({ node, onClose, onSaved }: { node: PlanNode | null; o
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
           <Button onClick={save} disabled={busy || goals === null}>
-            {busy && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />} Save
+            {busy && <FaSpinner className="mr-1.5 h-4 w-4 animate-spin" />} Save
           </Button>
         </div>
       </DialogContent>

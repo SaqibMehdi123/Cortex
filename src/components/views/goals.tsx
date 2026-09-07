@@ -1,5 +1,6 @@
 'use client'
 
+import { FaArrowTrendUp, FaBullseye, FaCalendarDay, FaCheck, FaChevronDown, FaChevronRight, FaCircleCheck, FaEllipsis, FaFire, FaPencil, FaPlus, FaRotateLeft, FaSpinner, FaTrashCan } from 'react-icons/fa6'
 import { useState } from 'react'
 import { api, fmtDate, daysUntil } from '@/lib/client'
 import type { Goal, Milestone } from '@/lib/types'
@@ -20,10 +21,6 @@ import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
 import { colorHex, EmptyState, SkeletonCard, PriorityDot } from '@/components/shared'
 import { fireConfetti } from '@/lib/confetti'
-import {
-  Target, Plus, Flame, Trash2, Loader2, TrendingUp, CalendarClock, ChevronDown, ChevronRight,
-  MoreHorizontal, Pencil, RotateCcw, CheckCircle2, Check,
-} from 'lucide-react'
 
 const CATEGORIES = ['career', 'learning', 'health', 'personal', 'project']
 const COLORS = ['teal', 'emerald', 'amber', 'rose', 'violet', 'cyan']
@@ -107,25 +104,25 @@ export function GoalsView() {
           className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           aria-label={`Actions for ${goal.title}`}
         >
-          <MoreHorizontal className="h-4 w-4" />
+          <FaEllipsis className="h-4 w-4" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-44">
         <DropdownMenuItem onClick={() => setEditGoal(goal)}>
-          <Pencil className="mr-2 h-3.5 w-3.5" /> Edit goal
+          <FaPencil className="mr-2 h-3.5 w-3.5" /> Edit goal
         </DropdownMenuItem>
         {goal.status === 'completed' ? (
           <DropdownMenuItem onClick={() => setStatus(goal, 'active')}>
-            <RotateCcw className="mr-2 h-3.5 w-3.5" /> Reopen goal
+            <FaRotateLeft className="mr-2 h-3.5 w-3.5" /> Reopen goal
           </DropdownMenuItem>
         ) : (
           <DropdownMenuItem onClick={() => setStatus(goal, 'completed')}>
-            <CheckCircle2 className="mr-2 h-3.5 w-3.5" /> Mark complete
+            <FaCircleCheck className="mr-2 h-3.5 w-3.5" /> Mark complete
           </DropdownMenuItem>
         )}
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => deleteGoal(goal)} className="text-danger focus:text-danger">
-          <Trash2 className="mr-2 h-3.5 w-3.5" /> Delete
+          <FaTrashCan className="mr-2 h-3.5 w-3.5" /> Delete
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -148,13 +145,13 @@ export function GoalsView() {
           <p className="text-sm text-muted-foreground">Milestones, streaks and velocity — progress you can see.</p>
         </div>
         <Button onClick={() => setCreateOpen(true)}>
-          <Plus className="mr-1.5 h-4 w-4" /> New goal
+          <FaPlus className="mr-1.5 h-4 w-4" /> New goal
         </Button>
       </div>
 
       {active.length === 0 ? (
         <EmptyState
-          icon={<Target className="h-5 w-5" />}
+          icon={<FaBullseye className="h-5 w-5" />}
           title="Set your first goal"
           description="Break a big ambition into milestones, check them off, and watch the progress ring and streak build up."
           action={{ label: 'Create a goal', onClick: () => setCreateOpen(true) }}
@@ -180,12 +177,12 @@ export function GoalsView() {
                     </div>
                     {goal.streak > 0 && (
                       <span className="flex shrink-0 items-center gap-1 rounded-full bg-warning/10 px-2 py-1 text-xs font-semibold text-warning">
-                        <Flame className="h-3.5 w-3.5" /> {goal.streak}
+                        <FaFire className="h-3.5 w-3.5" /> {goal.streak}
                       </span>
                     )}
                     {goalMenu(goal)}
                     <button onClick={() => toggleExpand(goal.id)} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted" aria-label={isOpen ? 'Collapse' : 'Expand milestones'}>
-                      {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                      {isOpen ? <FaChevronDown className="h-4 w-4" /> : <FaChevronRight className="h-4 w-4" />}
                     </button>
                   </div>
 
@@ -198,12 +195,12 @@ export function GoalsView() {
                     <span className="tabular-nums">{done}/{goal.milestones.length} milestones</span>
                     {goal.deadline && (
                       <span className={cn('inline-flex items-center gap-1', dl !== null && dl < 0 && 'font-medium text-danger', dl !== null && dl >= 0 && dl <= 14 && 'text-warning')}>
-                        <CalendarClock className="h-3 w-3" />
+                        <FaCalendarDay className="h-3 w-3" />
                         {dl !== null && dl < 0 ? `${-dl}d overdue` : dl !== null ? `${dl}d left` : fmtDate(goal.deadline)}
                       </span>
                     )}
                     <span className="inline-flex items-center gap-1 tabular-nums">
-                      <TrendingUp className="h-3 w-3" /> {goal.velocity?.reduce((a, b) => a + b, 0) ?? 0} milestones / 8wk
+                      <FaArrowTrendUp className="h-3 w-3" /> {goal.velocity?.reduce((a, b) => a + b, 0) ?? 0} milestones / 8wk
                     </span>
                   </div>
 
@@ -261,12 +258,12 @@ export function GoalsView() {
                         className="flex h-7 shrink-0 items-center gap-1.5 rounded-lg border border-success/40 bg-background px-2 text-xs font-medium text-success transition-colors hover:bg-success/10"
                         aria-label={`Reopen ${goal.title}`}
                       >
-                        <RotateCcw className="h-3.5 w-3.5" /> Reopen
+                        <FaRotateLeft className="h-3.5 w-3.5" /> Reopen
                       </button>
                       {goalMenu(goal)}
                       {goal.milestones.length > 0 && (
                         <button onClick={() => toggleExpand(goal.id)} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted" aria-label={isOpen ? 'Collapse' : 'Expand milestones'}>
-                          {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                          {isOpen ? <FaChevronDown className="h-4 w-4" /> : <FaChevronRight className="h-4 w-4" />}
                         </button>
                       )}
                     </div>
@@ -332,7 +329,7 @@ function MilestoneRow({ m, onToggle, onDeleted }: { m: Milestone; onToggle: () =
           aria-label="Milestone title"
         />
         <Button size="icon" variant="ghost" className="h-7 w-7" onClick={save} disabled={busy} aria-label="Save title">
-          {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+          {busy ? <FaSpinner className="h-3.5 w-3.5 animate-spin" /> : <FaCheck className="h-3.5 w-3.5" />}
         </Button>
       </div>
     )
@@ -348,7 +345,7 @@ function MilestoneRow({ m, onToggle, onDeleted }: { m: Milestone; onToggle: () =
         className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100"
         aria-label="Rename milestone"
       >
-        <Pencil className="h-3 w-3" />
+        <FaPencil className="h-3 w-3" />
       </button>
       <button
         onClick={async () => {
@@ -358,7 +355,7 @@ function MilestoneRow({ m, onToggle, onDeleted }: { m: Milestone; onToggle: () =
         className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:text-danger group-hover:opacity-100"
         aria-label="Delete milestone"
       >
-        <Trash2 className="h-3 w-3" />
+        <FaTrashCan className="h-3 w-3" />
       </button>
     </div>
   )
@@ -389,7 +386,7 @@ function AddMilestoneInline({ goalId, onAdded }: { goalId: string; onAdded: () =
         className="h-8 text-sm"
       />
       <Button size="sm" variant="ghost" className="h-8" disabled={busy || !value.trim()} onClick={add}>
-        <Plus className="h-3.5 w-3.5" />
+        <FaPlus className="h-3.5 w-3.5" />
       </Button>
     </div>
   )
@@ -493,7 +490,7 @@ function CreateGoalDialog({ open, onOpenChange, onCreated }: { open: boolean; on
                   <li key={i} className="flex items-center gap-2 rounded-lg bg-muted/50 px-2.5 py-1.5 text-sm">
                     <PriorityDot priority="med" /> <span className="flex-1">{m}</span>
                     <button onClick={() => setMilestones((ms) => ms.filter((_, j) => j !== i))} className="text-muted-foreground hover:text-danger" aria-label="Remove">
-                      <Trash2 className="h-3.5 w-3.5" />
+                      <FaTrashCan className="h-3.5 w-3.5" />
                     </button>
                   </li>
                 ))}
@@ -504,7 +501,7 @@ function CreateGoalDialog({ open, onOpenChange, onCreated }: { open: boolean; on
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button onClick={create} disabled={busy || !title.trim()}>
-            {busy && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />} Create goal
+            {busy && <FaSpinner className="mr-1.5 h-4 w-4 animate-spin" />} Create goal
           </Button>
         </div>
       </DialogContent>
@@ -594,7 +591,7 @@ function EditGoalDialog({ goal, onOpenChange, onSaved }: { goal: Goal | null; on
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onOpenChange}>Cancel</Button>
           <Button onClick={save} disabled={busy || !title.trim()}>
-            {busy && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />} Save changes
+            {busy && <FaSpinner className="mr-1.5 h-4 w-4 animate-spin" />} Save changes
           </Button>
         </div>
       </DialogContent>

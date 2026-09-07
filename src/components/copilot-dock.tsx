@@ -1,5 +1,6 @@
 'use client'
 
+import { FaPaperPlane, FaQuoteLeft, FaSpinner, FaTrashCan, FaWandMagicSparkles, FaXmark } from 'react-icons/fa6'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useUI } from '@/lib/nav-config'
 import { useUI as useUIStore } from '@/lib/store'
@@ -11,7 +12,6 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Sparkles, Send, X, Quote, Trash2, Loader2 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 
@@ -55,7 +55,7 @@ function MarkdownWithCitations({
             title={p.page ? `Jump to page ${p.page}` : p.label}
             className="mx-0.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary/10 px-1 align-super text-[10px] font-semibold text-primary transition-colors hover:bg-primary/20"
           >
-            <Quote className="mr-0.5 h-2.5 w-2.5" />
+            <FaQuoteLeft className="mr-0.5 h-2.5 w-2.5" />
             {p.n}
           </button>
         )
@@ -149,7 +149,7 @@ export function CopilotDock() {
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-2.5 border-b px-4 py-3">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-          <Sparkles className="h-4 w-4" />
+          <FaWandMagicSparkles className="h-4 w-4" />
         </div>
         <div className="flex-1">
           <p className="text-sm font-semibold">Copilot</p>
@@ -167,7 +167,7 @@ export function CopilotDock() {
             } catch {}
           }}
         >
-          <Trash2 className="h-4 w-4" />
+          <FaTrashCan className="h-4 w-4" />
         </Button>
         {/* Close — always visible. On <xl the dock renders inside a
             full-screen sheet, so this X is the only way back. */}
@@ -178,7 +178,7 @@ export function CopilotDock() {
           aria-label="Close Copilot"
           onClick={() => setCopilotOpen(false)}
         >
-          <X className="h-4 w-4" />
+          <FaXmark className="h-4 w-4" />
         </Button>
       </div>
 
@@ -224,7 +224,7 @@ export function CopilotDock() {
           ))}
           {busy && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" /> Thinking across your workspace…
+              <FaSpinner className="h-4 w-4 animate-spin" /> Thinking across your workspace…
             </div>
           )}
         </div>
@@ -247,7 +247,7 @@ export function CopilotDock() {
             aria-label="Message Copilot"
           />
           <Button size="icon" className="h-11 w-11 shrink-0" onClick={() => send()} disabled={busy || !input.trim()} aria-label="Send">
-            <Send className="h-4 w-4" />
+            <FaPaperPlane className="h-4 w-4" />
           </Button>
         </div>
       </div>

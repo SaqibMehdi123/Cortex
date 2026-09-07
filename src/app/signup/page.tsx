@@ -1,5 +1,6 @@
 'use client'
 
+import { FaArrowRight, FaSpinner } from 'react-icons/fa6'
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -7,7 +8,6 @@ import { CortexLogo } from '@/components/logo'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Loader2, ArrowRight } from 'lucide-react'
 import { api } from '@/lib/client'
 
 export default function SignupPage() {
@@ -97,7 +97,7 @@ export default function SignupPage() {
             {error && <p className="rounded-lg bg-danger/10 px-3 py-2 text-xs text-danger">{error}</p>}
 
             <Button type="submit" disabled={busy} className="w-full">
-              {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <ArrowRight className="mr-1.5 h-4 w-4" />}
+              {busy ? <FaSpinner className="mr-1.5 h-4 w-4 animate-spin" /> : <FaArrowRight className="mr-1.5 h-4 w-4" />}
               Create account
             </Button>
             <p className="text-center text-[11px] text-muted-foreground">

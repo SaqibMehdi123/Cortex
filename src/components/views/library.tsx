@@ -1,5 +1,6 @@
 'use client'
 
+import { FaBookOpen, FaBorderAll, FaFileArrowUp, FaFileLines, FaLink, FaList, FaMagnifyingGlass, FaNoteSticky, FaPaste, FaPlus, FaRegBookmark, FaSpinner, FaTrashCan } from 'react-icons/fa6'
 import { useMemo, useState, useEffect } from 'react'
 import { api, fmtDate } from '@/lib/client'
 import type { DocumentItem, Note } from '@/lib/types'
@@ -20,19 +21,15 @@ import { useToast } from '@/hooks/use-toast'
 import { useUI } from '@/lib/nav-config'
 import { EmptyState, SkeletonCard } from '@/components/shared'
 import { cn } from '@/lib/utils'
-import {
-  LayoutGrid, List, Plus, BookOpen, FileText, Search, Sparkles, Loader2,
-  Link2, ClipboardPaste, Trash2, BookmarkPlus, StickyNote, FileText as FileIcon, FileUp,
-} from 'lucide-react'
 
 const TYPE_META: Record<string, { label: string; icon: React.ReactNode }> = {
-  article: { label: 'Article', icon: <FileIcon className="h-4 w-4" /> },
-  paper: { label: 'Paper', icon: <FileIcon className="h-4 w-4" /> },
-  book: { label: 'Book', icon: <BookOpen className="h-4 w-4" /> },
-  url: { label: 'Web', icon: <Link2 className="h-4 w-4" /> },
-  text: { label: 'Text', icon: <FileIcon className="h-4 w-4" /> },
-  newsletter: { label: 'Newsletter', icon: <FileIcon className="h-4 w-4" /> },
-  other: { label: 'Doc', icon: <FileIcon className="h-4 w-4" /> },
+  article: { label: 'Article', icon: <FaFileLines className="h-4 w-4" /> },
+  paper: { label: 'Paper', icon: <FaFileLines className="h-4 w-4" /> },
+  book: { label: 'Book', icon: <FaBookOpen className="h-4 w-4" /> },
+  url: { label: 'Web', icon: <FaLink className="h-4 w-4" /> },
+  text: { label: 'Text', icon: <FaFileLines className="h-4 w-4" /> },
+  newsletter: { label: 'Newsletter', icon: <FaFileLines className="h-4 w-4" /> },
+  other: { label: 'Doc', icon: <FaFileLines className="h-4 w-4" /> },
 }
 
 const STATUS_STYLES: Record<string, string> = {
@@ -107,18 +104,18 @@ export function LibraryView() {
               className={cn('flex h-9 w-9 items-center justify-center transition-colors', layout === 'grid' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted')}
               aria-label="Grid view"
             >
-              <LayoutGrid className="h-4 w-4" />
+              <FaBorderAll className="h-4 w-4" />
             </button>
             <button
               onClick={() => setLayout('list')}
               className={cn('flex h-9 w-9 items-center justify-center transition-colors', layout === 'list' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted')}
               aria-label="List view"
             >
-              <List className="h-4 w-4" />
+              <FaList className="h-4 w-4" />
             </button>
           </div>
           <Button onClick={() => setImportOpen(true)}>
-            <Plus className="mr-1.5 h-4 w-4" /> Import
+            <FaPlus className="mr-1.5 h-4 w-4" /> Import
           </Button>
         </div>
       </div>
@@ -127,7 +124,7 @@ export function LibraryView() {
         <TabsList>
           <TabsTrigger value="documents">Reading</TabsTrigger>
           <TabsTrigger value="notes" className="gap-1.5">
-            <StickyNote className="h-3.5 w-3.5" /> Notes
+            <FaNoteSticky className="h-3.5 w-3.5" /> Notes
           </TabsTrigger>
         </TabsList>
 
@@ -161,7 +158,7 @@ export function LibraryView() {
           {/* Filters */}
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative flex-1 sm:max-w-xs">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <FaMagnifyingGlass className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search library…" className="pl-9" aria-label="Search documents" />
             </div>
             <div className="flex gap-1.5">
@@ -196,7 +193,7 @@ export function LibraryView() {
             </div>
           ) : !data || data.documents.length === 0 ? (
             <EmptyState
-              icon={<BookOpen className="h-5 w-5" />}
+              icon={<FaBookOpen className="h-5 w-5" />}
               title={q ? `No matches for “${q}”` : 'Import your first paper'}
               description="Paste a URL to any article or paper, paste raw text, or add a book you're reading. Ask AI questions about it once it's here."
               action={{ label: 'Import a document', onClick: () => setImportOpen(true) }}
@@ -238,7 +235,7 @@ export function LibraryView() {
                           setConfirmDelete(doc)
                         }}
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
+                        <FaTrashCan className="h-3.5 w-3.5" />
                       </Button>
                     </div>
                     <CardContent className="space-y-2 p-4">
@@ -300,7 +297,7 @@ export function LibraryView() {
                       setConfirmDelete(doc)
                     }}
                   >
-                    <Trash2 className="h-3.5 w-3.5" />
+                    <FaTrashCan className="h-3.5 w-3.5" />
                   </Button>
                   <Badge variant="outline" className={cn('shrink-0 text-[10px]', STATUS_STYLES[doc.status])}>
                     {doc.status === 'queued' ? 'later' : doc.status}
@@ -318,7 +315,7 @@ export function LibraryView() {
             </div>
           ) : notes.length === 0 ? (
             <EmptyState
-              icon={<StickyNote className="h-5 w-5" />}
+              icon={<FaNoteSticky className="h-5 w-5" />}
               title="No quick-capture notes yet"
               description="Use the + button (or ⌘K) from anywhere to capture a note, voice memo or link. They land here."
             />
@@ -339,7 +336,7 @@ export function LibraryView() {
                           setNotes(notes.filter((x) => x.id !== n.id))
                         }}
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
+                        <FaTrashCan className="h-3.5 w-3.5" />
                       </Button>
                     </div>
                     <p className="mt-1.5 line-clamp-5 whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">{n.content}</p>
@@ -469,10 +466,10 @@ function ImportDialog({ open, onOpenChange, onImported }: { open: boolean; onOpe
         </DialogHeader>
         <Tabs value={mode} onValueChange={(v) => setMode(v as typeof mode)}>
           <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="pdf" className="gap-1.5"><FileUp className="h-3.5 w-3.5" /> PDF</TabsTrigger>
-            <TabsTrigger value="url" className="gap-1.5"><Link2 className="h-3.5 w-3.5" /> URL</TabsTrigger>
-            <TabsTrigger value="paste" className="gap-1.5"><ClipboardPaste className="h-3.5 w-3.5" /> Text</TabsTrigger>
-            <TabsTrigger value="manual" className="gap-1.5"><FileText className="h-3.5 w-3.5" /> Manual</TabsTrigger>
+            <TabsTrigger value="pdf" className="gap-1.5"><FaFileArrowUp className="h-3.5 w-3.5" /> PDF</TabsTrigger>
+            <TabsTrigger value="url" className="gap-1.5"><FaLink className="h-3.5 w-3.5" /> URL</TabsTrigger>
+            <TabsTrigger value="paste" className="gap-1.5"><FaPaste className="h-3.5 w-3.5" /> Text</TabsTrigger>
+            <TabsTrigger value="manual" className="gap-1.5"><FaFileLines className="h-3.5 w-3.5" /> Manual</TabsTrigger>
           </TabsList>
         </Tabs>
         <div className="space-y-3">
@@ -492,7 +489,7 @@ function ImportDialog({ open, onOpenChange, onImported }: { open: boolean; onOpe
                   dragOver ? 'border-primary bg-primary/5' : 'hover:border-primary/50 hover:bg-muted/40'
                 )}
               >
-                <FileUp className="h-6 w-6 text-primary" />
+                <FaFileArrowUp className="h-6 w-6 text-primary" />
                 {file ? (
                   <>
                     <span className="text-sm font-medium">{file.name}</span>
@@ -554,8 +551,8 @@ function ImportDialog({ open, onOpenChange, onImported }: { open: boolean; onOpe
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={busy && uploadPct !== null && uploadPct < 100}>Cancel</Button>
           <Button onClick={submit} disabled={busy || (mode === 'pdf' && !file)}>
-            {busy && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
-            <BookmarkPlus className="mr-1.5 h-4 w-4" />
+            {busy && <FaSpinner className="mr-1.5 h-4 w-4 animate-spin" />}
+            <FaRegBookmark className="mr-1.5 h-4 w-4" />
             {mode === 'pdf'
               ? (busy
                 ? (uploadPct !== null && uploadPct < 100 ? `Uploading ${uploadPct}%` : 'Extracting text…')

@@ -1,5 +1,6 @@
 'use client'
 
+import { FaCalendarDay, FaEnvelopeCircleCheck, FaPlus, FaSpinner, FaTrashCan, FaUpRightFromSquare, FaWandMagicSparkles } from 'react-icons/fa6'
 import { useState } from 'react'
 import { api, useApi, fmtDate, daysUntil } from '@/lib/client'
 import type { Opportunity } from '@/lib/types'
@@ -13,16 +14,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import { toast } from '@/hooks/use-toast'
-import {
-  Plus,
-  MailCheck,
-  Trash2,
-  Loader2,
-  Sparkles,
-  ExternalLink,
-  CalendarClock,
-  Wand2,
-} from 'lucide-react'
 
 const TYPES = ['internship', 'job', 'scholarship', 'event', 'referral']
 const STATUSES = ['new', 'applied', 'interview', 'offer', 'rejected', 'archived']
@@ -126,10 +117,10 @@ export function OpportunitiesView() {
     <div className="space-y-5">
       <PageHeader title="Opportunities" description="Internship & job emails, deadlines and application status — in one board">
         <Button variant="outline" size="sm" onClick={() => setPasteOpen(true)}>
-          <Wand2 className="mr-1.5 h-4 w-4" /> Paste email (AI)
+          <FaWandMagicSparkles className="mr-1.5 h-4 w-4" /> Paste email (AI)
         </Button>
         <Button size="sm" onClick={() => openAdd()}>
-          <Plus className="mr-1.5 h-4 w-4" /> Add manually
+          <FaPlus className="mr-1.5 h-4 w-4" /> Add manually
         </Button>
       </PageHeader>
 
@@ -150,7 +141,7 @@ export function OpportunitiesView() {
         <ErrorBlock message={error} />
       ) : shown.length === 0 ? (
         <EmptyState
-          icon={<MailCheck className="h-8 w-8" />}
+          icon={<FaEnvelopeCircleCheck className="h-8 w-8" />}
           title="No opportunities here yet"
           hint='Forward-worthy: copy any internship/job email, click "Paste email (AI)" and the fields fill themselves. Or add one manually.'
         />
@@ -183,7 +174,7 @@ export function OpportunitiesView() {
                       overdue ? 'text-rose-600 dark:text-rose-400' : soon ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'
                     )}
                   >
-                    <CalendarClock className="h-3.5 w-3.5" />
+                    <FaCalendarDay className="h-3.5 w-3.5" />
                     {overdue ? `Deadline passed ${fmtDate(o.deadline, { month: 'short', day: 'numeric' })}` : `Deadline ${fmtDate(o.deadline, { month: 'short', day: 'numeric' })} · ${dLeft}d left`}
                   </p>
                 )}
@@ -205,7 +196,7 @@ export function OpportunitiesView() {
                     {o.url && (
                       <Button variant="ghost" size="sm" className="h-8 w-8 p-0" asChild>
                         <a href={o.url} target="_blank" rel="noreferrer" aria-label="Open link">
-                          <ExternalLink className="h-3.5 w-3.5" />
+                          <FaUpRightFromSquare className="h-3.5 w-3.5" />
                         </a>
                       </Button>
                     )}
@@ -216,7 +207,7 @@ export function OpportunitiesView() {
                       onClick={() => remove(o.id)}
                       aria-label="Delete"
                     >
-                      <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+                      <FaTrashCan className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
                     </Button>
                   </div>
                 </div>
@@ -300,7 +291,7 @@ export function OpportunitiesView() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
             <Button onClick={save} disabled={saving}>
-              {saving && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />} Save
+              {saving && <FaSpinner className="mr-1.5 h-4 w-4 animate-spin" />} Save
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -346,7 +337,7 @@ function PasteEmailDialog({
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-primary" /> Paste an email
+            <FaWandMagicSparkles className="h-4 w-4 text-primary" /> Paste an email
           </DialogTitle>
           <DialogDescription>
             Copy any internship/job email body below — AI extracts company, role, type and deadline, then opens a pre-filled form.
@@ -361,7 +352,7 @@ function PasteEmailDialog({
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button onClick={parse} disabled={parsing || !text.trim()}>
-            {parsing ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Wand2 className="mr-1.5 h-4 w-4" />}
+            {parsing ? <FaSpinner className="mr-1.5 h-4 w-4 animate-spin" /> : <FaWandMagicSparkles className="mr-1.5 h-4 w-4" />}
             {parsing ? 'Extracting…' : 'Extract details'}
           </Button>
         </DialogFooter>

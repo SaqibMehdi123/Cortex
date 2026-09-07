@@ -1,5 +1,6 @@
 'use client'
 
+import { FaArrowRight, FaEnvelopeCircleCheck, FaSpinner, FaTriangleExclamation } from 'react-icons/fa6'
 import { Suspense, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -7,7 +8,6 @@ import { CortexLogo } from '@/components/logo'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Loader2, MailCheck, ArrowRight, MailWarning } from 'lucide-react'
 import { api } from '@/lib/client'
 
 export default function VerifyPage() {
@@ -101,7 +101,7 @@ function VerifyForm() {
 
         <div className="rounded-2xl border bg-card p-6 shadow-soft">
           <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-            <MailCheck className="h-5 w-5 text-primary" />
+            <FaEnvelopeCircleCheck className="h-5 w-5 text-primary" />
           </div>
           <h1 className="font-display text-xl">Check your email</h1>
           <p className="mt-0.5 text-xs text-muted-foreground">
@@ -148,7 +148,7 @@ function VerifyForm() {
             )}
             {mailIssue === 'send_failed' && (
               <div className="flex items-start gap-2 rounded-lg bg-danger/10 px-3 py-2.5 text-xs leading-relaxed text-danger">
-                <MailWarning className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <FaTriangleExclamation className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 <span>The email couldn't be sent — the mail provider rejected it. Check the server's mail settings and try again.</span>
               </div>
             )}
@@ -161,7 +161,7 @@ function VerifyForm() {
             {error && <p className="rounded-lg bg-danger/10 px-3 py-2 text-xs text-danger">{error}</p>}
 
             <Button type="submit" disabled={busy || code.length !== 6 || !emailOk} className="w-full">
-              {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <ArrowRight className="mr-1.5 h-4 w-4" />}
+              {busy ? <FaSpinner className="mr-1.5 h-4 w-4 animate-spin" /> : <FaArrowRight className="mr-1.5 h-4 w-4" />}
               Verify & continue
             </Button>
           </form>

@@ -1,12 +1,12 @@
 'use client'
 
+import { FaBars, FaMoon, FaSun, FaUpRightFromSquare } from 'react-icons/fa6'
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import Link from 'next/link'
 import { CortexMark } from '@/components/logo'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { useTheme } from 'next-themes'
-import { ArrowUpRight, Menu, Moon, Sun } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const LINKS = [
@@ -31,9 +31,9 @@ function ThemeToggle() {
       className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
     >
       {mounted && resolvedTheme === 'dark' ? (
-        <Sun className="h-4 w-4" />
+        <FaSun className="h-4 w-4" />
       ) : (
-        <Moon className="h-4 w-4" />
+        <FaMoon className="h-4 w-4" />
       )}
     </button>
   )
@@ -87,7 +87,7 @@ export function LandingNav({ authed }: { authed: boolean }) {
           {authed ? (
             <Button asChild size="sm" className="h-8 rounded-lg px-3.5 text-[13px]">
               <Link href="/app">
-                Open app <ArrowUpRight className="ml-0.5 h-3.5 w-3.5" />
+                Open app <FaUpRightFromSquare className="ml-0.5 h-3.5 w-3.5" />
               </Link>
             </Button>
           ) : (
@@ -113,7 +113,7 @@ export function LandingNav({ authed }: { authed: boolean }) {
                 aria-label="Open menu"
                 className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:hidden"
               >
-                <Menu className="h-4.5 w-4.5" />
+                <FaBars className="h-4.5 w-4.5" />
               </button>
             </SheetTrigger>
             <SheetContent side="top" className="md:hidden">

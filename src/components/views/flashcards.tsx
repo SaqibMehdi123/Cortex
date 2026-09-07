@@ -1,5 +1,6 @@
 'use client'
 
+import { FaBookOpen, FaLayerGroup, FaPlay, FaPlus, FaRotateLeft, FaSpinner, FaTrashCan } from 'react-icons/fa6'
 import { useState } from 'react'
 import { api, fmtDate } from '@/lib/client'
 import type { Flashcard } from '@/lib/types'
@@ -14,7 +15,6 @@ import { cn } from '@/lib/utils'
 import { previewLabels, type Grade } from '@/lib/sm2'
 import { EmptyState, SkeletonCard } from '@/components/shared'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Layers, Plus, Trash2, Loader2, Play, RotateCcw, BookOpen } from 'lucide-react'
 
 const GRADE_STYLE: Record<Grade, { label: string; className: string }> = {
   again: { label: 'Again', className: 'bg-danger/90 hover:bg-danger text-white' },
@@ -100,16 +100,16 @@ export function FlashcardsView() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
-            <Layers className="h-6 w-6 text-primary" /> Flashcards
+            <FaLayerGroup className="h-6 w-6 text-primary" /> Flashcards
           </h1>
           <p className="text-sm text-muted-foreground">SM-2 spaced repetition — highlights become memory.</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={() => setCreateOpen(true)}>
-            <Plus className="mr-1.5 h-4 w-4" /> New card
+            <FaPlus className="mr-1.5 h-4 w-4" /> New card
           </Button>
           <Button onClick={startReview} disabled={due === 0}>
-            <Play className="mr-1.5 h-4 w-4" /> Review {due > 0 && `(${due})`}
+            <FaPlay className="mr-1.5 h-4 w-4" /> Review {due > 0 && `(${due})`}
           </Button>
         </div>
       </div>
@@ -126,7 +126,7 @@ export function FlashcardsView() {
           </div>
           {due > 0 && (
             <Button onClick={startReview}>
-              <Play className="mr-1.5 h-4 w-4" /> Start review
+              <FaPlay className="mr-1.5 h-4 w-4" /> Start review
             </Button>
           )}
         </CardContent>
@@ -137,7 +137,7 @@ export function FlashcardsView() {
         {data.cards.length === 0 ? (
           <div className="sm:col-span-2 lg:col-span-3">
             <EmptyState
-              icon={<Layers className="h-5 w-5" />}
+              icon={<FaLayerGroup className="h-5 w-5" />}
               title="No flashcards yet"
               description="Open any document in the Reader, select text, and tap “Flashcard” — the AI writes the question and answer for you."
             />
@@ -151,7 +151,7 @@ export function FlashcardsView() {
                 <div className="mt-2.5 flex items-center gap-2 text-[10px] text-muted-foreground">
                   {c.document && (
                     <span className="inline-flex items-center gap-1 truncate">
-                      <BookOpen className="h-3 w-3" /> {c.document.title}
+                      <FaBookOpen className="h-3 w-3" /> {c.document.title}
                     </span>
                   )}
                   <span className={cn('ml-auto shrink-0 rounded-full px-2 py-0.5', new Date(c.dueAt) <= new Date() ? 'bg-primary/10 text-primary' : 'bg-muted')}>
@@ -165,7 +165,7 @@ export function FlashcardsView() {
                     className="shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-danger group-hover:opacity-100"
                     aria-label="Delete card"
                   >
-                    <Trash2 className="h-3.5 w-3.5" />
+                    <FaTrashCan className="h-3.5 w-3.5" />
                   </button>
                 </div>
               </CardContent>
@@ -185,7 +185,7 @@ export function FlashcardsView() {
           >
             <div className="flex items-center gap-3 px-5 py-4">
               <Button variant="ghost" size="icon" className="h-9 w-9" aria-label="Exit review" onClick={() => { setReviewing(false); setCurrent(null); reload() }}>
-                <RotateCcw className="h-4 w-4" />
+                <FaRotateLeft className="h-4 w-4" />
               </Button>
               <div className="flex-1">
                 <Progress value={queue.length ? (reviewed / (reviewed + queue.length)) * 100 : 100} className="h-1.5" />
@@ -279,7 +279,7 @@ function CreateCardDialog({ open, onOpenChange, onCreated }: { open: boolean; on
               }
             }}
           >
-            {busy && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />} Create
+            {busy && <FaSpinner className="mr-1.5 h-4 w-4 animate-spin" />} Create
           </Button>
         </div>
       </DialogContent>

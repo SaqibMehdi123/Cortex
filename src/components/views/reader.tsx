@@ -1,5 +1,6 @@
 'use client'
 
+import { FaArrowLeft, FaBookOpen, FaCircleCheck, FaDownload, FaFileLines, FaHighlighter, FaLayerGroup, FaNoteSticky, FaPaperPlane, FaQuoteLeft, FaShareNodes, FaSpinner, FaTableColumns, FaTrashCan, FaTurnDown, FaUpRightFromSquare, FaWandMagicSparkles, FaXmark } from 'react-icons/fa6'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { api } from '@/lib/client'
@@ -24,11 +25,6 @@ import { cn } from '@/lib/utils'
 import { splitCitationParts } from '@/lib/citations'
 import ReactMarkdown from 'react-markdown'
 import { PdfCanvasViewer, type PdfViewerHandle } from '@/components/pdf-viewer'
-import {
-  ArrowLeft, Send, Highlighter, StickyNote, Layers, Share2, Loader2,
-  X, Trash2, CheckCircle2, BookOpen, FileText, PanelRightOpen, ExternalLink, Download, Sparkles,
-  Quote, CornerDownRight,
-} from 'lucide-react'
 
 const HL_COLORS = ['yellow', 'green', 'blue', 'pink'] as const
 
@@ -78,7 +74,7 @@ function CitedAnswer({
             title={p.page ? `Jump to page ${p.page}` : 'Jump to the cited passage'}
             className="mx-0.5 inline-flex h-5 min-w-5 items-center justify-center gap-0.5 rounded-full bg-primary/10 px-1 align-super text-[10px] font-semibold text-primary transition-colors hover:bg-primary/20"
           >
-            <Quote className="h-2.5 w-2.5" />
+            <FaQuoteLeft className="h-2.5 w-2.5" />
             {p.n}
           </button>
         )
@@ -97,11 +93,11 @@ function CitedAnswer({
               <span className="block break-words text-[11px] leading-snug text-muted-foreground transition-colors [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] [overflow:hidden] group-hover:text-foreground">{c.label}</span>
               {c.page ? (
                 <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-primary/10 px-1.5 py-px text-[9px] font-semibold text-primary">
-                  <FileText className="h-2.5 w-2.5" /> Page {c.page}
+                  <FaFileLines className="h-2.5 w-2.5" /> Page {c.page}
                 </span>
               ) : null}
             </span>
-            <CornerDownRight className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground/40 transition-colors group-hover:text-primary" />
+            <FaTurnDown className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground/40 transition-colors group-hover:text-primary" />
           </button>
         ))}
       </div>
@@ -114,7 +110,7 @@ function CitedAnswer({
 // PDFs inside iframes — this works identically everywhere, original layout,
 // images and fonts preserved); text documents use the comfortable
 // reading column. The canvas owns the FULL width: AI chat lives ONLY in the
-// floating popup (every Copilot icon toggles it, Sparkles ⇄ cross), while
+// floating popup (every Copilot icon toggles it, FaWandMagicSparkles ⇄ cross), while
 // summary + highlights open on demand from the header panel button.
 export function ReaderView() {
   const readerDocId = useUI((s) => s.readerDocId)
@@ -482,7 +478,7 @@ export function ReaderView() {
     if (!doc?.content) {
       return (
         <div className="rounded-xl border border-dashed p-8 text-center">
-          <BookOpen className="mx-auto h-8 w-8 text-muted-foreground/50" />
+          <FaBookOpen className="mx-auto h-8 w-8 text-muted-foreground/50" />
           <p className="mt-3 font-medium">No extractable text</p>
           <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
             This PDF has no machine-readable text (likely a scan). Paste its text to unlock highlighting and AI Q&amp;A.
@@ -670,7 +666,7 @@ export function ReaderView() {
           ))}
           {aiBusy && (
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Reading the document…
+              <FaSpinner className="h-3.5 w-3.5 animate-spin" /> Reading the document…
             </div>
           )}
         </div>
@@ -692,7 +688,7 @@ export function ReaderView() {
             aria-label="Ask AI"
           />
           <Button size="icon" className="h-11 w-11 shrink-0" onClick={() => sendAI()} disabled={aiBusy || !aiInput.trim()} aria-label="Send question">
-            <Send className="h-4 w-4" />
+            <FaPaperPlane className="h-4 w-4" />
           </Button>
         </div>
       </div>
@@ -721,7 +717,7 @@ export function ReaderView() {
               <div className="flex items-center justify-between gap-2">
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">AI summary</h3>
                 <Button variant="ghost" size="sm" className="h-7 gap-1.5 px-2 text-xs" onClick={summarize} disabled={summarizing || !doc?.content}>
-                  {summarizing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                  {summarizing ? <FaSpinner className="h-3.5 w-3.5 animate-spin" /> : <FaWandMagicSparkles className="h-3.5 w-3.5" />}
                   {doc?.summary ? 'Regenerate' : 'Generate'}
                 </Button>
               </div>
@@ -759,10 +755,10 @@ export function ReaderView() {
               <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Use it elsewhere</h3>
               <div className="flex flex-wrap gap-2">
                 <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={() => setMindmapOpen(true)}>
-                  <Share2 className="h-3.5 w-3.5" /> Mindmap
+                  <FaShareNodes className="h-3.5 w-3.5" /> Mindmap
                 </Button>
                 <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={() => setPanelTab('highlights')}>
-                  <Highlighter className="h-3.5 w-3.5" /> From a highlight
+                  <FaHighlighter className="h-3.5 w-3.5" /> From a highlight
                 </Button>
               </div>
             </section>
@@ -802,7 +798,7 @@ export function ReaderView() {
                       className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:text-danger group-hover:opacity-100"
                       aria-label="Delete highlight"
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
+                      <FaTrashCan className="h-3.5 w-3.5" />
                     </button>
                   </div>
                   {h.note && <p className="mt-1.5 border-l-2 border-border pl-2 text-xs italic text-muted-foreground">{h.note}</p>}
@@ -812,7 +808,7 @@ export function ReaderView() {
                       disabled={flashcardBusy}
                       className="flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                     >
-                      {flashcardBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Layers className="h-3 w-3" />} Flashcard
+                      {flashcardBusy ? <FaSpinner className="h-3 w-3 animate-spin" /> : <FaLayerGroup className="h-3 w-3" />} Flashcard
                     </button>
                     <button
                       onClick={() => {
@@ -821,7 +817,7 @@ export function ReaderView() {
                       }}
                       className="flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                     >
-                      <StickyNote className="h-3 w-3" /> {h.note ? 'Edit note' : 'Note'}
+                      <FaNoteSticky className="h-3 w-3" /> {h.note ? 'Edit note' : 'Note'}
                     </button>
                   </div>
                 </div>
@@ -842,7 +838,7 @@ export function ReaderView() {
       {/* ── Reader header ── */}
       <header className="flex flex-wrap items-center gap-2 border-b pb-2.5">
         <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={closeReader} aria-label="Back to library">
-          <ArrowLeft className="h-4.5 w-4.5" />
+          <FaArrowLeft className="h-4.5 w-4.5" />
         </Button>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold leading-tight">{doc?.title ?? 'Loading…'}</p>
@@ -855,8 +851,8 @@ export function ReaderView() {
         {isPdf && doc?.content && (
           <Tabs value={mode} onValueChange={(v) => setMode(v as 'original' | 'text')}>
             <TabsList className="h-8">
-              <TabsTrigger value="original" className="h-6 gap-1.5 px-2.5 text-xs"><FileText className="h-3.5 w-3.5" /> Original PDF</TabsTrigger>
-              <TabsTrigger value="text" className="h-6 gap-1.5 px-2.5 text-xs"><BookOpen className="h-3.5 w-3.5" /> Text</TabsTrigger>
+              <TabsTrigger value="original" className="h-6 gap-1.5 px-2.5 text-xs"><FaFileLines className="h-3.5 w-3.5" /> Original PDF</TabsTrigger>
+              <TabsTrigger value="text" className="h-6 gap-1.5 px-2.5 text-xs"><FaBookOpen className="h-3.5 w-3.5" /> Text</TabsTrigger>
             </TabsList>
           </Tabs>
         )}
@@ -864,7 +860,7 @@ export function ReaderView() {
         {doc && (
           <>
             <Button variant="outline" size="sm" className="hidden h-8 gap-1.5 text-xs sm:flex" onClick={toggleFinished}>
-              <CheckCircle2 className={cn('h-3.5 w-3.5', doc.status === 'finished' && 'text-success')} />
+              <FaCircleCheck className={cn('h-3.5 w-3.5', doc.status === 'finished' && 'text-success')} />
               {doc.status === 'finished' ? 'Reopen' : 'Finish'}
             </Button>
             <Button
@@ -874,7 +870,7 @@ export function ReaderView() {
               aria-label="Delete document"
               onClick={() => setConfirmDelete(true)}
             >
-              <Trash2 className="h-4 w-4" />
+              <FaTrashCan className="h-4 w-4" />
             </Button>
             <Button
               variant="ghost"
@@ -884,7 +880,7 @@ export function ReaderView() {
               aria-label="Open document panel (summary & highlights)"
               title="Summary & highlights"
             >
-              <PanelRightOpen className="h-4 w-4" />
+              <FaTableColumns className="h-4 w-4" />
             </Button>
           </>
         )}
@@ -910,14 +906,14 @@ export function ReaderView() {
                (mobile ones don't render PDFs in iframes) */
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border bg-muted/40 shadow-soft">
               <div className="flex items-center gap-2 border-b bg-background/95 px-3 py-2">
-                <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <FaFileLines className="h-4 w-4 shrink-0 text-muted-foreground" />
                 <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{doc?.fileName ?? doc?.title}</p>
                 <Badge variant="outline" className="hidden shrink-0 text-[10px] sm:inline-flex">{doc?.pageCount ?? '?'} pages</Badge>
                 <a href={fileUrl} target="_blank" rel="noreferrer" className="flex h-7 items-center gap-1.5 rounded-md border bg-background px-2 text-[11px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" aria-label="Open PDF in new tab">
-                  <ExternalLink className="h-3 w-3" /> Open
+                  <FaUpRightFromSquare className="h-3 w-3" /> Open
                 </a>
                 <a href={fileUrl} download={doc?.fileName ?? undefined} className="flex h-7 items-center gap-1.5 rounded-md border bg-background px-2 text-[11px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" aria-label="Download PDF">
-                  <Download className="h-3 w-3" /> Save
+                  <FaDownload className="h-3 w-3" /> Save
                 </a>
               </div>
               {/* pdf.js canvas pages — zoom, page nav, lazy render; resumes at the last page read;
@@ -939,7 +935,7 @@ export function ReaderView() {
                 {doc?.summary && (
                   <div className="anim-pop mb-8 rounded-xl border bg-card p-4">
                     <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
-                      <Sparkles className="h-3.5 w-3.5" /> AI summary
+                      <FaWandMagicSparkles className="h-3.5 w-3.5" /> AI summary
                     </div>
                     <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{doc.summary}</p>
                     {takeaways.length > 0 && (
@@ -957,7 +953,7 @@ export function ReaderView() {
                 <div className="mt-6 flex items-center justify-between gap-2 border-t pt-3 text-xs text-muted-foreground">
                   <span>— end of document —</span>
                   <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs sm:hidden" onClick={toggleFinished}>
-                    <CheckCircle2 className={cn('h-3.5 w-3.5', doc?.status === 'finished' && 'text-success')} />
+                    <FaCircleCheck className={cn('h-3.5 w-3.5', doc?.status === 'finished' && 'text-success')} />
                     {doc?.status === 'finished' ? 'Reopen' : 'Finish'}
                   </Button>
                 </div>
@@ -1040,7 +1036,7 @@ export function ReaderView() {
             aria-label="AI chat"
           >
             <div className="flex shrink-0 items-center gap-2 border-b px-3 py-2.5">
-              <Sparkles className="h-3.5 w-3.5 shrink-0 text-primary" />
+              <FaWandMagicSparkles className="h-3.5 w-3.5 shrink-0 text-primary" />
               <p className="shrink-0 text-xs font-semibold">Ask AI</p>
               <p className="min-w-0 flex-1 truncate text-right text-[10px] text-muted-foreground">{doc.title}</p>
               <button
@@ -1049,7 +1045,7 @@ export function ReaderView() {
                 title="Minimize"
                 className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
-                <X className="h-3.5 w-3.5" />
+                <FaXmark className="h-3.5 w-3.5" />
               </button>
             </div>
             <div className="flex min-h-0 flex-1 flex-col">{chatBody}</div>
@@ -1059,7 +1055,7 @@ export function ReaderView() {
       )}
 
       {/* Fullscreen Copilot toggle — the app-level icons are covered by the
-          immersive overlay, so fullscreen carries its own (same Sparkles
+          immersive overlay, so fullscreen carries its own (same FaWandMagicSparkles
           icon): click opens the popup, the cross minimizes it */}
       {pdfFullscreen && doc && createPortal(
         <div className="pointer-events-none fixed inset-0 z-[70]">
@@ -1069,7 +1065,7 @@ export function ReaderView() {
             title={readerChatOpen ? 'Minimize AI chat' : 'Ask AI about this book'}
             className="pointer-events-auto absolute bottom-5 right-4 flex h-11 w-11 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30 transition-transform hover:scale-105 active:scale-95 sm:right-5"
           >
-            {readerChatOpen ? <X className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
+            {readerChatOpen ? <FaXmark className="h-5 w-5" /> : <FaWandMagicSparkles className="h-5 w-5" />}
           </button>
         </div>,
         document.body
@@ -1105,7 +1101,7 @@ export function ReaderView() {
             className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted"
             aria-label="Add note to highlight"
           >
-            <StickyNote className="h-4 w-4" />
+            <FaNoteSticky className="h-4 w-4" />
           </button>
           <button
             onClick={() => {
@@ -1114,7 +1110,7 @@ export function ReaderView() {
             className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted"
             aria-label="Add to mindmap"
           >
-            <Share2 className="h-4 w-4" />
+            <FaShareNodes className="h-4 w-4" />
           </button>
           <button
             onClick={() => {
@@ -1123,7 +1119,7 @@ export function ReaderView() {
             className="flex h-7 items-center gap-1 rounded-lg px-2 text-xs font-medium text-foreground transition-colors hover:bg-muted"
             disabled={flashcardBusy}
           >
-            {flashcardBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Layers className="h-3.5 w-3.5" />} Flashcard
+            {flashcardBusy ? <FaSpinner className="h-3.5 w-3.5 animate-spin" /> : <FaLayerGroup className="h-3.5 w-3.5" />} Flashcard
           </button>
         </div>
       )}
@@ -1195,7 +1191,7 @@ export function ReaderView() {
           <div className="flex justify-end gap-2">
             <Button variant="ghost" onClick={() => setMindmapOpen(false)}>Cancel</Button>
             <Button onClick={addToMindmap}>
-              <Share2 className="mr-1.5 h-4 w-4" /> Add
+              <FaShareNodes className="mr-1.5 h-4 w-4" /> Add
             </Button>
           </div>
         </DialogContent>

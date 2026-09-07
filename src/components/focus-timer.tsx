@@ -1,11 +1,11 @@
 'use client'
 
+import { FaPause, FaPlay, FaStopwatch, FaXmark } from 'react-icons/fa6'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { useUI } from '@/lib/nav-config'
 import { api } from '@/lib/client'
-import { Pause, Play, X, Timer } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
 
@@ -90,7 +90,7 @@ export function FocusTimer() {
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Timer className="h-4 w-4 text-primary" /> Focus mode
+            <FaStopwatch className="h-4 w-4 text-primary" /> Focus mode
           </DialogTitle>
           <DialogDescription className="line-clamp-2">{focusTask?.title ?? 'Pomodoro session'}</DialogDescription>
         </DialogHeader>
@@ -122,7 +122,7 @@ export function FocusTimer() {
 
           <div className="flex gap-2">
             <Button onClick={() => setRunning((r) => !r)} className="min-w-[100px]">
-              {running ? <><Pause className="mr-1.5 h-4 w-4" /> Pause</> : <><Play className="mr-1.5 h-4 w-4" /> Resume</>}
+              {running ? <><FaPause className="mr-1.5 h-4 w-4" /> Pause</> : <><FaPlay className="mr-1.5 h-4 w-4" /> Resume</>}
             </Button>
             <Button
               variant="outline"
@@ -133,7 +133,7 @@ export function FocusTimer() {
                 setFocusTask(null)
               }}
             >
-              <X className="mr-1.5 h-4 w-4" /> End
+              <FaXmark className="mr-1.5 h-4 w-4" /> End
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">25 min focus → 5 min break. Logged to the linked task & goal.</p>

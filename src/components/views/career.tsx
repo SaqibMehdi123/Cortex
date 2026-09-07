@@ -1,5 +1,6 @@
 'use client'
 
+import { FaBookmark, FaBriefcase, FaClock, FaEnvelope, FaFileLines, FaGraduationCap, FaGripVertical, FaInbox, FaLandmark, FaLocationDot, FaMagnifyingGlass, FaPlus, FaRegBookmark, FaRotate, FaSpinner, FaTowerBroadcast, FaTrashCan, FaTriangleExclamation, FaUpRightFromSquare } from 'react-icons/fa6'
 import { useEffect, useMemo, useState } from 'react'
 import { api, fmtDate, daysUntil, useApi } from '@/lib/client'
 import type { Opportunity, JobListing, ListingIndex, ListingFetchResult, Scholarship, ScholarshipIndex, ScholarshipFetchResult } from '@/lib/types'
@@ -16,10 +17,6 @@ import { cn } from '@/lib/utils'
 import { SkeletonCard, EmptyState } from '@/components/shared'
 import { useUI } from '@/lib/nav-config'
 import { useAutoSync } from '@/hooks/use-auto-sync'
-import {
-  Briefcase, Plus, Loader2, Mail, Clock, FileText, Trash2, GripVertical, MailWarning, Inbox,
-  Radar, Search, ExternalLink, Bookmark, BookmarkCheck, MapPin, RefreshCw, GraduationCap, Landmark,
-} from 'lucide-react'
 
 const STAGES = [
   { key: 'saved', label: 'Saved', color: 'bg-zinc-400' },
@@ -94,7 +91,7 @@ export function CareerView() {
               tab === 'pipeline' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
             )}
           >
-            <Briefcase className="h-3.5 w-3.5" /> Pipeline
+            <FaBriefcase className="h-3.5 w-3.5" /> Pipeline
           </button>
           <button
             onClick={() => setTab('discover')}
@@ -103,7 +100,7 @@ export function CareerView() {
               tab === 'discover' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
             )}
           >
-            <Radar className="h-3.5 w-3.5" /> Discover
+            <FaTowerBroadcast className="h-3.5 w-3.5" /> Discover
           </button>
           <button
             onClick={() => setTab('scholarships')}
@@ -112,7 +109,7 @@ export function CareerView() {
               tab === 'scholarships' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
             )}
           >
-            <GraduationCap className="h-3.5 w-3.5" /> Scholarships
+            <FaGraduationCap className="h-3.5 w-3.5" /> Scholarships
           </button>
         </div>
       </div>
@@ -173,18 +170,18 @@ function PipelineTab() {
         </p>
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" onClick={scanGmail} disabled={scanning}>
-            {scanning ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Inbox className="mr-1.5 h-4 w-4" />}
+            {scanning ? <FaSpinner className="mr-1.5 h-4 w-4 animate-spin" /> : <FaInbox className="mr-1.5 h-4 w-4" />}
             {scanning ? 'Scanning inbox…' : 'Scan Gmail'}
           </Button>
           <Button onClick={() => setAddOpen(true)}>
-            <Plus className="mr-1.5 h-4 w-4" /> Add application
+            <FaPlus className="mr-1.5 h-4 w-4" /> Add application
           </Button>
         </div>
       </div>
 
       {/* Gmail note */}
       <div className="flex items-start gap-2.5 rounded-xl border border-dashed bg-card px-4 py-3 text-xs text-muted-foreground">
-        <Mail className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+        <FaEnvelope className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
         <p>
           <b className="text-foreground">Gmail, for real:</b> connect your Google account in Settings → Google account, then hit “Scan Gmail” —
           career emails from the last 60 days are classified (opportunity / rejection / interview / offer / deadline) and land on this board automatically.
@@ -198,7 +195,7 @@ function PipelineTab() {
         </div>
       ) : opportunities.length === 0 ? (
         <EmptyState
-          icon={<Briefcase className="h-5 w-5" />}
+          icon={<FaBriefcase className="h-5 w-5" />}
           title="Your pipeline is empty"
           description="Add applications manually or paste a job email — AI fills in company, role, deadline and stage for you."
           action={{ label: 'Add first application', onClick: () => setAddOpen(true) }}
@@ -240,7 +237,7 @@ function PipelineTab() {
                               <p className="truncate text-sm font-semibold">{o.company}</p>
                               <p className="truncate text-xs text-muted-foreground">{o.role}</p>
                             </div>
-                            <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground/40" />
+                            <FaGripVertical className="h-4 w-4 shrink-0 text-muted-foreground/40" />
                           </div>
                           <div className="mt-2 flex flex-wrap items-center gap-1.5">
                             <Badge variant="outline" className="text-[10px] capitalize">{o.type}</Badge>
@@ -252,14 +249,14 @@ function PipelineTab() {
                           </div>
                           {o.deadline && (
                             <p className={cn('mt-2 flex items-center gap-1 text-[10px] font-medium', dl !== null && dl < 0 ? 'text-danger' : dl !== null && dl <= 7 ? 'text-warning' : 'text-muted-foreground')}>
-                              <Clock className="h-3 w-3" />
+                              <FaClock className="h-3 w-3" />
                               {dl !== null && dl < 0 ? `${-dl}d overdue` : dl === 0 ? 'due today' : `${dl}d left`}
                               {fmtDate(o.deadline, { month: 'short', day: 'numeric' }) ? ` · ${fmtDate(o.deadline, { month: 'short', day: 'numeric' })}` : ''}
                             </p>
                           )}
                           {o.resume && (
                             <p className="mt-1 flex items-center gap-1 truncate text-[10px] text-muted-foreground">
-                              <FileText className="h-3 w-3" /> {o.resume}
+                              <FaFileLines className="h-3 w-3" /> {o.resume}
                             </p>
                           )}
                           {o.nextAction && <p className="mt-1 line-clamp-1 text-[10px] italic text-muted-foreground">→ {o.nextAction}</p>}
@@ -271,7 +268,7 @@ function PipelineTab() {
                             className="mt-1.5 flex h-6 w-6 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:text-danger group-hover:opacity-100"
                             aria-label="Delete application"
                           >
-                            <Trash2 className="h-3 w-3" />
+                            <FaTrashCan className="h-3 w-3" />
                           </button>
                         </CardContent>
                       </Card>
@@ -360,7 +357,7 @@ function AddApplicationDialog({ open, onOpenChange, onCreated }: { open: boolean
 
         <div className="flex gap-1.5">
           <button onClick={() => setMode('email')} className={cn('flex min-h-[36px] flex-1 items-center justify-center gap-1.5 rounded-lg border text-xs font-medium transition-colors', mode === 'email' ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted')}>
-            <MailWarning className="h-3.5 w-3.5" /> Parse an email
+            <FaTriangleExclamation className="h-3.5 w-3.5" /> Parse an email
           </button>
           <button onClick={() => setMode('manual')} className={cn('flex min-h-[36px] flex-1 items-center justify-center gap-1.5 rounded-lg border text-xs font-medium transition-colors', mode === 'manual' ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted')}>
             Manual entry
@@ -377,7 +374,7 @@ function AddApplicationDialog({ open, onOpenChange, onCreated }: { open: boolean
               aria-label="Email text"
             />
             <Button variant="secondary" size="sm" onClick={parseEmail} disabled={parseBusy || !emailText.trim()} className="w-full">
-              {parseBusy ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Mail className="mr-1.5 h-3.5 w-3.5" />}
+              {parseBusy ? <FaSpinner className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <FaEnvelope className="mr-1.5 h-3.5 w-3.5" />}
               Parse with AI
             </Button>
             {parsedNote && <p className="rounded-lg bg-success/10 px-3 py-2 text-xs text-success">{parsedNote}</p>}
@@ -419,7 +416,7 @@ function AddApplicationDialog({ open, onOpenChange, onCreated }: { open: boolean
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button onClick={save} disabled={busy}>
-            {busy && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />} Save
+            {busy && <FaSpinner className="mr-1.5 h-4 w-4 animate-spin" />} Save
           </Button>
         </div>
       </DialogContent>
@@ -529,7 +526,7 @@ function DiscoverTab() {
           {lastFetchedAt && !fetching && !autoFetching && <span className="hidden text-xs text-muted-foreground sm:inline">Updated {timeAgo(lastFetchedAt)}</span>}
           {autoFetching && <span className="hidden text-xs text-muted-foreground sm:inline">Refreshing in background…</span>}
           <Button onClick={fetchListings} disabled={fetching || autoFetching}>
-            {(fetching || autoFetching) ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-1.5 h-4 w-4" />}
+            {(fetching || autoFetching) ? <FaSpinner className="mr-1.5 h-4 w-4 animate-spin" /> : <FaRotate className="mr-1.5 h-4 w-4" />}
             {fetching ? 'Fetching…' : 'Fetch latest'}
           </Button>
         </div>
@@ -558,7 +555,7 @@ function DiscoverTab() {
               savedOnly ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted',
             )}
           >
-            <BookmarkCheck className="h-3.5 w-3.5" /> Saved
+            <FaBookmark className="h-3.5 w-3.5" /> Saved
           </button>
         </div>
         <div className="ml-auto flex w-full min-w-0 items-center gap-2 sm:w-auto">
@@ -576,7 +573,7 @@ function DiscoverTab() {
             </select>
           )}
           <div className="relative min-w-0 flex-1 sm:w-44 sm:flex-none">
-            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <FaMagnifyingGlass className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -595,7 +592,7 @@ function DiscoverTab() {
         <>
           <div className="flex items-center gap-2 sm:hidden">
             <span className="flex shrink-0 items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-              <Briefcase className="h-3 w-3" /> Role
+              <FaBriefcase className="h-3 w-3" /> Role
             </span>
             <select
               value={family}
@@ -613,7 +610,7 @@ function DiscoverTab() {
           </div>
           <div className="hidden flex-wrap items-center gap-1.5 sm:flex">
             <span className="mr-1 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-              <Briefcase className="h-3 w-3" /> Role
+              <FaBriefcase className="h-3 w-3" /> Role
             </span>
             <button
               onClick={() => setFamily('')}
@@ -647,7 +644,7 @@ function DiscoverTab() {
         </div>
       ) : total === 0 ? (
         <EmptyState
-          icon={autoFetching ? <Loader2 className="h-5 w-5 animate-spin" /> : <Radar className="h-5 w-5" />}
+          icon={autoFetching ? <FaSpinner className="h-5 w-5 animate-spin" /> : <FaTowerBroadcast className="h-5 w-5" />}
           title={autoFetching ? 'Fetching opportunities…' : 'No listings yet'}
           description={
             autoFetching
@@ -658,7 +655,7 @@ function DiscoverTab() {
         />
       ) : listings.length === 0 ? (
         <EmptyState
-          icon={<Search className="h-5 w-5" />}
+          icon={<FaMagnifyingGlass className="h-5 w-5" />}
           title="Nothing matches these filters"
           description="Try a different role, type, source, or clear the search."
         />
@@ -683,7 +680,7 @@ function DiscoverTab() {
                     aria-label={l.saved ? 'Saved to pipeline' : 'Save to pipeline'}
                     title={l.saved ? 'Saved to pipeline' : 'Save to pipeline'}
                   >
-                    {l.saved ? <BookmarkCheck className="h-3.5 w-3.5" /> : <Bookmark className="h-3.5 w-3.5" />}
+                    {l.saved ? <FaBookmark className="h-3.5 w-3.5" /> : <FaRegBookmark className="h-3.5 w-3.5" />}
                   </button>
                 </div>
                 <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
@@ -694,7 +691,7 @@ function DiscoverTab() {
                 </div>
                 <div className="mt-2 flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
                   <span className="flex min-w-0 items-center gap-1">
-                    {l.location && <><MapPin className="h-3 w-3 shrink-0" /><span className="truncate">{l.location}</span></>}
+                    {l.location && <><FaLocationDot className="h-3 w-3 shrink-0" /><span className="truncate">{l.location}</span></>}
                     {l.publishedAt && <span className="shrink-0">· {timeAgo(l.publishedAt)}</span>}
                   </span>
                   <a
@@ -703,7 +700,7 @@ function DiscoverTab() {
                     rel="noopener noreferrer"
                     className="flex shrink-0 items-center gap-1 font-medium text-primary hover:underline"
                   >
-                    Apply <ExternalLink className="h-3 w-3" />
+                    Apply <FaUpRightFromSquare className="h-3 w-3" />
                   </a>
                 </div>
               </CardContent>
@@ -817,7 +814,7 @@ function ScholarshipsTab() {
           {lastFetchedAt && !fetching && !autoFetching && <span className="hidden text-xs text-muted-foreground sm:inline">Updated {timeAgo(lastFetchedAt)}</span>}
           {autoFetching && <span className="hidden text-xs text-muted-foreground sm:inline">Refreshing in background…</span>}
           <Button size="sm" className="h-9" onClick={fetchScholarships} disabled={fetching || autoFetching}>
-            {(fetching || autoFetching) ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-1.5 h-4 w-4" />}
+            {(fetching || autoFetching) ? <FaSpinner className="mr-1.5 h-4 w-4 animate-spin" /> : <FaRotate className="mr-1.5 h-4 w-4" />}
             {fetching ? 'Fetching…' : 'Fetch latest'}
           </Button>
         </div>
@@ -846,11 +843,11 @@ function ScholarshipsTab() {
               savedOnly ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted',
             )}
           >
-            <BookmarkCheck className="h-3.5 w-3.5" /> Saved
+            <FaBookmark className="h-3.5 w-3.5" /> Saved
           </button>
         </div>
         <div className="relative ml-auto">
-          <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <FaMagnifyingGlass className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -867,7 +864,7 @@ function ScholarshipsTab() {
         </div>
       ) : total === 0 ? (
         <EmptyState
-          icon={autoFetching ? <Loader2 className="h-5 w-5 animate-spin" /> : <GraduationCap className="h-5 w-5" />}
+          icon={autoFetching ? <FaSpinner className="h-5 w-5 animate-spin" /> : <FaGraduationCap className="h-5 w-5" />}
           title={autoFetching ? 'Fetching scholarships…' : 'No scholarships yet'}
           description={
             autoFetching
@@ -878,7 +875,7 @@ function ScholarshipsTab() {
         />
       ) : items.length === 0 ? (
         <EmptyState
-          icon={<Search className="h-5 w-5" />}
+          icon={<FaMagnifyingGlass className="h-5 w-5" />}
           title="Nothing matches these filters"
           description="Try a different level or clear the search."
         />
@@ -903,7 +900,7 @@ function ScholarshipsTab() {
                       aria-label={s.saved ? 'Saved' : 'Save scholarship'}
                       title={s.saved ? 'Saved' : 'Save to shortlist'}
                     >
-                      {s.saved ? <BookmarkCheck className="h-3.5 w-3.5" /> : <Bookmark className="h-3.5 w-3.5" />}
+                      {s.saved ? <FaBookmark className="h-3.5 w-3.5" /> : <FaRegBookmark className="h-3.5 w-3.5" />}
                     </button>
                   </div>
                   <a
@@ -918,12 +915,12 @@ function ScholarshipsTab() {
                   <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
                     {s.funding && (
                       <span className="flex items-center gap-1 rounded-full bg-warning/10 px-2 py-0.5 text-[10px] font-medium text-warning">
-                        <Landmark className="h-3 w-3" /> {s.funding}
+                        <FaLandmark className="h-3 w-3" /> {s.funding}
                       </span>
                     )}
                     {s.country && (
                       <span className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
-                        <MapPin className="h-3 w-3" /> {s.country}
+                        <FaLocationDot className="h-3 w-3" /> {s.country}
                       </span>
                     )}
                     <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">{s.provider}</span>
@@ -936,7 +933,7 @@ function ScholarshipsTab() {
                       rel="noopener noreferrer"
                       className="flex shrink-0 items-center gap-1 font-medium text-primary hover:underline"
                     >
-                      Apply <ExternalLink className="h-3 w-3" />
+                      Apply <FaUpRightFromSquare className="h-3 w-3" />
                     </a>
                   </div>
                 </CardContent>

@@ -1,9 +1,9 @@
 "use client"
 
-import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
-import { cva, VariantProps } from "class-variance-authority"
-import { PanelLeftIcon } from "lucide-react"
+import { cva, type VariantProps } from "class-variance-authority"
+import { FaIndent } from 'react-icons/fa6'
+import * as React from "react"
 
 import { useIsMobile } from "@/hooks/use-mobile"
 import { cn } from "@/lib/utils"
@@ -273,7 +273,7 @@ function SidebarTrigger({
       }}
       {...props}
     >
-      <PanelLeftIcon />
+      <FaIndent />
       <span className="sr-only">Toggle Sidebar</span>
     </Button>
   )

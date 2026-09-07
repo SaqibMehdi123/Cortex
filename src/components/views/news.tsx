@@ -1,5 +1,6 @@
 'use client'
 
+import { FaArrowTrendUp, FaBook, FaBookmark, FaBullseye, FaChevronDown, FaChevronUp, FaCircleCheck, FaFileLines, FaFlask, FaLightbulb, FaMagnifyingGlass, FaNewspaper, FaPlus, FaRegBookmark, FaRotate, FaSliders, FaSpinner, FaTrashCan, FaUpRightFromSquare, FaWandMagicSparkles, FaWrench } from 'react-icons/fa6'
 import { useMemo, useState } from 'react'
 import { api, fmtDate, useApi } from '@/lib/client'
 import type { NewsArticle, Paper } from '@/lib/types'
@@ -16,10 +17,6 @@ import { useAutoSync } from '@/hooks/use-auto-sync'
 import { cn } from '@/lib/utils'
 import { EmptyState, PageHeader, SkeletonCard } from '@/components/shared'
 import { timeAgo } from '@/lib/timeago'
-import {
-  Radar, RefreshCw, BookmarkPlus, BookmarkCheck, ExternalLink, Settings2, Loader2, Plus, Trash2, Newspaper,
-  FileText, Sparkles, ChevronDown, ChevronUp, TrendingUp, LibraryBig, FlaskConical, Lightbulb, Wrench, Target, CircleCheck, Search,
-} from 'lucide-react'
 
 const CATEGORIES = [
   { key: 'all', label: 'All' },
@@ -141,18 +138,18 @@ function NewsTab() {
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2">
         <Button size="sm" className="h-9" onClick={fetchNews} disabled={fetching || autoFetching}>
-          {(fetching || autoFetching) ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-1.5 h-4 w-4" />}
+          {(fetching || autoFetching) ? <FaSpinner className="mr-1.5 h-4 w-4 animate-spin" /> : <FaRotate className="mr-1.5 h-4 w-4" />}
           Fetch latest
         </Button>
         <Button variant="outline" size="sm" className="h-9" onClick={() => setSourcesOpen(true)}>
-          <Settings2 className="mr-1.5 h-4 w-4" /> Sources
+          <FaSliders className="mr-1.5 h-4 w-4" /> Sources
         </Button>
         {lastFetchedAt && !fetching && !autoFetching && (
           <span className="hidden text-xs text-muted-foreground sm:inline">Updated {timeAgo(lastFetchedAt)}</span>
         )}
         {autoFetching && <span className="hidden text-xs text-muted-foreground sm:inline">Refreshing in background…</span>}
         <div className="relative ml-auto w-full sm:w-52">
-          <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <FaMagnifyingGlass className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search stories…" className="h-9 pl-9 text-xs" aria-label="Search news" />
         </div>
       </div>
@@ -179,7 +176,7 @@ function NewsTab() {
             savedOnly ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted'
           )}
         >
-          <BookmarkCheck className="mr-1 inline h-3.5 w-3.5" /> Saved
+          <FaBookmark className="mr-1 inline h-3.5 w-3.5" /> Saved
         </button>
         <div className="ml-auto flex items-center gap-2">
           {data && data.sources.length > 1 && (
@@ -215,7 +212,7 @@ function NewsTab() {
         </div>
       ) : articles.length === 0 ? (
         <EmptyState
-          icon={autoFetching ? <Loader2 className="h-5 w-5 animate-spin" /> : <Newspaper className="h-5 w-5" />}
+          icon={autoFetching ? <FaSpinner className="h-5 w-5 animate-spin" /> : <FaNewspaper className="h-5 w-5" />}
           title={
             q || savedOnly || source !== 'all'
               ? 'Nothing matches these filters'
@@ -259,11 +256,11 @@ function NewsTab() {
                     <Badge variant="outline" className="text-[10px] capitalize">{a.category}</Badge>
                     <div className="ml-auto flex gap-1">
                       <Button variant="ghost" size="icon" className="h-7 w-7" aria-label={a.saved ? 'Unsave' : 'Save to reading queue'} onClick={() => toggleSave(a)}>
-                        {a.saved ? <BookmarkCheck className="h-4 w-4 text-primary" /> : <BookmarkPlus className="h-4 w-4" />}
+                        {a.saved ? <FaBookmark className="h-4 w-4 text-primary" /> : <FaRegBookmark className="h-4 w-4" />}
                       </Button>
                       <a href={a.url} target="_blank" rel="noreferrer" onClick={() => markRead(a)} aria-label="Open article">
                         <Button variant="ghost" size="icon" className="h-7 w-7">
-                          <ExternalLink className="h-4 w-4" />
+                          <FaUpRightFromSquare className="h-4 w-4" />
                         </Button>
                       </a>
                     </div>
@@ -289,10 +286,10 @@ function PaperAnalysis({ paper }: { paper: Paper }) {
   }, [paper.results])
 
   const sections = [
-    { icon: <Wrench className="h-3.5 w-3.5" />, label: 'Problem it solves', body: paper.problem },
-    { icon: <Lightbulb className="h-3.5 w-3.5" />, label: "What's new (innovation)", body: paper.innovation },
-    { icon: <CircleCheck className="h-3.5 w-3.5" />, label: 'Key results', body: null, list: results },
-    { icon: <Target className="h-3.5 w-3.5" />, label: 'Why it matters', body: paper.whyMatters },
+    { icon: <FaWrench className="h-3.5 w-3.5" />, label: 'Problem it solves', body: paper.problem },
+    { icon: <FaLightbulb className="h-3.5 w-3.5" />, label: "What's new (innovation)", body: paper.innovation },
+    { icon: <FaCircleCheck className="h-3.5 w-3.5" />, label: 'Key results', body: null, list: results },
+    { icon: <FaBullseye className="h-3.5 w-3.5" />, label: 'Why it matters', body: paper.whyMatters },
   ].filter((s) => s.body || (s.list && s.list.length > 0))
 
   if (sections.length === 0) return null
@@ -368,12 +365,12 @@ function PaperCard({ paper, onUpdated }: { paper: Paper; onUpdated: (p: Paper) =
       <CardContent className="p-4">
         <div className="flex items-start gap-3">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border bg-secondary text-muted-foreground" aria-hidden>
-            <FileText className="h-4 w-4" />
+            <FaFileLines className="h-4 w-4" />
           </span>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
               <Badge variant="outline" className="h-5 gap-1 px-1.5 text-[10px]">
-                <TrendingUp className="h-3 w-3" /> {paper.upvotes}
+                <FaArrowTrendUp className="h-3 w-3" /> {paper.upvotes}
               </Badge>
               <Badge variant="outline" className="h-5 px-1.5 text-[10px] capitalize">
                 {paper.source === 'huggingface' ? 'HF Daily' : 'arXiv'}
@@ -387,14 +384,14 @@ function PaperCard({ paper, onUpdated }: { paper: Paper; onUpdated: (p: Paper) =
 
             {analyzed && paper.tldr && (
               <p className="mt-2 flex gap-1.5 text-xs leading-relaxed text-muted-foreground">
-                <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+                <FaWandMagicSparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
                 <span>{paper.tldr}</span>
               </p>
             )}
 
             {!analyzed && (
               <Button variant="outline" size="sm" className="mt-2.5 h-7 text-xs" onClick={analyze} disabled={analyzing}>
-                {analyzing ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Sparkles className="mr-1.5 h-3.5 w-3.5" />}
+                {analyzing ? <FaSpinner className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <FaWandMagicSparkles className="mr-1.5 h-3.5 w-3.5" />}
                 {analyzing ? 'Reading the abstract…' : 'Analyze paper'}
               </Button>
             )}
@@ -406,7 +403,7 @@ function PaperCard({ paper, onUpdated }: { paper: Paper; onUpdated: (p: Paper) =
                   className="mt-2 flex items-center gap-1 text-xs font-medium text-primary transition-colors hover:text-primary/80"
                   aria-expanded={expanded}
                 >
-                  {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                  {expanded ? <FaChevronUp className="h-3.5 w-3.5" /> : <FaChevronDown className="h-3.5 w-3.5" />}
                   {expanded ? 'Hide breakdown' : 'Problem · Innovation · Results'}
                 </button>
                 {expanded && <PaperAnalysis paper={paper} />}
@@ -415,16 +412,16 @@ function PaperCard({ paper, onUpdated }: { paper: Paper; onUpdated: (p: Paper) =
 
             <div className="mt-3 flex flex-wrap items-center gap-1.5">
               <Button variant="outline" size="sm" className="h-7 text-xs" onClick={saveToLibrary} disabled={savingLib}>
-                {savingLib ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <LibraryBig className="mr-1.5 h-3.5 w-3.5" />}
+                {savingLib ? <FaSpinner className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <FaBook className="mr-1.5 h-3.5 w-3.5" />}
                 {paper.documentId ? 'Open in Reader' : 'Save to Library'}
               </Button>
               <a href={paper.pdfUrl ?? paper.url ?? '#'} target="_blank" rel="noreferrer">
                 <Button variant="ghost" size="sm" className="h-7 text-xs">
-                  <ExternalLink className="mr-1.5 h-3.5 w-3.5" /> PDF
+                  <FaUpRightFromSquare className="mr-1.5 h-3.5 w-3.5" /> PDF
                 </Button>
               </a>
               <Button variant="ghost" size="icon" className="ml-auto h-7 w-7" aria-label={paper.saved ? 'Unbookmark' : 'Bookmark'} onClick={toggleSaved}>
-                {paper.saved ? <BookmarkCheck className="h-4 w-4 text-primary" /> : <BookmarkPlus className="h-4 w-4" />}
+                {paper.saved ? <FaBookmark className="h-4 w-4 text-primary" /> : <FaRegBookmark className="h-4 w-4" />}
               </Button>
             </div>
           </div>
@@ -491,7 +488,7 @@ function PapersTab() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <Button size="sm" className="h-9" onClick={syncPapers} disabled={syncing || autoSyncing}>
-          {(syncing || autoSyncing) ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-1.5 h-4 w-4" />}
+          {(syncing || autoSyncing) ? <FaSpinner className="mr-1.5 h-4 w-4 animate-spin" /> : <FaRotate className="mr-1.5 h-4 w-4" />}
           Sync papers
         </Button>
         {papersLastFetchedAt && !syncing && !autoSyncing && (
@@ -500,7 +497,7 @@ function PapersTab() {
         {autoSyncing && <span className="text-xs text-muted-foreground">Syncing in background…</span>}
         <p className="hidden text-xs text-muted-foreground sm:block">Hugging Face Daily Papers + arXiv cs.AI / cs.CL / cs.LG / cs.CV</p>
         <div className="relative ml-auto w-full sm:w-52">
-          <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <FaMagnifyingGlass className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search papers…" className="h-9 pl-9 text-xs" aria-label="Search papers" />
         </div>
       </div>
@@ -526,7 +523,7 @@ function PapersTab() {
             savedOnly ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted'
           )}
         >
-          <BookmarkCheck className="mr-1 inline h-3.5 w-3.5" /> Saved
+          <FaBookmark className="mr-1 inline h-3.5 w-3.5" /> Saved
         </button>
         <div className="ml-auto">
           <Select value={sort} onValueChange={setSort}>
@@ -547,7 +544,7 @@ function PapersTab() {
         </div>
       ) : papers.length === 0 ? (
         <EmptyState
-          icon={<FlaskConical className="h-5 w-5" />}
+          icon={<FaFlask className="h-5 w-5" />}
           title={q || savedOnly ? 'Nothing matches these filters' : 'No papers tracked yet'}
           description={
             q || savedOnly
@@ -576,8 +573,8 @@ export function NewsView() {
       />
       <Tabs defaultValue="news">
         <TabsList>
-          <TabsTrigger value="news" className="gap-1.5"><Newspaper className="h-3.5 w-3.5" /> News</TabsTrigger>
-          <TabsTrigger value="papers" className="gap-1.5"><FlaskConical className="h-3.5 w-3.5" /> Papers</TabsTrigger>
+          <TabsTrigger value="news" className="gap-1.5"><FaNewspaper className="h-3.5 w-3.5" /> News</TabsTrigger>
+          <TabsTrigger value="papers" className="gap-1.5"><FaFlask className="h-3.5 w-3.5" /> Papers</TabsTrigger>
         </TabsList>
         <TabsContent value="news" className="mt-4">
           <NewsTab />
@@ -635,7 +632,7 @@ function SourcesDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v
               }
             }}
           >
-            <Plus className="mr-1.5 h-4 w-4" /> Add source
+            <FaPlus className="mr-1.5 h-4 w-4" /> Add source
           </Button>
         </div>
         <div className="max-h-[240px] space-y-1.5 overflow-y-auto scroll-thin">
@@ -652,7 +649,7 @@ function SourcesDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v
                 className="text-muted-foreground hover:text-danger"
                 aria-label="Remove source"
               >
-                <Trash2 className="h-4 w-4" />
+                <FaTrashCan className="h-4 w-4" />
               </button>
             </div>
           ))}

@@ -1,5 +1,6 @@
 'use client'
 
+import { FaArrowTrendUp, FaBookOpen, FaBullseye, FaGraduationCap, FaLayerGroup, FaListCheck, FaStopwatch } from 'react-icons/fa6'
 import { useState } from 'react'
 import { useApi } from '@/lib/client'
 import type { AnalyticsData } from '@/lib/types'
@@ -9,7 +10,6 @@ import { cn } from '@/lib/utils'
 import {
   AreaChart, Area, BarChart, Bar, LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip as ReTooltip, CartesianGrid,
 } from 'recharts'
-import { BookOpen, ListTodo, Timer, TrendingUp, Layers, Target, GraduationCap } from 'lucide-react'
 
 export function AnalyticsView() {
   const [range, setRange] = useState<'week' | 'month'>('week')
@@ -33,12 +33,12 @@ export function AnalyticsView() {
   }))
 
   const tiles = [
-    { label: 'Reading time', value: `${Math.round(data.totals.readingMinutes / 60 * 10) / 10}h`, icon: <BookOpen className="h-4 w-4" />, color: 'text-primary' },
-    { label: 'Tasks completed', value: data.totals.tasksCompleted, icon: <ListTodo className="h-4 w-4" />, color: 'text-success' },
-    { label: 'Focus hours', value: `${Math.round(data.totals.focusMinutes / 60 * 10) / 10}h`, icon: <Timer className="h-4 w-4" />, color: 'text-warning' },
-    { label: 'Cards reviewed', value: data.totals.flashcardsReviewed, icon: <Layers className="h-4 w-4" />, color: 'text-teal-500' },
-    { label: 'Active goals', value: data.totals.activeGoals, icon: <Target className="h-4 w-4" />, color: 'text-violet-500' },
-    { label: 'Docs finished', value: data.totals.docsFinished, icon: <GraduationCap className="h-4 w-4" />, color: 'text-cyan-500' },
+    { label: 'Reading time', value: `${Math.round(data.totals.readingMinutes / 60 * 10) / 10}h`, icon: <FaBookOpen className="h-4 w-4" />, color: 'text-primary' },
+    { label: 'Tasks completed', value: data.totals.tasksCompleted, icon: <FaListCheck className="h-4 w-4" />, color: 'text-success' },
+    { label: 'Focus hours', value: `${Math.round(data.totals.focusMinutes / 60 * 10) / 10}h`, icon: <FaStopwatch className="h-4 w-4" />, color: 'text-warning' },
+    { label: 'Cards reviewed', value: data.totals.flashcardsReviewed, icon: <FaLayerGroup className="h-4 w-4" />, color: 'text-teal-500' },
+    { label: 'Active goals', value: data.totals.activeGoals, icon: <FaBullseye className="h-4 w-4" />, color: 'text-violet-500' },
+    { label: 'Docs finished', value: data.totals.docsFinished, icon: <FaGraduationCap className="h-4 w-4" />, color: 'text-cyan-500' },
   ]
 
   return (
@@ -79,7 +79,7 @@ export function AnalyticsView() {
       <Card className="transition-shadow hover:shadow-soft">
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2 text-sm">
-            <BookOpen className="h-4 w-4 text-primary" /> Reading time
+            <FaBookOpen className="h-4 w-4 text-primary" /> Reading time
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -108,7 +108,7 @@ export function AnalyticsView() {
         <Card className="transition-shadow hover:shadow-soft">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm">
-              <ListTodo className="h-4 w-4 text-success" /> Tasks completed
+              <FaListCheck className="h-4 w-4 text-success" /> Tasks completed
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -130,7 +130,7 @@ export function AnalyticsView() {
         <Card className="transition-shadow hover:shadow-soft">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm">
-              <Timer className="h-4 w-4 text-warning" /> Focus hours
+              <FaStopwatch className="h-4 w-4 text-warning" /> Focus hours
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -159,7 +159,7 @@ export function AnalyticsView() {
       <Card className="transition-shadow hover:shadow-soft">
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2 text-sm">
-            <TrendingUp className="h-4 w-4 text-primary" /> Goal velocity — milestones completed per week
+            <FaArrowTrendUp className="h-4 w-4 text-primary" /> Goal velocity — milestones completed per week
           </CardTitle>
         </CardHeader>
         <CardContent>

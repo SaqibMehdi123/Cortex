@@ -1,5 +1,6 @@
 'use client'
 
+import { FaDownload, FaExpand, FaFileCode, FaMagnifyingGlassMinus, FaMagnifyingGlassPlus, FaPalette, FaPlus, FaShareNodes, FaSpinner, FaTrashCan, FaWandMagicSparkles, FaXmark } from 'react-icons/fa6'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '@/lib/client'
 import type { Mindmap, MindmapNode } from '@/lib/types'
@@ -12,10 +13,6 @@ import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
 import { colorHex, EmptyState, SkeletonCard } from '@/components/shared'
 import { useUI } from '@/lib/nav-config'
-import {
-  Share2, Plus, Trash2, Loader2, Sparkles, ZoomIn, ZoomOut, Maximize, Wand2,
-  Download, FileCode, Palette, X,
-} from 'lucide-react'
 
 const NODE_W = 150
 const NODE_H = 44
@@ -251,7 +248,7 @@ export function MindmapView() {
       <div className="anim-fade-up space-y-4 pb-8">
         <Header onCreate={() => setGenOpen(true)} hasMaps={false} />
         <EmptyState
-          icon={<Share2 className="h-5 w-5" />}
+          icon={<FaShareNodes className="h-5 w-5" />}
           title="Generate your first mindmap"
           description="Cortex can auto-generate a mindmap from any document in your library, from your notes, or from any topic you type."
           action={{ label: 'Generate with AI', onClick: () => setGenOpen(true) }}
@@ -288,17 +285,17 @@ export function MindmapView() {
         </Select>
 
         <div className="flex items-center gap-1">
-          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setZoom((z) => Math.max(0.3, z - 0.15))} aria-label="Zoom out"><ZoomOut className="h-4 w-4" /></Button>
+          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setZoom((z) => Math.max(0.3, z - 0.15))} aria-label="Zoom out"><FaMagnifyingGlassMinus className="h-4 w-4" /></Button>
           <span className="w-10 text-center text-xs text-muted-foreground">{Math.round(zoom * 100)}%</span>
-          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setZoom((z) => Math.min(2.2, z + 0.15))} aria-label="Zoom in"><ZoomIn className="h-4 w-4" /></Button>
-          <Button variant="outline" size="icon" className="h-8 w-8" onClick={fitView} aria-label="Fit view"><Maximize className="h-4 w-4" /></Button>
+          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setZoom((z) => Math.min(2.2, z + 0.15))} aria-label="Zoom in"><FaMagnifyingGlassPlus className="h-4 w-4" /></Button>
+          <Button variant="outline" size="icon" className="h-8 w-8" onClick={fitView} aria-label="Fit view"><FaExpand className="h-4 w-4" /></Button>
         </div>
 
         <Button variant="outline" size="sm" className="h-8 text-xs" onClick={autoLayout}>
-          <Wand2 className="mr-1.5 h-3.5 w-3.5" /> Auto-layout
+          <FaWandMagicSparkles className="mr-1.5 h-3.5 w-3.5" /> Auto-layout
         </Button>
-        <Button variant="outline" size="sm" className="h-8 text-xs" onClick={exportPNG}><Download className="mr-1.5 h-3.5 w-3.5" /> PNG</Button>
-        <Button variant="outline" size="sm" className="h-8 text-xs" onClick={exportMarkdown}><FileCode className="mr-1.5 h-3.5 w-3.5" /> Markdown</Button>
+        <Button variant="outline" size="sm" className="h-8 text-xs" onClick={exportPNG}><FaDownload className="mr-1.5 h-3.5 w-3.5" /> PNG</Button>
+        <Button variant="outline" size="sm" className="h-8 text-xs" onClick={exportMarkdown}><FaFileCode className="mr-1.5 h-3.5 w-3.5" /> Markdown</Button>
         <Button
           variant="ghost"
           size="sm"
@@ -311,7 +308,7 @@ export function MindmapView() {
           }}
           aria-label="Delete map"
         >
-          <Trash2 className="h-3.5 w-3.5" />
+          <FaTrashCan className="h-3.5 w-3.5" />
         </Button>
         <span className="ml-auto text-[10px] text-muted-foreground">{dirty ? 'Saving…' : 'Saved'}</span>
       </div>
@@ -396,7 +393,7 @@ export function MindmapView() {
         {/* node action bar */}
         {selected && (
           <div className="anim-pop absolute left-1/2 top-3 flex -translate-x-1/2 items-center gap-1.5 rounded-xl border bg-popover p-1.5 shadow-lg">
-            <Palette className="ml-1 h-3.5 w-3.5 text-muted-foreground" />
+            <FaPalette className="ml-1 h-3.5 w-3.5 text-muted-foreground" />
             {['indigo', 'teal', 'emerald', 'amber', 'rose', 'violet', 'zinc'].map((c) => (
               <button
                 key={c}
@@ -416,7 +413,7 @@ export function MindmapView() {
                 if (parent) addChild(parent)
               }}
             >
-              <Plus className="mr-1 h-3 w-3" /> Child
+              <FaPlus className="mr-1 h-3 w-3" /> Child
             </Button>
             <Button
               size="sm"
@@ -428,10 +425,10 @@ export function MindmapView() {
                 setSelected(null)
               }}
             >
-              <Trash2 className="mr-1 h-3 w-3" /> Delete
+              <FaTrashCan className="mr-1 h-3 w-3" /> Delete
             </Button>
             <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setSelected(null)} aria-label="Deselect">
-              <X className="h-3.5 w-3.5" />
+              <FaXmark className="h-3.5 w-3.5" />
             </Button>
           </div>
         )}
@@ -506,7 +503,7 @@ function Header({ onCreate, hasMaps }: { onCreate: () => void; hasMaps: boolean 
         <p className="text-sm text-muted-foreground">{hasMaps ? 'Drag nodes, recolor, auto-layout, export.' : 'Visual maps of your knowledge, auto-built.'}</p>
       </div>
       <Button onClick={onCreate}>
-        <Sparkles className="mr-1.5 h-4 w-4" /> Generate
+        <FaWandMagicSparkles className="mr-1.5 h-4 w-4" /> Generate
       </Button>
     </div>
   )
@@ -580,8 +577,8 @@ function GenerateDialog({ open, onOpenChange, onCreated }: { open: boolean; onOp
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button onClick={generate} disabled={busy || (mode === 'topic' && !topic.trim()) || (mode === 'document' && !docId)}>
-            {busy && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
-            <Sparkles className="mr-1.5 h-4 w-4" /> Generate
+            {busy && <FaSpinner className="mr-1.5 h-4 w-4 animate-spin" />}
+            <FaWandMagicSparkles className="mr-1.5 h-4 w-4" /> Generate
           </Button>
         </div>
       </DialogContent>

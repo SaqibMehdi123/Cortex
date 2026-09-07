@@ -1,9 +1,9 @@
 'use client'
 
+import { FaBolt, FaBrain, FaCalendarCheck, FaLayerGroup, FaMagnifyingGlass, FaTurnDown } from 'react-icons/fa6'
 import { useEffect, useRef, useState } from 'react'
 import { Reveal, SectionHeader } from './landing'
 import { spotlightHandlers, useTypewriterLoop } from './motion'
-import { BrainCircuit, CalendarCheck2, CornerDownRight, Layers, ScanSearch, Zap } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 /* ── Workflow — scroll-driven timeline; the line fills as you scroll ──── */
@@ -11,25 +11,25 @@ import { cn } from '@/lib/utils'
 const STEPS = [
   {
     n: '01',
-    icon: Zap,
+    icon: FaBolt,
     title: 'Capture',
     desc: 'Clip it the second it appears. Quick capture and ⌘K from anywhere — no context switch, no friction.',
   },
   {
     n: '02',
-    icon: ScanSearch,
+    icon: FaMagnifyingGlass,
     title: 'Understand',
     desc: 'Reader mode plus a copilot that has read everything you saved. Ask it, summarize with it, connect through it.',
   },
   {
     n: '03',
-    icon: Layers,
+    icon: FaLayerGroup,
     title: 'Retain',
     desc: 'Flashcards and mindmaps on an SM-2 schedule. Memory that compounds instead of rotting in a folder.',
   },
   {
     n: '04',
-    icon: CalendarCheck2,
+    icon: FaCalendarCheck,
     title: 'Act',
     desc: 'Plan the week, run the focus timer, and let the radar hand you the right jobs and scholarships.',
   },
@@ -272,7 +272,7 @@ export function CopilotSection() {
           >
             {/* header */}
             <div className="flex items-center gap-2 border-b border-border bg-background/70 px-4 py-2.5">
-              <BrainCircuit className="h-3.5 w-3.5 text-muted-foreground" />
+              <FaBrain className="h-3.5 w-3.5 text-muted-foreground" />
               <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
                 copilot
               </span>
@@ -305,7 +305,7 @@ export function CopilotSection() {
               </div>
 
               <div className="mt-auto flex items-center gap-2 rounded-lg border border-border bg-background/50 px-3 py-2 text-[12.5px] text-muted-foreground">
-                <CornerDownRight className="h-3.5 w-3.5" />
+                <FaTurnDown className="h-3.5 w-3.5" />
                 Ask anything you&rsquo;ve saved
                 <span className="ml-auto rounded border border-border px-1 font-mono text-[9px]">
                   ↵

@@ -19,12 +19,12 @@
 // Fullscreen: the whole viewer can go immersive (fixed overlay above the
 // whole app) via the toolbar button; X or Esc returns to the normal view.
 
+import { FaChevronLeft, FaChevronRight, FaExpand, FaFileCircleExclamation, FaMagnifyingGlassMinus, FaMagnifyingGlassPlus, FaSpinner, FaXmark } from 'react-icons/fa6'
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Loader2, FileWarning, Maximize, X } from 'lucide-react'
 
 // pdf.js TextLayer constructor (obtained from the dynamic module import —
 // pdf.js must stay out of the SSR bundle)
@@ -383,7 +383,7 @@ export const PdfCanvasViewer = forwardRef<
   if (error) {
     return (
       <div className={cn('flex min-h-0 flex-1 flex-col items-center justify-center gap-2 p-6 text-center', className)}>
-        <FileWarning className="h-6 w-6 text-muted-foreground" />
+        <FaFileCircleExclamation className="h-6 w-6 text-muted-foreground" />
         <p className="text-sm font-medium">Could not render this PDF</p>
         <p className="max-w-xs text-xs text-muted-foreground">
           The file may be corrupted or password-protected. You can still open or save it with the buttons above.
@@ -396,7 +396,7 @@ export const PdfCanvasViewer = forwardRef<
     return (
       <div className={cn('flex min-h-0 flex-1 items-center justify-center', className)}>
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" /> Loading PDF…
+          <FaSpinner className="h-4 w-4 animate-spin" /> Loading PDF…
         </div>
       </div>
     )
@@ -416,7 +416,7 @@ export const PdfCanvasViewer = forwardRef<
       {/* Toolbar */}
       <div className="flex shrink-0 items-center gap-0.5 border-b bg-background/95 px-1.5 py-1">
         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => scrollToPage(currentPage - 1)} disabled={currentPage <= 1} aria-label="Previous page">
-          <ChevronLeft className="h-4 w-4" />
+          <FaChevronLeft className="h-4 w-4" />
         </Button>
         <button
           onClick={() => scrollToPage(1)}
@@ -427,11 +427,11 @@ export const PdfCanvasViewer = forwardRef<
           {currentPage} / {numPages}
         </button>
         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => scrollToPage(currentPage + 1)} disabled={currentPage >= numPages} aria-label="Next page">
-          <ChevronRight className="h-4 w-4" />
+          <FaChevronRight className="h-4 w-4" />
         </Button>
         <span className="mx-1 h-4 w-px shrink-0 bg-border" aria-hidden />
         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setZoomIndex((i) => Math.max(0, i - 1))} disabled={zoomIndex === 0} aria-label="Zoom out">
-          <ZoomOut className="h-4 w-4" />
+          <FaMagnifyingGlassMinus className="h-4 w-4" />
         </Button>
         <button
           onClick={() => setZoomIndex(DEFAULT_ZOOM_INDEX)}
@@ -442,7 +442,7 @@ export const PdfCanvasViewer = forwardRef<
           {Math.round(zoom * 100)}%
         </button>
         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setZoomIndex((i) => Math.min(ZOOMS.length - 1, i + 1))} disabled={zoomIndex === ZOOMS.length - 1} aria-label="Zoom in">
-          <ZoomIn className="h-4 w-4" />
+          <FaMagnifyingGlassPlus className="h-4 w-4" />
         </Button>
         <Button
           variant="ghost"
@@ -452,7 +452,7 @@ export const PdfCanvasViewer = forwardRef<
           aria-label={fullscreen ? 'Exit fullscreen (Esc)' : 'Enter fullscreen'}
           title={fullscreen ? 'Exit fullscreen (Esc)' : 'Fullscreen'}
         >
-          {fullscreen ? <X className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
+          {fullscreen ? <FaXmark className="h-4 w-4" /> : <FaExpand className="h-4 w-4" />}
         </Button>
       </div>
 

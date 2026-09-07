@@ -1,12 +1,11 @@
 'use client'
 
+import { FaBell, FaBolt, FaBullseye, FaChartLine, FaCircleCheck, FaGear, FaIndent, FaLayerGroup, FaMagnifyingGlass, FaMoon, FaOutdent, FaPlus, FaRightFromBracket, FaShareNodes, FaSpinner, FaSun, FaTriangleExclamation, FaWandMagicSparkles, FaXmark } from 'react-icons/fa6'
 import { cn } from '@/lib/utils'
 import { useUI, type ViewKey, NAV_ITEMS, MOBILE_TABS, NAV_GROUP_LABELS } from '@/lib/nav-config'
-import { PanelLeftClose, PanelLeftOpen, Search, Sparkles, Plus, Bell, WifiOff, CheckCircle2, Loader2, Zap, Target, Share2, Layers, ChartLine, Settings, LogOut, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTheme } from 'next-themes'
-import { Moon, Sun } from 'lucide-react'
 import { api } from '@/lib/client'
 import type { DashboardData } from '@/lib/types'
 import { CortexMark } from '@/components/logo'
@@ -17,12 +16,12 @@ import {
 } from '@/components/ui'
 
 const MORE_ITEMS: { key: ViewKey; label: string; icon: React.ReactNode }[] = [
-  { key: 'goals', label: 'Goals', icon: <Target className="h-5 w-5" /> },
-  { key: 'career', label: 'Career', icon: <Zap className="h-5 w-5" /> },
-  { key: 'mindmap', label: 'Mindmaps', icon: <Share2 className="h-5 w-5" /> },
-  { key: 'flashcards', label: 'Flashcards', icon: <Layers className="h-5 w-5" /> },
-  { key: 'analytics', label: 'Analytics', icon: <ChartLine className="h-5 w-5" /> },
-  { key: 'settings', label: 'Settings', icon: <Settings className="h-5 w-5" /> },
+  { key: 'goals', label: 'Goals', icon: <FaBullseye className="h-5 w-5" /> },
+  { key: 'career', label: 'Career', icon: <FaBolt className="h-5 w-5" /> },
+  { key: 'mindmap', label: 'Mindmaps', icon: <FaShareNodes className="h-5 w-5" /> },
+  { key: 'flashcards', label: 'Flashcards', icon: <FaLayerGroup className="h-5 w-5" /> },
+  { key: 'analytics', label: 'Analytics', icon: <FaChartLine className="h-5 w-5" /> },
+  { key: 'settings', label: 'Settings', icon: <FaGear className="h-5 w-5" /> },
 ]
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -97,7 +96,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {/* Offline banner */}
         {!online && (
           <div className="fixed inset-x-0 top-0 z-50 flex items-center justify-center gap-2 bg-warning py-1.5 text-xs font-medium text-white">
-            <WifiOff className="h-3.5 w-3.5" /> Offline — changes will sync when you reconnect
+            <FaTriangleExclamation className="h-3.5 w-3.5" /> Offline — changes will sync when you reconnect
           </div>
         )}
 
@@ -129,7 +128,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               )}
               aria-label="Search everything (Ctrl+K)"
             >
-              <Search className="h-3.5 w-3.5 shrink-0" />
+              <FaMagnifyingGlass className="h-3.5 w-3.5 shrink-0" />
               {!collapsed && (
                 <>
                   <span className="flex-1 text-left">Search…</span>
@@ -189,7 +188,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Popover>
               <PopoverTrigger asChild>
                 <button aria-label="Notifications" className={cn('relative flex min-h-[36px] w-full items-center gap-2.5 rounded-lg px-3 py-1.5 text-[13px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground', collapsed && 'justify-center px-0')}>
-                  <Bell className="h-4 w-4" />
+                  <FaBell className="h-4 w-4" />
                   {!collapsed && 'Notifications'}
                   {notifCount > 0 && (
                     <span className={cn('absolute top-1.5 rounded-full bg-danger px-1.5 py-0.5 text-[10px] font-semibold text-white', collapsed ? 'right-1' : 'right-2')}>
@@ -209,7 +208,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               className={cn('flex min-h-[36px] w-full items-center gap-2.5 rounded-lg px-3 py-1.5 text-[13px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground', collapsed && 'justify-center px-0')}
               aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             >
-              {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+              {collapsed ? <FaIndent className="h-4 w-4" /> : <FaOutdent className="h-4 w-4" />}
               {!collapsed && 'Collapse'}
             </button>
 
@@ -219,8 +218,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               aria-label="Toggle dark mode"
             >
               {/* CSS-only swap: no hydration mismatch (next-themes sets .dark on <html>) */}
-              <Sun className="hidden h-4 w-4 dark:block" />
-              <Moon className="h-4 w-4 dark:hidden" />
+              <FaSun className="hidden h-4 w-4 dark:block" />
+              <FaMoon className="h-4 w-4 dark:hidden" />
               {!collapsed && (
                 <>
                   <span className="hidden dark:inline">Light mode</span>
@@ -231,11 +230,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
             <div className={cn('flex min-h-[32px] items-center gap-2.5 rounded-lg px-3 py-1.5 text-xs text-muted-foreground', collapsed && 'justify-center px-0')} aria-live="polite">
               {!online ? (
-                <WifiOff className="h-4 w-4 text-warning" aria-label="Offline" />
+                <FaTriangleExclamation className="h-4 w-4 text-warning" aria-label="Offline" />
               ) : synced ? (
-                <CheckCircle2 className="h-4 w-4 text-success" aria-label="Synced" />
+                <FaCircleCheck className="h-4 w-4 text-success" aria-label="Synced" />
               ) : (
-                <Loader2 className="h-4 w-4 animate-pulse text-warning" aria-label="Syncing" />
+                <FaSpinner className="h-4 w-4 animate-pulse text-warning" aria-label="Syncing" />
               )}
               {!collapsed && <span>{!online ? 'Offline mode' : synced ? 'All synced' : 'Syncing…'}</span>}
             </div>
@@ -262,21 +261,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <span className="font-display text-xl leading-none">Cortex</span>
             <span className="h-1.5 w-1.5 rounded-full bg-primary" aria-hidden />
           </div>
-          {!online && <WifiOff className="h-4 w-4 text-warning" aria-label="Offline" />}
+          {!online && <FaTriangleExclamation className="h-4 w-4 text-warning" aria-label="Offline" />}
           <button
             onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
             className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             aria-label="Toggle dark mode"
           >
-            <Sun className="hidden h-4 w-4 dark:block" />
-            <Moon className="h-4 w-4 dark:hidden" />
+            <FaSun className="hidden h-4 w-4 dark:block" />
+            <FaMoon className="h-4 w-4 dark:hidden" />
           </button>
           <button
             onClick={() => setCommandOpen(true)}
             className="flex h-9 items-center gap-1.5 rounded-lg border bg-muted px-2.5 text-xs text-muted-foreground"
             aria-label="Search"
           >
-            <Search className="h-3.5 w-3.5" /> Search
+            <FaMagnifyingGlass className="h-3.5 w-3.5" /> Search
           </button>
         </header>
 
@@ -310,7 +309,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                         aria-label="Close"
                         className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                       >
-                        <X className="h-4.5 w-4.5" />
+                        <FaXmark className="h-4.5 w-4.5" />
                       </SheetClose>
                     </SheetHeader>
                     <div className="grid grid-cols-3 gap-3">
@@ -359,7 +358,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             className="flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30 transition-transform active:scale-95"
             aria-label="Quick capture"
           >
-            <Plus className="h-6 w-6" />
+            <FaPlus className="h-6 w-6" />
           </button>
         </div>
 
@@ -380,7 +379,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             aria-label="Quick capture"
             title="Quick capture"
           >
-            <Plus className="h-5 w-5" />
+            <FaPlus className="h-5 w-5" />
           </button>
         </div>
       </div>
@@ -392,7 +391,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
    ReaderMindmapButton: only rendered while a book is open; asks the
    mounted reader (one-shot store flag) to open its "Add to mindmap"
    dialog. ChatToggleButton: book open → toggles the minimal reader
-   popup (Sparkles ⇄ cross, same as the fullscreen overlay toggle);
+   popup (FaWandMagicSparkles ⇄ cross, same as the fullscreen overlay toggle);
    no book → opens the Cortex Copilot dock / sheet. */
 function ReaderMindmapButton() {
   const setReaderMindmapOpen = useUI((s) => s.setReaderMindmapOpen)
@@ -403,7 +402,7 @@ function ReaderMindmapButton() {
       aria-label="Create mindmap from this document"
       title="Create mindmap"
     >
-      <Share2 className="h-5 w-5 text-muted-foreground" />
+      <FaShareNodes className="h-5 w-5 text-muted-foreground" />
     </button>
   )
 }
@@ -426,9 +425,9 @@ function ChatToggleButton() {
       title={readerDocId ? (readerChatOpen ? 'Minimize AI chat' : 'Ask AI about this book') : 'Open AI Copilot'}
     >
       {readerDocId && readerChatOpen ? (
-        <X className="h-5 w-5" />
+        <FaXmark className="h-5 w-5" />
       ) : (
-        <Sparkles className={cn('h-5 w-5', !readerDocId && 'text-muted-foreground')} />
+        <FaWandMagicSparkles className={cn('h-5 w-5', !readerDocId && 'text-muted-foreground')} />
       )}
     </button>
   )
@@ -443,7 +442,7 @@ function NotificationPanel({ data }: { data: DashboardData | null }) {
       <div className="border-b px-4 py-3 text-sm font-semibold">Notifications</div>
       {briefing.dueFlashcards > 0 && (
         <button onClick={() => setView('flashcards')} className="flex w-full items-center gap-3 border-b px-4 py-3 text-left text-sm transition-colors hover:bg-muted">
-          <Layers className="h-4 w-4 shrink-0 text-primary" />
+          <FaLayerGroup className="h-4 w-4 shrink-0 text-primary" />
           <span><b>{briefing.dueFlashcards}</b> flashcards due for review</span>
         </button>
       )}
@@ -541,7 +540,7 @@ function UserChip({ collapsed }: { collapsed: boolean }) {
             className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:text-danger group-hover:opacity-100"
             aria-label="Sign out"
           >
-            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LogOut className="h-3.5 w-3.5" />}
+            {busy ? <FaSpinner className="h-3.5 w-3.5 animate-spin" /> : <FaRightFromBracket className="h-3.5 w-3.5" />}
           </button>
         </>
       )}

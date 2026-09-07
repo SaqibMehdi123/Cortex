@@ -1,15 +1,12 @@
 'use client'
 
+import { FaBookOpen, FaBriefcase, FaBullseye, FaCalendarWeek, FaDownload, FaFileLines, FaLink, FaListCheck, FaMicrophone, FaMoon, FaNewspaper, FaPlus, FaRotate, FaSun } from 'react-icons/fa6'
 import { useEffect, useState, useCallback } from 'react'
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem, CommandSeparator } from '@/components/ui/command'
 import { useUI, NAV_ITEMS, type ViewKey } from '@/lib/nav-config'
 import { api } from '@/lib/client'
 import type { SearchResults } from '@/lib/types'
-import {
-  BookOpen, FileText, ListTodo, Target, CalendarRange, Newspaper, Briefcase,
-  Plus, Mic, Link2, Moon, Sun, Download, RefreshCw,
-} from 'lucide-react'
 import { useTheme } from 'next-themes'
 
 export function CommandBar() {
@@ -63,28 +60,28 @@ export function CommandBar() {
           <>
             <CommandGroup heading="Quick actions">
               <CommandItem onSelect={() => { setCommandOpen(false); setCaptureOpen(true, 'note') }}>
-                <Plus /> Quick capture — note
+                <FaPlus /> Quick capture — note
               </CommandItem>
               <CommandItem onSelect={() => { setCommandOpen(false); setCaptureOpen(true, 'task') }}>
-                <ListTodo /> Add task
+                <FaListCheck /> Add task
               </CommandItem>
               <CommandItem onSelect={() => { setCommandOpen(false); setCaptureOpen(true, 'voice') }}>
-                <Mic /> Voice memo
+                <FaMicrophone /> Voice memo
               </CommandItem>
               <CommandItem onSelect={() => { setCommandOpen(false); setCaptureOpen(true, 'url') }}>
-                <Link2 /> Save URL to read later
+                <FaLink /> Save URL to read later
               </CommandItem>
               <CommandItem onSelect={() => { setCommandOpen(false); setView('library') }}>
-                <BookOpen /> Import a document
+                <FaBookOpen /> Import a document
               </CommandItem>
               <CommandItem onSelect={async () => { setCommandOpen(false); try { await api.post('/api/news/fetch') } catch {} setView('news') }}>
-                <RefreshCw /> Fetch latest AI news
+                <FaRotate /> Fetch latest AI news
               </CommandItem>
               <CommandItem onSelect={() => { setCommandOpen(false); window.location.href = '/api/export?format=json' }}>
-                <Download /> Export all data (JSON)
+                <FaDownload /> Export all data (JSON)
               </CommandItem>
               <CommandItem onSelect={() => { setTheme(resolvedTheme === 'dark' ? 'light' : 'dark'); setCommandOpen(false) }}>
-                {resolvedTheme === 'dark' ? <Sun /> : <Moon />} Toggle theme
+                {resolvedTheme === 'dark' ? <FaSun /> : <FaMoon />} Toggle theme
               </CommandItem>
             </CommandGroup>
             <CommandSeparator />
@@ -106,7 +103,7 @@ export function CommandBar() {
           <CommandGroup heading="Documents">
             {results.documents.map((d) => (
               <CommandItem key={d.id} onSelect={() => { openReader(d.id); setCommandOpen(false) }}>
-                <FileText /> {d.title} <span className="ml-auto text-xs text-muted-foreground">{d.status}</span>
+                <FaFileLines /> {d.title} <span className="ml-auto text-xs text-muted-foreground">{d.status}</span>
               </CommandItem>
             ))}
           </CommandGroup>
@@ -116,7 +113,7 @@ export function CommandBar() {
           <CommandGroup heading="Notes">
             {results.notes.map((n) => (
               <CommandItem key={n.id} onSelect={() => go('library')}>
-                <FileText /> {n.title ?? n.content.slice(0, 60)}
+                <FaFileLines /> {n.title ?? n.content.slice(0, 60)}
               </CommandItem>
             ))}
           </CommandGroup>
@@ -126,7 +123,7 @@ export function CommandBar() {
           <CommandGroup heading="Tasks">
             {results.tasks.map((t) => (
               <CommandItem key={t.id} onSelect={() => go('plans')}>
-                <ListTodo /> {t.title} <span className="ml-auto text-xs text-muted-foreground">{t.status}</span>
+                <FaListCheck /> {t.title} <span className="ml-auto text-xs text-muted-foreground">{t.status}</span>
               </CommandItem>
             ))}
           </CommandGroup>
@@ -136,7 +133,7 @@ export function CommandBar() {
           <CommandGroup heading="Goals">
             {results.goals.map((g) => (
               <CommandItem key={g.id} onSelect={() => go('goals')}>
-                <Target /> {g.title}
+                <FaBullseye /> {g.title}
               </CommandItem>
             ))}
           </CommandGroup>
@@ -146,7 +143,7 @@ export function CommandBar() {
           <CommandGroup heading="Plans">
             {results.plans.map((p) => (
               <CommandItem key={p.id} onSelect={() => go('plans')}>
-                <CalendarRange /> [{p.timeframe}] {p.title}
+                <FaCalendarWeek /> [{p.timeframe}] {p.title}
               </CommandItem>
             ))}
           </CommandGroup>
@@ -156,7 +153,7 @@ export function CommandBar() {
           <CommandGroup heading="AI News">
             {results.news.map((n) => (
               <CommandItem key={n.id} onSelect={() => { window.open(n.url, '_blank'); setCommandOpen(false) }}>
-                <Newspaper /> {n.title}
+                <FaNewspaper /> {n.title}
               </CommandItem>
             ))}
           </CommandGroup>
@@ -166,7 +163,7 @@ export function CommandBar() {
           <CommandGroup heading="Career">
             {results.opportunities.map((o) => (
               <CommandItem key={o.id} onSelect={() => go('career')}>
-                <Briefcase /> {o.company} — {o.role} <span className="ml-auto text-xs text-muted-foreground">{o.status}</span>
+                <FaBriefcase /> {o.company} — {o.role} <span className="ml-auto text-xs text-muted-foreground">{o.status}</span>
               </CommandItem>
             ))}
           </CommandGroup>

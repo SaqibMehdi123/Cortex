@@ -1,21 +1,10 @@
 'use client'
 
+import { FaBolt, FaBookOpen, FaBriefcase, FaCalendarWeek, FaChartLine, FaCrosshairs, FaLayerGroup, FaShareNodes, FaTerminal, FaTowerBroadcast } from 'react-icons/fa6'
 import React from 'react'
 import { Reveal, SectionHeader } from './landing'
 import { spotlightHandlers, useCountUp } from './motion'
 import { BRAND_LOGOS, BrandMark } from './brand-logos'
-import {
-  BookOpen,
-  Briefcase,
-  CalendarRange,
-  Command,
-  Crosshair,
-  Layers,
-  Radar,
-  Share2,
-  ChartLine,
-  Zap,
-} from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 /* ── Sources marquee — real platform marks, monochrome ────────────────── */
@@ -65,7 +54,7 @@ interface Tool {
 
 const TOOLS: Tool[] = [
   {
-    icon: <Radar className="h-[22px] w-[22px]" />,
+    icon: <FaTowerBroadcast className="h-[22px] w-[22px]" />,
     title: 'AI news radar',
     desc: '97+ sources re-read every few hours. Each story lands pre-summarized, ranked by what it changes for you.',
     tag: 'auto-refresh',
@@ -74,7 +63,7 @@ const TOOLS: Tool[] = [
     featured: 'radar',
   },
   {
-    icon: <Briefcase className="h-[22px] w-[22px]" />,
+    icon: <FaBriefcase className="h-[22px] w-[22px]" />,
     title: 'Career radar',
     desc: 'Jobs matched to your profile, plus a live masters & PhD scholarship feed.',
     tag: 'match',
@@ -83,7 +72,7 @@ const TOOLS: Tool[] = [
     featured: 'career',
   },
   {
-    icon: <BookOpen className="h-[22px] w-[22px]" />,
+    icon: <FaBookOpen className="h-[22px] w-[22px]" />,
     title: 'Library & reader',
     desc: 'Save papers and articles, read them clean, keep every highlight searchable.',
     tag: 'reader',
@@ -91,7 +80,7 @@ const TOOLS: Tool[] = [
     span: 'lg:col-span-2',
   },
   {
-    icon: <CalendarRange className="h-[22px] w-[22px]" />,
+    icon: <FaCalendarWeek className="h-[22px] w-[22px]" />,
     title: 'Weekly plans',
     desc: 'Time-block the week in minutes; unfinished work carries over in one click.',
     tag: 'weekly',
@@ -99,7 +88,7 @@ const TOOLS: Tool[] = [
     span: 'lg:col-span-2',
   },
   {
-    icon: <Zap className="h-[22px] w-[22px]" />,
+    icon: <FaBolt className="h-[22px] w-[22px]" />,
     title: 'Instant capture',
     desc: 'A global quick-capture plus ⌘K means no thought ever escapes.',
     tag: '⌘K',
@@ -107,7 +96,7 @@ const TOOLS: Tool[] = [
     span: 'lg:col-span-2',
   },
   {
-    icon: <Crosshair className="h-[22px] w-[22px]" />,
+    icon: <FaCrosshairs className="h-[22px] w-[22px]" />,
     title: 'Goals & milestones',
     desc: 'Progress rings that fill from real work — not manual updates.',
     tag: 'progress',
@@ -115,7 +104,7 @@ const TOOLS: Tool[] = [
     span: 'lg:col-span-2',
   },
   {
-    icon: <Share2 className="h-[22px] w-[22px]" />,
+    icon: <FaShareNodes className="h-[22px] w-[22px]" />,
     title: 'Mindmaps',
     desc: 'Drag notes into spatial maps and watch structure emerge from the mess.',
     tag: 'canvas',
@@ -123,7 +112,7 @@ const TOOLS: Tool[] = [
     span: 'lg:col-span-2',
   },
   {
-    icon: <Layers className="h-[22px] w-[22px]" />,
+    icon: <FaLayerGroup className="h-[22px] w-[22px]" />,
     title: 'Flashcards',
     desc: 'Cards grown from whatever you read, scheduled by the SM-2 algorithm.',
     tag: 'sm-2',
@@ -131,7 +120,7 @@ const TOOLS: Tool[] = [
     span: 'lg:col-span-2',
   },
   {
-    icon: <ChartLine className="h-[22px] w-[22px]" />,
+    icon: <FaChartLine className="h-[22px] w-[22px]" />,
     title: 'Analytics',
     desc: 'Streaks, pace and review load. Signal, not guilt.',
     tag: 'stats',
@@ -139,7 +128,7 @@ const TOOLS: Tool[] = [
     span: 'lg:col-span-3',
   },
   {
-    icon: <Command className="h-[22px] w-[22px]" />,
+    icon: <FaTerminal className="h-[22px] w-[22px]" />,
     title: 'Command bar',
     desc: 'Focus timer, copilot dock and ⌘K — woven through every view, not bolted on.',
     tag: 'system-wide',
@@ -223,7 +212,7 @@ function ToolCard({ tool, index }: { tool: Tool; index: number }) {
           {tool.icon}
         </span>
         <span className="flex items-center gap-2">
-          <span className="font-mono text-[10px] text-muted-foreground/50 tabular-nums">
+          <span className="font-display text-[15px] font-medium italic leading-none tracking-[-0.01em] text-foreground/60 tabular-nums">
             {String(index + 1).padStart(2, '0')}
           </span>
           <span className="tool-tag rounded-full border px-2.5 py-1 font-mono text-[9.5px] uppercase tracking-[0.14em]">

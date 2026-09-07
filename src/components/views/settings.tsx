@@ -1,5 +1,6 @@
 'use client'
 
+import { FaAt, FaCalendarDays, FaCalendarPlus, FaChrome, FaCopy, FaDesktop, FaDownload, FaEnvelope, FaFileCode, FaFileLines, FaInbox, FaInfo, FaKey, FaMoon, FaPalette, FaRightFromBracket, FaRotate, FaShieldHalved, FaSpinner, FaSun, FaUser } from 'react-icons/fa6'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { api } from '@/lib/client'
@@ -13,10 +14,6 @@ import { useTheme } from 'next-themes'
 import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
 import type { GoogleStatus } from '@/lib/types'
-import {
-  Sun, Moon, Monitor, Download, FileJson, FileText, CalendarDays, Mail, Info, Palette, User,
-  Chrome, RefreshCw, LogOut, Copy, CalendarPlus, Inbox, ShieldCheck, KeyRound, AtSign, Loader2,
-} from 'lucide-react'
 
 interface SettingsData {
   id: string
@@ -56,22 +53,22 @@ export function SettingsView() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-sm"><Download className="h-4 w-4 text-primary" /> Your data, your rules</CardTitle>
+          <CardTitle className="flex items-center gap-2 text-sm"><FaDownload className="h-4 w-4 text-primary" /> Your data, your rules</CardTitle>
           <CardDescription>Privacy-first: export everything, anytime. Data lives in your own database.</CardDescription>
         </CardHeader>
         {/* stack on mobile — two labeled buttons side by side can't fit 390px */}
         <CardContent className="flex flex-col gap-2 sm:flex-row">
           <a href="/api/export?format=json" download className="sm:flex-1">
-            <Button variant="outline" className="w-full"><FileJson className="mr-1.5 h-4 w-4" /> Export JSON</Button>
+            <Button variant="outline" className="w-full"><FaFileCode className="mr-1.5 h-4 w-4" /> Export JSON</Button>
           </a>
           <a href="/api/export?format=md" download className="sm:flex-1">
-            <Button variant="outline" className="w-full"><FileText className="mr-1.5 h-4 w-4" /> Export Markdown</Button>
+            <Button variant="outline" className="w-full"><FaFileLines className="mr-1.5 h-4 w-4" /> Export Markdown</Button>
           </a>
         </CardContent>
       </Card>
 
       <div className="flex items-start gap-2 rounded-xl border border-dashed p-4 text-xs text-muted-foreground">
-        <Info className="mt-0.5 h-4 w-4 shrink-0" />
+        <FaInfo className="mt-0.5 h-4 w-4 shrink-0" />
         <p>Cortex syncs across your laptop and phone with the same account. Offline edits queue locally and resolve on reconnect — last write wins per field, so nothing is lost silently.</p>
       </div>
     </div>
@@ -98,7 +95,7 @@ function AccountCard({ user }: { user: { id: string; name: string; email: string
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-sm"><ShieldCheck className="h-4 w-4 text-primary" /> Account</CardTitle>
+        <CardTitle className="flex items-center gap-2 text-sm"><FaShieldHalved className="h-4 w-4 text-primary" /> Account</CardTitle>
         <CardDescription>You are signed in as {user.name}.</CardDescription>
       </CardHeader>
       <CardContent>
@@ -109,11 +106,11 @@ function AccountCard({ user }: { user: { id: string; name: string; email: string
             </span>
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold">{user.name}</p>
-              <p className="flex items-center gap-1 truncate text-xs text-muted-foreground"><AtSign className="h-3 w-3" /> {user.email}</p>
+              <p className="flex items-center gap-1 truncate text-xs text-muted-foreground"><FaAt className="h-3 w-3" /> {user.email}</p>
             </div>
           </div>
           <Button variant="outline" onClick={signOut} disabled={busy}>
-            {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <LogOut className="mr-1.5 h-4 w-4" />}
+            {busy ? <FaSpinner className="mr-1.5 h-4 w-4 animate-spin" /> : <FaRightFromBracket className="mr-1.5 h-4 w-4" />}
             Sign out
           </Button>
         </div>
@@ -126,7 +123,7 @@ function ProfileCard({ data, save }: { data?: SettingsData; save: (patch: Record
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-sm"><User className="h-4 w-4 text-primary" /> Profile</CardTitle>
+        <CardTitle className="flex items-center gap-2 text-sm"><FaUser className="h-4 w-4 text-primary" /> Profile</CardTitle>
         <CardDescription>Used for your daily greeting.</CardDescription>
       </CardHeader>
       <CardContent>
@@ -160,15 +157,15 @@ function AppearanceCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-sm"><Palette className="h-4 w-4 text-primary" /> Appearance</CardTitle>
+        <CardTitle className="flex items-center gap-2 text-sm"><FaPalette className="h-4 w-4 text-primary" /> Appearance</CardTitle>
         <CardDescription>Follows your system preference by default. Dark mode is OLED-friendly.</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-3 gap-2">
           {([
-            { key: 'light', label: 'Light', icon: <Sun className="h-4 w-4" /> },
-            { key: 'dark', label: 'Dark', icon: <Moon className="h-4 w-4" /> },
-            { key: 'system', label: 'System', icon: <Monitor className="h-4 w-4" /> },
+            { key: 'light', label: 'Light', icon: <FaSun className="h-4 w-4" /> },
+            { key: 'dark', label: 'Dark', icon: <FaMoon className="h-4 w-4" /> },
+            { key: 'system', label: 'System', icon: <FaDesktop className="h-4 w-4" /> },
           ]).map((opt) => (
             <button
               key={opt.key}
@@ -191,7 +188,7 @@ function DigestCard({ data, save }: { data?: SettingsData; save: (patch: Record<
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-sm"><CalendarDays className="h-4 w-4 text-primary" /> Daily digest</CardTitle>
+        <CardTitle className="flex items-center gap-2 text-sm"><FaCalendarDays className="h-4 w-4 text-primary" /> Daily digest</CardTitle>
         <CardDescription>When your briefing (plan + news digest + deadlines) should be prepared each day.</CardDescription>
       </CardHeader>
       <CardContent>
@@ -275,7 +272,7 @@ function GoogleCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-sm"><Chrome className="h-4 w-4 text-primary" /> Google account</CardTitle>
+        <CardTitle className="flex items-center gap-2 text-sm"><FaChrome className="h-4 w-4 text-primary" /> Google account</CardTitle>
         <CardDescription>Real OAuth for Gmail (read) and Google Calendar (read + write). Credentials stay on your server.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3 text-sm">
@@ -285,7 +282,7 @@ function GoogleCard() {
           /* ── Setup guide ── */
           <div className="space-y-3">
             <div className="flex items-start gap-2.5 rounded-lg border border-warning/40 bg-warning/5 p-3">
-              <KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+              <FaKey className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
               <div className="text-xs leading-relaxed">
                 <p className="font-medium text-foreground">Google API credentials needed (one-time setup)</p>
                 <ol className="mt-1.5 list-decimal space-y-1 pl-4 text-muted-foreground">
@@ -300,7 +297,7 @@ function GoogleCard() {
             <div className="flex items-center gap-2 rounded-lg border bg-muted/40 p-2.5">
               <code className="min-w-0 flex-1 truncate text-xs">{status.redirectUri ?? 'https://your-app-url/api/auth/google/callback'}</code>
               <Button variant="ghost" size="icon" className="h-7 w-7" onClick={copyRedirect} aria-label="Copy redirect URI">
-                <Copy className="h-3.5 w-3.5" />
+                <FaCopy className="h-3.5 w-3.5" />
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">Scopes requested: <span className="font-mono">gmail.readonly</span>, <span className="font-mono">calendar.readonly</span>, <span className="font-mono">calendar.events</span> — read-only mail, no deletion, no sending.</p>
@@ -310,23 +307,23 @@ function GoogleCard() {
           <div className="space-y-3">
             <div className="flex items-center gap-3 rounded-lg border bg-muted/40 p-3">
               <span className="flex h-9 w-9 items-center justify-center rounded-full bg-success/15 text-success">
-                <ShieldCheck className="h-5 w-5" />
+                <FaShieldHalved className="h-5 w-5" />
               </span>
               <div className="min-w-0 flex-1">
                 <p className="truncate font-medium">{status.email ?? 'Google account'}</p>
                 <p className="text-xs text-muted-foreground">Gmail (read) &amp; Calendar (read/write) connected · tokens auto-refresh</p>
               </div>
               <Button variant="outline" size="sm" onClick={disconnect} disabled={busy === 'disconnect'}>
-                <LogOut className="mr-1.5 h-3.5 w-3.5" /> Disconnect
+                <FaRightFromBracket className="mr-1.5 h-3.5 w-3.5" /> Disconnect
               </Button>
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
               <Button variant="outline" onClick={importGmail} disabled={busy === 'gmail'}>
-                {busy === 'gmail' ? <RefreshCw className="mr-1.5 h-4 w-4 animate-spin" /> : <Inbox className="mr-1.5 h-4 w-4" />}
+                {busy === 'gmail' ? <FaRotate className="mr-1.5 h-4 w-4 animate-spin" /> : <FaInbox className="mr-1.5 h-4 w-4" />}
                 Scan inbox for applications
               </Button>
               <Button variant="outline" onClick={pushCalendar} disabled={busy === 'calendar'}>
-                {busy === 'calendar' ? <RefreshCw className="mr-1.5 h-4 w-4 animate-spin" /> : <CalendarPlus className="mr-1.5 h-4 w-4" />}
+                {busy === 'calendar' ? <FaRotate className="mr-1.5 h-4 w-4 animate-spin" /> : <FaCalendarPlus className="mr-1.5 h-4 w-4" />}
                 Push deadline tasks to Calendar
               </Button>
             </div>
@@ -339,13 +336,13 @@ function GoogleCard() {
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">Credentials detected. Connect your Google account to scan Gmail for applications and sync deadline tasks with Calendar.</p>
             <a href="/api/auth/google" className="block">
-              <Button className="w-full"><Chrome className="mr-2 h-4 w-4" /> Connect with Google</Button>
+              <Button className="w-full"><FaChrome className="mr-2 h-4 w-4" /> Connect with Google</Button>
             </a>
             <p className="text-xs text-muted-foreground">You will be redirected to Google&apos;s consent screen and returned here.</p>
           </div>
         )}
         <div className="flex items-center gap-2 border-t pt-3 text-xs text-muted-foreground">
-          <Mail className="h-3.5 w-3.5" />
+          <FaEnvelope className="h-3.5 w-3.5" />
           Prefer not to use OAuth? You can still paste any email into Career → Add application for AI classification.
         </div>
       </CardContent>

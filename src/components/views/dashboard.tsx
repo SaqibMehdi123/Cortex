@@ -1,5 +1,6 @@
 'use client'
 
+import { FaBolt, FaBookOpen, FaBullseye, FaCalendarDay, FaChevronRight, FaClock, FaCloudSun, FaFire, FaLayerGroup, FaMoon, FaNewspaper, FaSpinner, FaStopwatch, FaSun, FaTriangleExclamation } from 'react-icons/fa6'
 import { useState } from 'react'
 import { api, todayISO, fmtDate } from '@/lib/client'
 import { useUI } from '@/lib/nav-config'
@@ -11,7 +12,6 @@ import { ProgressRing, SwipeTaskRow, PriorityDot, EmptyState, SkeletonCard, colo
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Progress } from '@/components/ui/progress'
-import { Sparkles, BookOpen, Newspaper, CalendarClock, Layers, Flame, Zap, AlertTriangle, Clock3, Sun, Moon as MoonIcon, Sunset, Target, ChevronRight, Timer, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
 import { useAutoSync } from '@/hooks/use-auto-sync'
@@ -19,10 +19,10 @@ import { fireConfetti } from '@/lib/confetti'
 
 function greeting() {
   const h = new Date().getHours()
-  if (h < 5) return { text: 'Burning the midnight oil', icon: <MoonIcon className="h-4 w-4" /> }
-  if (h < 12) return { text: 'Good morning', icon: <Sun className="h-4 w-4" /> }
-  if (h < 18) return { text: 'Good afternoon', icon: <Sun className="h-4 w-4" /> }
-  return { text: 'Good evening', icon: <Sunset className="h-4 w-4" /> }
+  if (h < 5) return { text: 'Burning the midnight oil', icon: <FaMoon className="h-4 w-4" /> }
+  if (h < 12) return { text: 'Good morning', icon: <FaSun className="h-4 w-4" /> }
+  if (h < 18) return { text: 'Good afternoon', icon: <FaSun className="h-4 w-4" /> }
+  return { text: 'Good evening', icon: <FaCloudSun className="h-4 w-4" /> }
 }
 
 export function DashboardView() {
@@ -104,7 +104,7 @@ export function DashboardView() {
           </h1>
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Clock3 className="h-3.5 w-3.5" /> {b.readMinutesToday}m read · {b.focusMinutesToday}m focused today
+          <FaClock className="h-3.5 w-3.5" /> {b.readMinutesToday}m read · {b.focusMinutesToday}m focused today
         </div>
       </div>
 
@@ -116,30 +116,30 @@ export function DashboardView() {
           </CardTitle>
           <CardAction>
             <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setCopilotOpen(true)}>
-              Ask Copilot <ChevronRight className="h-3.5 w-3.5" />
+              Ask Copilot <FaChevronRight className="h-3.5 w-3.5" />
             </Button>
           </CardAction>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
           <div className="flex flex-wrap gap-2">
             <button onClick={() => setView('flashcards')} className="flex items-center gap-1.5 rounded-full border bg-card px-3 py-1.5 text-xs font-medium transition-colors hover:bg-muted">
-              <Layers className="h-3.5 w-3.5 text-primary" /> {b.dueFlashcards} flashcards due
+              <FaLayerGroup className="h-3.5 w-3.5 text-primary" /> {b.dueFlashcards} flashcards due
             </button>
             <button onClick={() => setView('news')} className="flex items-center gap-1.5 rounded-full border bg-card px-3 py-1.5 text-xs font-medium transition-colors hover:bg-muted">
-              <Newspaper className="h-3.5 w-3.5 text-primary" /> {b.unreadNews} unread stories
+              <FaNewspaper className="h-3.5 w-3.5 text-primary" /> {b.unreadNews} unread stories
             </button>
             {b.streakBest > 0 && (
               <span className="flex items-center gap-1.5 rounded-full border bg-card px-3 py-1.5 text-xs font-medium">
-                <Flame className="h-3.5 w-3.5 text-warning" /> {b.streakBest}-day best streak
+                <FaFire className="h-3.5 w-3.5 text-warning" /> {b.streakBest}-day best streak
               </span>
             )}
             <span className="flex items-center gap-1.5 rounded-full border bg-card px-3 py-1.5 text-xs font-medium">
-              <Zap className="h-3.5 w-3.5 text-primary" /> {b.tasksDoneToday}/{b.tasksTotalToday} tasks today
+              <FaBolt className="h-3.5 w-3.5 text-primary" /> {b.tasksDoneToday}/{b.tasksTotalToday} tasks today
             </span>
           </div>
           {b.nextBestTask && (
             <div className="flex items-start gap-2 rounded-lg bg-card p-3">
-              <Zap className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+              <FaBolt className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
               <div className="min-w-0">
                 <p className="text-xs font-medium text-muted-foreground">Next best task</p>
                 <p className="truncate font-medium">{b.nextBestTask.title}</p>
@@ -148,7 +148,7 @@ export function DashboardView() {
           )}
           {b.atRiskGoals.map((gr) => (
             <button key={gr.id} onClick={() => setView('goals')} className="flex w-full items-start gap-2 rounded-lg bg-danger/5 p-3 text-left transition-colors hover:bg-danger/10">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-danger" />
+              <FaTriangleExclamation className="mt-0.5 h-4 w-4 shrink-0 text-danger" />
               <div className="min-w-0">
                 <p className="text-xs font-medium text-danger">At-risk goal: {gr.title}</p>
                 <p className="text-xs text-muted-foreground">{gr.reason}</p>
@@ -165,7 +165,7 @@ export function DashboardView() {
             <CardTitle className="text-sm">Today&apos;s timeline</CardTitle>
             <CardAction>
               <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setView('plans')}>
-                Plans <ChevronRight className="h-3.5 w-3.5" />
+                Plans <FaChevronRight className="h-3.5 w-3.5" />
               </Button>
             </CardAction>
           </CardHeader>
@@ -176,7 +176,7 @@ export function DashboardView() {
               <>
                 {data.todayPlans.map((p) => (
                   <div key={p.id} className="flex items-center gap-2.5 rounded-lg border bg-muted/40 px-3 py-2 text-sm">
-                    <CalendarClock className="h-4 w-4 text-primary" />
+                    <FaCalendarDay className="h-4 w-4 text-primary" />
                     <span className="font-medium">{p.title}</span>
                     <Badge variant="outline" className="ml-auto text-[10px]">plan</Badge>
                   </div>
@@ -198,7 +198,7 @@ export function DashboardView() {
                           <span>~{t.estimate}m</span>
                           {t.goal && (
                             <span className="inline-flex items-center gap-1">
-                              <Target className="h-3 w-3" style={{ color: colorHex(t.goal.color) }} /> {t.goal.title}
+                              <FaBullseye className="h-3 w-3" style={{ color: colorHex(t.goal.color) }} /> {t.goal.title}
                             </span>
                           )}
                         </div>
@@ -208,7 +208,7 @@ export function DashboardView() {
                         className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-primary"
                         aria-label={`Focus on ${t.title}`}
                       >
-                        <Timer className="h-4 w-4" />
+                        <FaStopwatch className="h-4 w-4" />
                       </button>
                     </div>
                   </SwipeTaskRow>
@@ -227,14 +227,14 @@ export function DashboardView() {
             <CardTitle className="text-sm">Active goals</CardTitle>
             <CardAction>
               <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setView('goals')}>
-                Goals <ChevronRight className="h-3.5 w-3.5" />
+                Goals <FaChevronRight className="h-3.5 w-3.5" />
               </Button>
             </CardAction>
           </CardHeader>
           <CardContent>
             {data.goals.length === 0 ? (
               <EmptyState
-                icon={<Target className="h-5 w-5" />}
+                icon={<FaBullseye className="h-5 w-5" />}
                 title="No goals yet"
                 description="Set a goal with milestones and watch the rings fill as you progress."
                 action={{ label: 'Create your first goal', onClick: () => setView('goals') }}
@@ -248,7 +248,7 @@ export function DashboardView() {
                       color={colorHex(goal.color)}
                       sublabel={
                         <span className="inline-flex items-center gap-1">
-                          {goal.streak > 0 && <Flame className="h-3 w-3 text-warning" />}
+                          {goal.streak > 0 && <FaFire className="h-3 w-3 text-warning" />}
                           {goal.title}
                         </span>
                       }
@@ -264,18 +264,18 @@ export function DashboardView() {
         <Card className="gap-4 py-5 transition-shadow hover:shadow-soft">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-sm">
-              <Newspaper className="h-4 w-4 text-primary" /> News digest
+              <FaNewspaper className="h-4 w-4 text-primary" /> News digest
             </CardTitle>
             <CardAction>
               <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setView('news')}>
-                Radar <ChevronRight className="h-3.5 w-3.5" />
+                Radar <FaChevronRight className="h-3.5 w-3.5" />
               </Button>
             </CardAction>
           </CardHeader>
           <CardContent className="space-y-2.5">
             {data.newsDigest.length === 0 ? (
               <p className="flex items-center justify-center gap-2 py-6 text-center text-sm text-muted-foreground">
-                {newsAutoFetching && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                {newsAutoFetching && <FaSpinner className="h-3.5 w-3.5 animate-spin" />}
                 {newsAutoFetching ? 'Fetching the latest AI news…' : 'No stories yet — hit Fetch latest on the News radar.'}
               </p>
             ) : (
@@ -317,7 +317,7 @@ export function DashboardView() {
         <Card className="gap-4 py-5 transition-shadow hover:shadow-soft">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-sm">
-              <CalendarClock className="h-4 w-4 text-primary" /> Deadlines
+              <FaCalendarDay className="h-4 w-4 text-primary" /> Deadlines
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
@@ -351,11 +351,11 @@ export function DashboardView() {
         <Card className="gap-4 py-5 transition-shadow hover:shadow-soft">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-sm">
-              <BookOpen className="h-4 w-4 text-primary" /> Continue reading
+              <FaBookOpen className="h-4 w-4 text-primary" /> Continue reading
             </CardTitle>
             <CardAction>
               <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setView('library')}>
-                Library <ChevronRight className="h-3.5 w-3.5" />
+                Library <FaChevronRight className="h-3.5 w-3.5" />
               </Button>
             </CardAction>
           </CardHeader>

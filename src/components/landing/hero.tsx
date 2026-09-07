@@ -1,32 +1,18 @@
 'use client'
 
+import { FaArrowRight, FaBookOpen, FaBullseye, FaCalendarWeek, FaChartLine, FaFileLines, FaFire, FaLayerGroup, FaLock, FaShareNodes, FaTowerBroadcast, FaUpRightFromSquare, FaWandMagicSparkles } from 'react-icons/fa6'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { CortexMark } from '@/components/logo'
 import { Reveal } from './landing'
 import { useTilt } from './motion'
-import {
-  ArrowRight,
-  ArrowUpRight,
-  BookOpen,
-  CalendarRange,
-  ChartLine,
-  FileText,
-  Flame,
-  Layers,
-  Lock,
-  Radar,
-  Share2,
-  Sparkles,
-  Target,
-} from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
+import type { IconType } from 'react-icons'
 import { cn } from '@/lib/utils'
 
 /* ── The app mock — dense, branded, and quietly alive ─────────────────── */
 
 interface SideItem {
-  icon: LucideIcon
+  icon: IconType
   label: string
   active?: boolean
   live?: boolean
@@ -35,16 +21,16 @@ interface SideItem {
 
 const SIDE: Record<'workspace' | 'intelligence', SideItem[]> = {
   workspace: [
-    { icon: FileText, label: 'Today', active: true },
-    { icon: BookOpen, label: 'Library' },
-    { icon: CalendarRange, label: 'Plans' },
-    { icon: Target, label: 'Goals' },
+    { icon: FaFileLines, label: 'Today', active: true },
+    { icon: FaBookOpen, label: 'Library' },
+    { icon: FaCalendarWeek, label: 'Plans' },
+    { icon: FaBullseye, label: 'Goals' },
   ],
   intelligence: [
-    { icon: Radar, label: 'Radar', live: true },
-    { icon: Layers, label: 'Cards', due: '14' },
-    { icon: Share2, label: 'Maps' },
-    { icon: ChartLine, label: 'Stats' },
+    { icon: FaTowerBroadcast, label: 'Radar', live: true },
+    { icon: FaLayerGroup, label: 'Cards', due: '14' },
+    { icon: FaShareNodes, label: 'Maps' },
+    { icon: FaChartLine, label: 'Stats' },
   ],
 }
 
@@ -95,7 +81,7 @@ function MockWindow() {
           <span className="h-2.5 w-2.5 rounded-full bg-[#4ade80]/55" />
         </div>
         <div className="mx-auto flex items-center gap-1.5 rounded-md border border-border bg-muted/60 px-3.5 py-1 font-mono text-[10px] text-muted-foreground">
-          <Lock className="h-2.5 w-2.5" />
+          <FaLock className="h-2.5 w-2.5" />
           cortex.app
         </div>
         <div className="rounded-md border border-border bg-muted/60 px-1.5 py-0.5 font-mono text-[9.5px] text-muted-foreground">
@@ -180,7 +166,7 @@ function MockWindow() {
                   background: 'color-mix(in srgb, var(--chart-2) 7%, transparent)',
                 }}
               >
-                <Flame className="h-2.5 w-2.5" />
+                <FaFire className="h-2.5 w-2.5" />
                 12-day
               </span>
               <span className="hidden font-mono text-[9px] uppercase tracking-wider text-muted-foreground sm:block">
@@ -204,7 +190,7 @@ function MockWindow() {
 
           {/* AI digest */}
           <div className="digest-card mock-rise mt-3 flex items-start gap-2.5 rounded-lg p-2.5" style={{ animationDelay: '0.7s' }}>
-            <Sparkles className="mt-px h-3.5 w-3.5 shrink-0 text-[var(--chart-1)]" />
+            <FaWandMagicSparkles className="mt-px h-3.5 w-3.5 shrink-0 text-[var(--chart-1)]" />
             <div className="min-w-0">
               <p className="flex items-center gap-1.5 font-mono text-[8px] uppercase tracking-[0.18em] text-muted-foreground">
                 radar digest
@@ -356,7 +342,7 @@ export function LandingHero({ authed, firstName }: { authed: boolean; firstName:
                 v2.1
               </span>
               Radar now auto-fetches news, papers, jobs & scholarships
-              <ArrowUpRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+              <FaUpRightFromSquare className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
             </a>
           </Reveal>
 
@@ -391,7 +377,7 @@ export function LandingHero({ authed, firstName }: { authed: boolean; firstName:
             <Button asChild className="sheen h-10 rounded-lg px-5 text-[14px]">
               <Link href={authed ? '/app' : '/signup'}>
                 {authed ? 'Open Cortex' : 'Start for free'}
-                <ArrowRight className="ml-1 h-4 w-4" />
+                <FaArrowRight className="ml-1 h-4 w-4" />
               </Link>
             </Button>
             <Button
@@ -430,7 +416,7 @@ export function LandingHero({ authed, firstName }: { authed: boolean; firstName:
             >
               <div className="chip-float flex items-center gap-2.5 rounded-xl border border-border bg-card/95 py-2.5 pl-3 pr-4 shadow-xl backdrop-blur">
                 <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-border bg-background/70">
-                  <BookOpen className="h-3.5 w-3.5 text-muted-foreground" />
+                  <FaBookOpen className="h-3.5 w-3.5 text-muted-foreground" />
                 </span>
                 <div>
                   <p className="text-[11.5px] font-medium leading-tight text-foreground">
@@ -478,7 +464,7 @@ export function LandingHero({ authed, firstName }: { authed: boolean; firstName:
                 className="chip-float flex items-center gap-2 rounded-lg border border-border bg-card/95 px-3 py-2 shadow-lg backdrop-blur"
                 style={{ animationDelay: '-4.9s' }}
               >
-                <Layers className="h-3.5 w-3.5 text-muted-foreground" />
+                <FaLayerGroup className="h-3.5 w-3.5 text-muted-foreground" />
                 <p className="font-mono text-[10px] text-muted-foreground">
                   <span className="font-semibold text-foreground">14 cards</span> due · SM-2
                 </p>

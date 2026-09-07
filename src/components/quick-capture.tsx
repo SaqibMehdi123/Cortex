@@ -1,5 +1,6 @@
 'use client'
 
+import { FaLink, FaListCheck, FaMicrophone, FaNoteSticky, FaSpinner, FaSquare, FaTrashCan } from 'react-icons/fa6'
 import { useState, useRef, useEffect } from 'react'
 import { useUI } from '@/lib/nav-config'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
@@ -9,7 +10,6 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { api } from '@/lib/client'
 import { useToast } from '@/hooks/use-toast'
-import { StickyNote, Mic, Link2, ListTodo, Loader2, Square, Trash2 } from 'lucide-react'
 
 // Minimal SpeechRecognition typing
 interface SpeechRecognitionLike {
@@ -122,10 +122,10 @@ export function QuickCapture() {
 
         <Tabs value={type} onValueChange={(v) => setType(v as 'note' | 'voice' | 'url' | 'task')}>
           <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="note" className="gap-1.5"><StickyNote className="h-3.5 w-3.5" /> Note</TabsTrigger>
-            <TabsTrigger value="voice" className="gap-1.5"><Mic className="h-3.5 w-3.5" /> Voice</TabsTrigger>
-            <TabsTrigger value="url" className="gap-1.5"><Link2 className="h-3.5 w-3.5" /> URL</TabsTrigger>
-            <TabsTrigger value="task" className="gap-1.5"><ListTodo className="h-3.5 w-3.5" /> Task</TabsTrigger>
+            <TabsTrigger value="note" className="gap-1.5"><FaNoteSticky className="h-3.5 w-3.5" /> Note</TabsTrigger>
+            <TabsTrigger value="voice" className="gap-1.5"><FaMicrophone className="h-3.5 w-3.5" /> Voice</TabsTrigger>
+            <TabsTrigger value="url" className="gap-1.5"><FaLink className="h-3.5 w-3.5" /> URL</TabsTrigger>
+            <TabsTrigger value="task" className="gap-1.5"><FaListCheck className="h-3.5 w-3.5" /> Task</TabsTrigger>
           </TabsList>
         </Tabs>
 
@@ -164,13 +164,13 @@ export function QuickCapture() {
                 disabled={!voiceSupported}
                 className="min-h-[44px]"
               >
-                {listening ? <><Square className="mr-1.5 h-3.5 w-3.5" /> Stop</> : <><Mic className="mr-1.5 h-3.5 w-3.5" /> Record</>}
+                {listening ? <><FaSquare className="mr-1.5 h-3.5 w-3.5" /> Stop</> : <><FaMicrophone className="mr-1.5 h-3.5 w-3.5" /> Record</>}
               </Button>
               {listening && <span className="flex items-center gap-1.5 text-xs text-warning"><span className="h-2 w-2 animate-pulse rounded-full bg-warning" /> Listening…</span>}
               {!voiceSupported && <span className="text-xs text-muted-foreground">Voice input not supported here — just type instead.</span>}
               {content && (
                 <Button type="button" variant="ghost" size="icon" className="ml-auto h-9 w-9" aria-label="Clear" onClick={() => setContent('')}>
-                  <Trash2 className="h-4 w-4" />
+                  <FaTrashCan className="h-4 w-4" />
                 </Button>
               )}
             </div>
@@ -180,7 +180,7 @@ export function QuickCapture() {
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={() => { recognitionRef.current?.stop(); setCaptureOpen(false) }}>Cancel</Button>
           <Button onClick={submit} disabled={busy}>
-            {busy && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+            {busy && <FaSpinner className="mr-1.5 h-4 w-4 animate-spin" />}
             {type === 'url' ? 'Save to read later' : 'Capture'}
           </Button>
         </div>
