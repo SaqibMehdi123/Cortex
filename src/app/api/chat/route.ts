@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { usedCitationNumbers } from '@/lib/citations'
 import ZAI from 'z-ai-web-dev-sdk'
 import { getSessionUser, unauthorized } from '@/lib/auth-server'
 
@@ -59,20 +60,33 @@ export async function POST(req: NextRequest) {
       ? await db.highlight.findMany({ where: { userId: user.id, documentId: document.id }, orderBy: { createdAt: 'desc' }, take: 20 })
       : []
 
-    // Split content into paragraphs for citation targeting
-    const paragraphs = document?.content
-      ? document.content
-          .split(/\n{1,}/)
-          .map((p) => p.trim())
-          .filter((p) => p.length > 60)
-      : []
+    // Split content into paragraphs for citation targeting — each paragraph
+    // keeps its char offset in the original content so a citation can be
+    // traced back to an approximate PDF page (offset/length × pageCount) and
+    // an exact text position (charStart) for in-reader jumps.
+    const paragraphs: { text: string; start: number }[] = []
+    if (document?.content) {
+      let cursor = 0
+      for (const raw of document.content.split(/\n{1,}/)) {
+        const found = document.content.indexOf(raw, cursor)
+        if (found === -1) {
+          cursor += raw.length + 1
+          continue
+        }
+        cursor = found + raw.length
+        const trimmed = raw.trim()
+        if (trimmed.length > 60) {
+          paragraphs.push({ text: trimmed, start: found + (raw.length - raw.trimStart().length) })
+        }
+      }
+    }
 
     const zai = await ZAI.create()
 
     // Step 1: pick the most relevant paragraph indexes to cite
-    let citeHints: string[] = []
+    let citeHints: { text: string; start: number }[] = []
     if (paragraphs.length > 0) {
-      const sample = paragraphs.slice(0, 400).map((p, i) => `[${i}] ${p.slice(0, 160)}`).join('\n')
+      const sample = paragraphs.slice(0, 400).map((p, i) => `[${i}] ${p.text.slice(0, 160)}`).join('\n')
       try {
         const pickCompletion = await zai.chat.completions.create({
           messages: [
@@ -82,7 +96,7 @@ export async function POST(req: NextRequest) {
           thinking: { type: 'disabled' },
         })
         const arr = JSON.parse((pickCompletion.choices[0]?.message?.content ?? '[]').replace(/```json|```/g, '').trim())
-        if (Array.isArray(arr)) citeHints = arr.slice(0, 3).map((n: unknown) => paragraphs[Number(n)] ?? '').filter(Boolean)
+        if (Array.isArray(arr)) citeHints = arr.slice(0, 3).map((n: unknown) => paragraphs[Number(n)]).filter(Boolean)
       } catch {
         citeHints = []
       }
@@ -96,7 +110,7 @@ export async function POST(req: NextRequest) {
         ? `Full content for reference:\n"""\n${document.content.slice(0, 22000)}\n"""`
         : `The user has not added the full text, so rely on the title/topic and general knowledge.`,
       citeHints.length
-        ? `Most relevant passages for this question:\n${citeHints.map((p, i) => `(${i + 1}) ${p.slice(0, 1200)}`).join('\n')}`
+        ? `Most relevant passages for this question:\n${citeHints.map((p, i) => `(${i + 1}) ${p.text.slice(0, 1200)}`).join('\n')}`
         : null,
       highlights.length
         ? `User's highlights in this document:\n${highlights.slice(0, 10).map((h) => `- "${h.text.slice(0, 200)}"`).join('\n')}`
@@ -127,16 +141,26 @@ export async function POST(req: NextRequest) {
 
     const reply = completion.choices[0]?.message?.content ?? 'Sorry, I could not generate an answer. Please try again.'
 
-    // Build citation list from hints actually referenced
-    const citations: { n: number; label: string; documentId: string | null; url: string | null }[] = []
+    // Build citation list from hints actually referenced. `page` is a
+    // proportional estimate (char offset → page) — good enough to jump near,
+    // and the reader refines it against the real PDF text layer on click.
+    const used = usedCitationNumbers(reply)
+    const contentLen = document?.content?.length ?? 0
+    const pageCount = document?.pageCount ?? 0
+    const citations: { n: number; label: string; documentId: string | null; url: string | null; page: number | null; charStart: number | null }[] = []
     if (citeHints.length) {
       citeHints.forEach((p, i) => {
-        if (reply.includes(`[${i + 1}]`)) {
+        if (used.has(i + 1)) {
+          const page = pageCount > 0 && contentLen > 0
+            ? Math.min(pageCount, Math.max(1, Math.round((p.start / contentLen) * pageCount)))
+            : null
           citations.push({
             n: i + 1,
-            label: p.slice(0, 140) + (p.length > 140 ? '…' : ''),
+            label: p.text.slice(0, 140) + (p.text.length > 140 ? '…' : ''),
             documentId: document?.id ?? null,
             url: null,
+            page,
+            charStart: p.start,
           })
         }
       })

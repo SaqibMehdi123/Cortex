@@ -12,7 +12,7 @@
 // prev/next page, lazy page rendering + bitmap eviction (a 300-page book
 // never holds more than a handful of page bitmaps in memory).
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -24,19 +24,28 @@ const PAD = 12 // px padding around pages inside the scroll area
 const ZOOMS = [0.5, 0.65, 0.8, 1, 1.25, 1.5, 1.75, 2, 2.5, 3]
 const DEFAULT_ZOOM_INDEX = 3
 
-export function PdfCanvasViewer({
-  url,
-  className,
-  initialPage = 1,
-  onPageChange,
-}: {
-  url: string
-  className?: string
-  /** page to open on (reading resume position) — only honoured once per mount */
-  initialPage?: number
-  /** fires whenever the top-most visible page changes while scrolling */
-  onPageChange?: (page: number) => void
-}) {
+// Imperative API for the reader: jump to a page (citation clicks) and find
+// which page actually contains a cited passage (searches the real text layer,
+// correcting the proportional page estimate stored on citations).
+export interface PdfViewerHandle {
+  goToPage: (n: number) => void
+  /** returns the 1-based page whose text contains `query`, or null */
+  locate: (query: string, hintPage?: number) => Promise<number | null>
+}
+
+export const PdfCanvasViewer = forwardRef<
+  PdfViewerHandle,
+  {
+    url: string
+    className?: string
+    /** page to open on (reading resume position) — only honoured once per mount */
+    initialPage?: number
+    /** fires whenever the top-most visible page changes while scrolling */
+    onPageChange?: (page: number) => void
+    /** external jump request (citation click) — bump `nonce` to trigger */
+    jump?: { page: number; nonce: number } | null
+  }
+>(function PdfCanvasViewer({ url, className, initialPage = 1, onPageChange, jump }, ref) {
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null)
   const [error, setError] = useState(false)
   const [containerWidth, setContainerWidth] = useState(0)
@@ -47,6 +56,14 @@ export function PdfCanvasViewer({
   const pageRefs = useRef<(HTMLDivElement | null)[]>([])
   const jumpedRef = useRef(false)
   const lastReportedPage = useRef(0)
+  // while a deliberate (citation) jump is animating, intermediate scroll
+  // positions must not be reported as the reading position
+  const jumpSettleUntil = useRef(0)
+  // sync mirror of the top-most page (read inside the ResizeObserver callback
+  // where state would be stale)
+  const currentPageRef = useRef(1)
+  // page to restore after a container reflow (dock open/close, window resize)
+  const pendingKeepPage = useRef<number | null>(null)
   // keep the latest callback without re-binding the scroll handler
   const onPageChangeRef = useRef(onPageChange)
   onPageChangeRef.current = onPageChange
@@ -98,11 +115,59 @@ export function PdfCanvasViewer({
     if (!el) return
     const ro = new ResizeObserver((entries) => {
       const w = entries[0]?.contentRect.width
-      if (w) setContainerWidth(Math.round(w))
+      if (!w) return
+      const next = Math.round(w)
+      if (next === containerWidth) return
+      if (containerWidth > 0) {
+        // the reflow will move every page — remember which one is on screen
+        // so it can be held in place after the new width applies
+        pendingKeepPage.current = currentPageRef.current
+      }
+      setContainerWidth(next)
     })
     ro.observe(el)
     return () => ro.disconnect()
-  }, [pdf])
+  }, [pdf, containerWidth])
+
+  // ── Hold the current page across container reflows ──
+  // Opening the Copilot dock / collapsing the sidebar / resizing the window
+  // changes the page width; without this the browser preserves the raw
+  // scrollTop and the reader silently drifts to a different page. Painted
+  // pages resize asynchronously (each canvas re-renders in its own effect),
+  // so the target offset is re-applied every frame until heights settle.
+  useEffect(() => {
+    if (!pdf || containerWidth <= 0) return
+    const keep = pendingKeepPage.current
+    if (keep == null) return
+    pendingKeepPage.current = null
+    const target = Math.min(Math.max(1, keep), pdf.numPages)
+    const sc = scrollRef.current
+    if (!sc) return
+    // the reflow scroll noise must not be reported as a new reading position
+    jumpSettleUntil.current = Date.now() + 1600
+    let raf = 0
+    const started = performance.now()
+    let lastMax = -1
+    let stable = 0
+    const tick = () => {
+      const el = pageRefs.current[target - 1]
+      if (el) {
+        sc.scrollTop = el.offsetTop - PAD / 2
+        const max = sc.scrollHeight - sc.clientHeight
+        stable = max === lastMax ? stable + 1 : 0
+        lastMax = max
+      }
+      if (stable >= 10 || performance.now() - started > 1200) {
+        lastReportedPage.current = target
+        currentPageRef.current = target
+        setCurrentPage(target)
+        return
+      }
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [pdf, containerWidth])
 
   // ── Resume: jump to the initial page once the layout is real ──
   // Wait for the container width (ResizeObserver) — before that, pages lay
@@ -120,6 +185,7 @@ export function PdfCanvasViewer({
       if (el && sc) {
         sc.scrollTo({ top: el.offsetTop - PAD / 2 })
         lastReportedPage.current = n
+        currentPageRef.current = n
         setCurrentPage(n)
       }
     })
@@ -130,6 +196,11 @@ export function PdfCanvasViewer({
   const onScroll = useCallback(() => {
     const sc = scrollRef.current
     if (!sc || numPages === 0) return
+    // during a resume / citation jump / reflow settle window every position
+    // is mid-flight noise: hold the deliberate target in the toolbar and the
+    // mirror refs — canvases resize asynchronously and probes would land on
+    // pages we are merely flying over
+    if (Date.now() <= jumpSettleUntil.current) return
     const probe = sc.scrollTop + sc.clientHeight * 0.3
     let page = 1
     for (let i = 0; i < pageRefs.current.length; i++) {
@@ -137,9 +208,15 @@ export function PdfCanvasViewer({
       if (el && el.offsetTop <= probe) page = i + 1
     }
     setCurrentPage(page)
+    currentPageRef.current = page
     // don't report until the resume jump has settled — pre-jump scroll noise
-    // (layout reflow) would otherwise overwrite the saved reading position
-    if (jumpedRef.current && page !== lastReportedPage.current) {
+    // (layout reflow) would otherwise overwrite the saved reading position.
+    // A fresh deliberate jump silences reports for its animation window too.
+    if (
+      jumpedRef.current &&
+      page !== lastReportedPage.current &&
+      Date.now() > jumpSettleUntil.current
+    ) {
       lastReportedPage.current = page
       onPageChangeRef.current?.(page)
     }
@@ -151,6 +228,90 @@ export function PdfCanvasViewer({
     const sc = scrollRef.current
     if (el && sc) sc.scrollTo({ top: el.offsetTop - PAD / 2, behavior: 'smooth' })
   }, [numPages])
+
+  // ── Citation jump (in place, while mounted) ──
+  // Runs when the nonce changes AND again once `pdf` arrives, so a request
+  // made before the document finished loading is not lost. The reader saves
+  // the jump target itself; here we only silence intermediate reports while
+  // the smooth scroll animates (a mid-animation probe would otherwise
+  // overwrite the saved page with a page we are merely flying over).
+  useEffect(() => {
+    if (!jump || !pdf) return
+    lastReportedPage.current = jump.page
+    jumpSettleUntil.current = Date.now() + 1500
+    scrollToPage(jump.page)
+    // sync the toolbar with the real landing page once the animation ends —
+    // no further scroll events fire on their own, so without this the page
+    // indicator would stay stale until the user scrolls again
+    const t = setTimeout(() => {
+      const sc = scrollRef.current
+      if (!sc) return
+      const probe = sc.scrollTop + sc.clientHeight * 0.3
+      let page = 1
+      for (let i = 0; i < pageRefs.current.length; i++) {
+        const el = pageRefs.current[i]
+        if (el && el.offsetTop <= probe) page = i + 1
+      }
+      lastReportedPage.current = page
+      currentPageRef.current = page
+      setCurrentPage(page)
+    }, 1100)
+    return () => clearTimeout(t)
+  }, [jump, pdf, scrollToPage])
+
+  // ── Text-layer search for citation landing pages ──
+  const pageTextCache = useRef<Map<number, string>>(new Map())
+  const getPageText = useCallback(
+    async (n: number): Promise<string> => {
+      const cached = pageTextCache.current.get(n)
+      if (cached !== undefined) return cached
+      const page = await pdf!.getPage(n)
+      const tc = await page.getTextContent()
+      let out = ''
+      for (const item of tc.items as { str?: string }[]) {
+        if (typeof item.str === 'string') out += item.str + ' '
+      }
+      const t = normForMatch(out)
+      pageTextCache.current.set(n, t)
+      return t
+    },
+    [pdf]
+  )
+
+  const locate = useCallback(
+    async (query: string, hintPage?: number): Promise<number | null> => {
+      if (!pdf) return null
+      const q = normForMatch(query).slice(0, 140)
+      if (q.length < 12) return null // too short to match reliably
+      const sq = squash(q)
+      const total = pdf.numPages
+      const has = async (n: number) => {
+        if (n < 1 || n > total) return false
+        try {
+          return squash(await getPageText(n)).includes(sq)
+        } catch {
+          return false
+        }
+      }
+      const start = hintPage && hintPage >= 1 && hintPage <= total ? hintPage : 1
+      // widening rings around the hint — the stored page is a proportional
+      // estimate, so the true page is usually within a handful of pages
+      if (await has(start)) return start
+      for (let r = 1; r <= 40; r++) {
+        if (start - r >= 1 && (await has(start - r))) return start - r
+        if (start + r <= total && (await has(start + r))) return start + r
+      }
+      // last resort: full sweep (rare — estimate was far off)
+      for (let n = 1; n <= total; n++) {
+        if (Math.abs(n - start) <= 40) continue
+        if (await has(n)) return n
+      }
+      return null
+    },
+    [pdf, getPageText]
+  )
+
+  useImperativeHandle(ref, () => ({ goToPage: scrollToPage, locate }), [scrollToPage, locate])
 
   if (error) {
     return (
@@ -231,7 +392,22 @@ export function PdfCanvasViewer({
       </div>
     </div>
   )
+})
+
+// normalize for citation matching: lowercase, strip punctuation, collapse
+// whitespace (the stored content and the pdf.js text layer disagree on line
+// breaks, hyphenation and spacing — comparing the squashed alphanumeric forms
+// is robust to all of that)
+function normForMatch(s: string) {
+  return s
+    .replace(/\u00ad/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
 }
+// even stricter: letters+digits only — survives "con- trol" vs "control"
+const squash = (s: string) => s.replace(/[^a-z0-9]/g, '')
 
 // ─── One page: placeholder until scrolled near, canvas bitmap once rendered ───
 function PdfPage({

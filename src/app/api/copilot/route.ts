@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { usedCitationNumbers } from '@/lib/citations'
 import ZAI from 'z-ai-web-dev-sdk'
 import { getSessionUser, unauthorized } from '@/lib/auth-server'
 
@@ -8,6 +9,8 @@ interface Cite {
   label: string
   documentId?: string | null
   url?: string | null
+  page?: number | null
+  charStart?: number | null
 }
 
 // GET /api/copilot — the user's persisted copilot conversation
@@ -44,7 +47,7 @@ export async function POST(req: NextRequest) {
 
     // Gather cross-module context in parallel (all scoped to this user)
     const [documents, notes, goals, tasks, plans, highlights, opportunities, news, flashcardsDue] = await Promise.all([
-      db.document.findMany({ where: { userId: user.id }, orderBy: { updatedAt: 'desc' }, take: 25, select: { id: true, title: true, summary: true, content: true, status: true } }),
+      db.document.findMany({ where: { userId: user.id }, orderBy: { updatedAt: 'desc' }, take: 25, select: { id: true, title: true, summary: true, content: true, status: true, pageCount: true } }),
       db.note.findMany({ where: { userId: user.id }, orderBy: { updatedAt: 'desc' }, take: 20 }),
       db.goal.findMany({ where: { userId: user.id, status: 'active' }, include: { milestones: true }, take: 15 }),
       db.task.findMany({ where: { userId: user.id, status: { not: 'done' } }, orderBy: [{ dueDate: 'asc' }], take: 15, include: { goal: { select: { title: true } } } }),
@@ -63,14 +66,32 @@ export async function POST(req: NextRequest) {
       .filter((w) => w.length > 3)
       .slice(0, 8)
 
-    const chunks: { docId: string; docTitle: string; text: string }[] = []
+    const chunks: { docId: string; docTitle: string; text: string; start: number; total: number; pageCount: number }[] = []
     for (const doc of documents) {
       if (!doc.content) continue
-      const paras = doc.content.split(/\n{1,}/).map((p) => p.trim()).filter((p) => p.length > 60)
-      for (const p of paras) {
-        const lower = p.toLowerCase()
+      // track each paragraph's char offset so citations can carry a page
+      let cursor = 0
+      for (const raw of doc.content.split(/\n{1,}/)) {
+        const found = doc.content.indexOf(raw, cursor)
+        if (found === -1) {
+          cursor += raw.length + 1
+          continue
+        }
+        cursor = found + raw.length
+        const t = raw.trim()
+        if (t.length <= 60) continue
+        const lower = t.toLowerCase()
         const score = keywords.reduce((acc, k) => acc + (lower.includes(k) ? 1 : 0), 0)
-        if (score > 0) chunks.push({ docId: doc.id, docTitle: doc.title, text: p })
+        if (score > 0) {
+          chunks.push({
+            docId: doc.id,
+            docTitle: doc.title,
+            text: t,
+            start: found + (raw.length - raw.trimStart().length),
+            total: doc.content.length,
+            pageCount: doc.pageCount ?? 0,
+          })
+        }
       }
     }
     chunks.sort((a, b) => b.text.length - a.text.length)
@@ -81,6 +102,12 @@ export async function POST(req: NextRequest) {
       label: `${c.docTitle} — ${c.text.slice(0, 120)}…`,
       documentId: c.docId,
       url: null,
+      // proportional estimate (char offset → page); the reader refines it
+      // against the real PDF text layer when the citation is clicked
+      page: c.pageCount > 0 && c.total > 0
+        ? Math.min(c.pageCount, Math.max(1, Math.round((c.start / c.total) * c.pageCount)))
+        : null,
+      charStart: c.start,
     }))
 
     const contextParts = [
@@ -138,7 +165,8 @@ export async function POST(req: NextRequest) {
 
     const reply = completion.choices[0]?.message?.content ?? 'Sorry, I could not generate an answer. Please try again.'
 
-    const usedCitations = citations.filter((c) => reply.includes(`[${c.n}]`))
+    const used = usedCitationNumbers(reply)
+    const usedCitations = citations.filter((c) => used.has(c.n))
 
     const assistantMsg = await db.chatMessage.create({
       data: {

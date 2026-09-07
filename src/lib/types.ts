@@ -38,6 +38,10 @@ export interface Citation {
   label: string
   documentId?: string | null
   url?: string | null
+  /** best-estimate page in the source PDF (1-based) so citations can jump to the exact page */
+  page?: number | null
+  /** char offset of the cited passage inside document.content — powers precise text jumps */
+  charStart?: number | null
 }
 
 export interface ChatMessage {

@@ -767,3 +767,24 @@
   .mock-ring .ring-val { animation: none; stroke-dashoffset: var(--ring-off, 31.2); }
   .digest-card::after, .bar-shimmer::after { animation: none; display: none; }
 }
+
+/* ── Citation landing flash (reader text mode) ────────────────────────
+   Briefly highlights the paragraph a citation jumped to. */
+.cite-flash {
+  animation: cite-flash 2.2s ease-out;
+  border-radius: 8px;
+}
+@keyframes cite-flash {
+  0%, 50% {
+    background: color-mix(in srgb, var(--primary) 13%, transparent);
+    box-shadow: 0 0 0 8px color-mix(in srgb, var(--primary) 7%, transparent);
+  }
+  100% {
+    background: transparent;
+    box-shadow: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cite-flash { animation: none; }
+}

@@ -20,11 +20,13 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
+import { splitCitationParts } from '@/lib/citations'
 import ReactMarkdown from 'react-markdown'
-import { PdfCanvasViewer } from '@/components/pdf-viewer'
+import { PdfCanvasViewer, type PdfViewerHandle } from '@/components/pdf-viewer'
 import {
   ArrowLeft, Send, Highlighter, StickyNote, Layers, Share2, Loader2,
   X, Trash2, CheckCircle2, BookOpen, FileText, PanelRightOpen, ExternalLink, Download, Sparkles,
+  Quote, CornerDownRight,
 } from 'lucide-react'
 
 const HL_COLORS = ['yellow', 'green', 'blue', 'pink'] as const
@@ -40,6 +42,72 @@ interface SelInfo {
 
 type RailTab = 'chat' | 'summary' | 'highlights'
 
+// ─── Assistant answer with live citation chips ──────────────────────
+// [n] markers in the markdown become buttons that land the reader on the
+// cited page (PDF) or passage (text). The Sources list under the answer
+// shows each quoted passage with a page badge — every row is clickable too.
+function CitedAnswer({
+  content,
+  citations,
+  onCite,
+}: {
+  content: string
+  citations: Citation[] | null
+  onCite: (c: Citation) => void
+}) {
+  const mdClass =
+    'space-y-2 text-sm leading-relaxed [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_li]:ml-4 [&_li]:list-disc [&_ol]:ml-4 [&_ol]:list-decimal [&_p]:mb-2 [&_strong]:font-semibold [&_ul]:ml-4 [&_ul]:list-disc'
+
+  if (!citations?.length) {
+    return <div className={mdClass}><ReactMarkdown>{content}</ReactMarkdown></div>
+  }
+
+  // split content around citation markers (single [2] or combined [1, 3])
+  const parts = splitCitationParts(content, citations)
+
+  return (
+    <div className={mdClass}>
+      {parts.map((p, i) =>
+        typeof p === 'string' ? (
+          <ReactMarkdown key={i}>{p}</ReactMarkdown>
+        ) : (
+          <button
+            key={i}
+            onClick={() => onCite(p)}
+            title={p.page ? `Jump to page ${p.page}` : 'Jump to the cited passage'}
+            className="mx-0.5 inline-flex h-5 min-w-5 items-center justify-center gap-0.5 rounded-full bg-primary/10 px-1 align-super text-[10px] font-semibold text-primary transition-colors hover:bg-primary/20"
+          >
+            <Quote className="h-2.5 w-2.5" />
+            {p.n}
+          </button>
+        )
+      )}
+      <div className="mt-2.5 space-y-1.5 border-t pt-2">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">Sources</p>
+        {citations.map((c) => (
+          <button
+            key={c.n}
+            onClick={() => onCite(c)}
+            title={c.page ? `Jump to page ${c.page}` : 'Jump to the cited passage'}
+            className="group flex w-full items-start gap-2 rounded-lg border bg-muted/40 px-2 py-1.5 text-left transition-colors hover:border-primary/40 hover:bg-muted"
+          >
+            <span className="mt-px flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[9px] font-bold text-primary">{c.n}</span>
+            <span className="min-w-0 flex-1">
+              <span className="block break-words text-[11px] leading-snug text-muted-foreground transition-colors [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] [overflow:hidden] group-hover:text-foreground">{c.label}</span>
+              {c.page ? (
+                <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-primary/10 px-1.5 py-px text-[9px] font-semibold text-primary">
+                  <FileText className="h-2.5 w-2.5" /> Page {c.page}
+                </span>
+              ) : null}
+            </span>
+            <CornerDownRight className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground/40 transition-colors group-hover:text-primary" />
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ─── Reader — opens INSIDE the app shell as a section ────────────────
 // PDFs render through a pdf.js canvas viewer (mobile browsers don't render
 // PDFs inside iframes — this works identically everywhere, original layout,
@@ -48,6 +116,9 @@ type RailTab = 'chat' | 'summary' | 'highlights'
 export function ReaderView() {
   const readerDocId = useUI((s) => s.readerDocId)
   const closeReader = useUI((s) => s.closeReader)
+  const openReader = useUI((s) => s.openReader)
+  const readerJumpPage = useUI((s) => s.readerJumpPage)
+  const setReaderJumpPage = useUI((s) => s.setReaderJumpPage)
   const { toast } = useToast()
 
   const [doc, setDoc] = useState<(DocumentItem & { highlights: Highlight[] }) | null>(null)
@@ -79,6 +150,10 @@ export function ReaderView() {
   const pendingPageSave = useRef<{ page: number; pct: number | null } | null>(null)
   const pageSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const restoredTextRef = useRef('')
+  // citation jumps: imperative handle to the pdf viewer + external jump request
+  const viewerRef = useRef<PdfViewerHandle | null>(null)
+  const jumpNonce = useRef(0)
+  const [pdfJump, setPdfJump] = useState<{ page: number; nonce: number } | null>(null)
 
   const isPdf = !!doc?.filePath
 
@@ -197,6 +272,112 @@ export function ReaderView() {
     return () => flushPageSave()
   }, [readerDocId, flushPageSave])
 
+  // ── Citation jumps ────────────────────────────────────────────────
+  // Jump the PDF viewer to a page. Covers both paths: a fresh mount (mode
+  // switch — the mount resume effect re-reads initialPdfPageRef) and the
+  // already-mounted viewer (jump nonce scrolls in place).
+  const applyPdfJump = useCallback(
+    (page: number) => {
+      initialPdfPageRef.current = page
+      jumpNonce.current += 1
+      setPdfJump({ page, nonce: jumpNonce.current })
+      setMode((m) => (m !== 'original' ? 'original' : m))
+      // A deliberate jump IS the new reading position — record it here. The
+      // viewer suppresses onPageChange around its own resume/settle, so a
+      // jump that lands via a fresh mount would otherwise never be saved
+      // and a reload would fall back to the stale pre-jump page.
+      handlePdfPageChange(page)
+    },
+    [handlePdfPageChange]
+  )
+
+  // Best-effort page for citations stored before page tracking existed:
+  // find the quoted passage in the content, convert its char offset to a
+  // page proportionally.
+  const estimateCitePage = useCallback(
+    (c: Citation): number | null => {
+      if (!doc?.pageCount || !doc.content) return null
+      let off = c.charStart ?? null
+      if (off == null && c.label) {
+        const needle = c.label.replace(/…$/, '').slice(0, 60)
+        if (needle) {
+          const idx = doc.content.indexOf(needle)
+          if (idx >= 0) off = idx
+        }
+      }
+      if (off == null) return null
+      return Math.min(doc.pageCount, Math.max(1, Math.round((off / doc.content.length) * doc.pageCount)))
+    },
+    [doc]
+  )
+
+  // Text documents: scroll the reading column to the cited passage and flash it
+  const scrollToTextOffset = useCallback((off: number) => {
+    const el = scrollRef.current
+    if (!el) return
+    const paras = el.querySelectorAll<HTMLElement>('[data-off]')
+    let target: HTMLElement | null = null
+    for (const p of Array.from(paras)) {
+      if (Number(p.dataset.off ?? 0) <= off) target = p
+      else break
+    }
+    target = target ?? (paras[0] as HTMLElement | undefined) ?? null
+    if (!target) return
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    target.classList.remove('cite-flash')
+    void target.offsetWidth // restart the animation on repeated clicks
+    target.classList.add('cite-flash')
+    window.setTimeout(() => target?.classList.remove('cite-flash'), 2400)
+  }, [])
+
+  // A citation was clicked (chip in the answer or a Sources row): land the
+  // reader on the passage. PDFs jump instantly to the stored page estimate,
+  // then get corrected to the page that really contains the passage
+  // (text-layer search). Text documents scroll to the exact offset.
+  const jumpToCitation = useCallback(
+    async (c: Citation) => {
+      if (!doc) return
+      if (c.documentId && c.documentId !== doc.id) {
+        openReader(c.documentId) // cited a different document — open it
+        return
+      }
+      if (isPdf) {
+        const estimate = c.page ?? estimateCitePage(c)
+        if (estimate) applyPdfJump(estimate)
+        // on phones the rail is a full sheet — close it so the landing page
+        // is actually visible
+        setRailOpen(false)
+        const raw = (c.label ?? '').replace(/…$/, '').trim()
+        if (raw.length >= 12 && viewerRef.current) {
+          // Copilot labels carry a "Title — passage" prefix — try the raw
+          // label first, then just the passage part
+          let found = await viewerRef.current.locate(raw, estimate ?? undefined).catch(() => null)
+          if (!found && raw.includes(' — ')) {
+            found = await viewerRef.current
+              .locate(raw.slice(raw.indexOf(' — ') + 3), estimate ?? undefined)
+              .catch(() => null)
+          }
+          if (found && found !== estimate) applyPdfJump(found)
+        }
+      } else if (c.charStart != null) {
+        setRailOpen(false) // phones: reveal the passage behind the sheet
+        scrollToTextOffset(c.charStart)
+      } else if (c.url) {
+        window.open(c.url, '_blank')
+      }
+    },
+    [doc, isPdf, openReader, applyPdfJump, estimateCitePage, scrollToTextOffset]
+  )
+
+  // Copilot handed us a citation jump (open the book straight at page N) —
+  // consume it once the document is loaded. The viewer's jump effect replays
+  // once `pdf` is ready, so this works even while the file is still loading.
+  useEffect(() => {
+    if (!readerJumpPage || !doc) return
+    if (isPdf) applyPdfJump(readerJumpPage)
+    setReaderJumpPage(null)
+  }, [readerJumpPage, doc, isPdf, applyPdfJump, setReaderJumpPage])
+
   // ── Text mode resume: scroll back to the saved progress position ──
   useEffect(() => {
     if (!doc) return
@@ -286,7 +467,19 @@ export function ReaderView() {
     }
 
     const paragraphs = doc.content.split(/\n{1,}/)
-    return paragraphs.map((p, i) => <p key={i}>{renderWithHighlights(p)}</p>)
+    // char offset of every rendered paragraph — lets a citation click scroll
+    // the text column to the exact cited passage
+    const starts: number[] = []
+    let cursor = 0
+    for (const p of paragraphs) {
+      const found = doc.content.indexOf(p, cursor)
+      const start = found === -1 ? cursor : found
+      starts.push(start)
+      cursor = start + p.length
+    }
+    return paragraphs.map((p, i) => (
+      <p key={i} data-off={starts[i]}>{renderWithHighlights(p)}</p>
+    ))
   }
 
   function renderWithHighlights(text: string) {
@@ -442,25 +635,11 @@ export function ReaderView() {
                 )}
                 {messages.map((m) => (
                   <div key={m.id} className={cn('flex', m.role === 'user' ? 'justify-end' : 'justify-start')}>
-                    <div className={cn('max-w-[88%] rounded-2xl px-3 py-2 text-sm', m.role === 'user' ? 'rounded-br-md bg-foreground text-background' : 'rounded-bl-md border bg-card')}>
+                    <div className={cn('max-w-[92%] rounded-2xl px-3 py-2 text-sm', m.role === 'user' ? 'rounded-br-md bg-foreground text-background' : 'rounded-bl-md border bg-card')}>
                       {m.role === 'user' ? (
                         m.content
                       ) : (
-                        <>
-                          <div className="[&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_li]:ml-4 [&_li]:list-disc [&_p]:mb-2 [&_strong]:font-semibold [&_ul]:ml-4 [&_ul]:list-disc">
-                            <ReactMarkdown>{m.content}</ReactMarkdown>
-                          </div>
-                          {m.citations?.length ? (
-                            <div className="mt-2 space-y-1 border-t pt-2">
-                              {m.citations.map((c: Citation) => (
-                                <p key={c.n} className="text-[10px] leading-snug text-muted-foreground">
-                                  <span className="mr-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-muted text-[9px] font-bold">{c.n}</span>
-                                  {c.label}
-                                </p>
-                              ))}
-                            </div>
-                          ) : null}
-                        </>
+                        <CitedAnswer content={m.content} citations={m.citations} onCite={jumpToCitation} />
                       )}
                     </div>
                   </div>
@@ -673,8 +852,13 @@ export function ReaderView() {
 
       {/* ── Content split ── */}
       <div className="flex min-h-0 flex-1 gap-0 pt-3">
-        {/* Main reading section */}
-        <div className="flex min-w-0 flex-1 flex-col lg:pr-3">
+        {/* Main reading section — stretches 48px lower than the AI rail (into
+            main's bottom padding) so the PDF/text canvas uses the space the
+            floating Quick capture / Copilot buttons would otherwise occupy.
+            The buttons only float over the rail's corner (right side), so the
+            extra height is overlap-free for the reading column on every
+            breakpoint; the rail keeps its exact height. */}
+        <div className="flex min-w-0 flex-1 flex-col lg:-mb-12 lg:pr-3">
           {loading ? (
             <div className="flex-1 space-y-4 rounded-xl border bg-card p-8">
               {Array.from({ length: 8 }).map((_, i) => (
@@ -696,8 +880,15 @@ export function ReaderView() {
                   <Download className="h-3 w-3" /> Save
                 </a>
               </div>
-              {/* pdf.js canvas pages — zoom, page nav, lazy render; resumes at the last page read */}
-              <PdfCanvasViewer url={fileUrl} initialPage={initialPdfPageRef.current} onPageChange={handlePdfPageChange} />
+              {/* pdf.js canvas pages — zoom, page nav, lazy render; resumes at the last page read;
+                  citation clicks jump here via the imperative handle */}
+              <PdfCanvasViewer
+                ref={viewerRef}
+                url={fileUrl}
+                initialPage={initialPdfPageRef.current}
+                onPageChange={handlePdfPageChange}
+                jump={pdfJump}
+              />
             </div>
           ) : (
             /* Text reading column (articles, extracted text, pasted content) */

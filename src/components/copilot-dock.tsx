@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useUI } from '@/lib/nav-config'
+import { useUI as useUIStore } from '@/lib/store'
 import { useMediaQuery } from '@/components/shared'
 import { api } from '@/lib/client'
+import { splitCitationParts } from '@/lib/citations'
 import type { ChatMessage, Citation } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -38,21 +40,8 @@ function MarkdownWithCitations({
     )
   }
 
-  // split content by citation markers
-  const parts: (string | Citation)[] = []
-  const regex = /\[(\d+)\]/g
-  let last = 0
-  let m: RegExpExecArray | null
-  while ((m = regex.exec(content)) !== null) {
-    const n = Number(m[1])
-    const cite = citations.find((c) => c.n === n)
-    if (cite) {
-      if (m.index > last) parts.push(content.slice(last, m.index))
-      parts.push(cite)
-      last = m.index + m[0].length
-    }
-  }
-  if (last < content.length) parts.push(content.slice(last))
+  // split content by citation markers (single [2] or combined [1, 3])
+  const parts = splitCitationParts(content, citations)
 
   return (
     <div className="prose-sm space-y-2 text-sm leading-relaxed [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_li]:ml-4 [&_li]:list-disc [&_ol]:ml-4 [&_ol]:list-decimal [&_p]:mb-2 [&_strong]:font-semibold [&_ul]:ml-4 [&_ul]:list-disc">
@@ -63,7 +52,7 @@ function MarkdownWithCitations({
           <button
             key={i}
             onClick={() => onCite?.(p)}
-            title={p.label}
+            title={p.page ? `Jump to page ${p.page}` : p.label}
             className="mx-0.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary/10 px-1 align-super text-[10px] font-semibold text-primary transition-colors hover:bg-primary/20"
           >
             <Quote className="mr-0.5 h-2.5 w-2.5" />
@@ -76,10 +65,18 @@ function MarkdownWithCitations({
           <button
             key={c.n}
             onClick={() => onCite?.(c)}
+            title={c.page ? `Jump to page ${c.page}` : c.label}
             className="flex w-full items-start gap-1.5 rounded-lg bg-muted/60 px-2 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted"
           >
             <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[9px] font-bold text-primary">{c.n}</span>
-            <span className="line-clamp-2">{c.label}</span>
+            <span className="min-w-0 flex-1">
+              <span className="line-clamp-2">{c.label}</span>
+              {c.page ? (
+                <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-primary/10 px-1.5 py-px text-[9px] font-semibold text-primary">
+                  Page {c.page}
+                </span>
+              ) : null}
+            </span>
           </button>
         ))}
       </div>
@@ -92,6 +89,7 @@ export function CopilotDock() {
   const setCopilotOpen = useUI((s) => s.setCopilotOpen)
   const setView = useUI((s) => s.setView)
   const openReader = useUI((s) => s.openReader)
+  const setReaderJumpPage = useUIStore((s) => s.setReaderJumpPage)
   const isMobile = useMediaQuery('(max-width: 1279px)')
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
@@ -136,12 +134,15 @@ export function CopilotDock() {
     (c: Citation) => {
       if (c.documentId) {
         openReader(c.documentId)
+        // land straight on the cited page — the reader consumes this once
+        // the document has loaded
+        if (c.page) setReaderJumpPage(c.page)
         setCopilotOpen(false)
       } else if (c.url) {
         window.open(c.url, '_blank')
       }
     },
-    [openReader, setCopilotOpen]
+    [openReader, setCopilotOpen, setReaderJumpPage]
   )
 
   const body = (

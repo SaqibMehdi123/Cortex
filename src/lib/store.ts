@@ -14,6 +14,8 @@ interface UIState {
   sidebarCollapsed: boolean
   mobileMoreOpen: boolean
   focusTask: { id: string; title: string; goalId?: string | null } | null
+  /** one-shot page jump for the reader (Copilot citation → open the book at that page) */
+  readerJumpPage: number | null
   /** true once the persisted slice (view / readerDocId) has been restored on this tab */
   hydrated: boolean
   setView: (v: ViewKey) => void
@@ -25,6 +27,7 @@ interface UIState {
   toggleSidebar: () => void
   setMobileMoreOpen: (open: boolean) => void
   setFocusTask: (t: { id: string; title: string; goalId?: string | null } | null) => void
+  setReaderJumpPage: (p: number | null) => void
 }
 
 // `view` + `readerDocId` + sidebarCollapsed survive a reload so the workspace
@@ -44,6 +47,7 @@ export const useUI = create<UIState>()(
       sidebarCollapsed: false,
       mobileMoreOpen: false,
       focusTask: null,
+      readerJumpPage: null,
       hydrated: false,
       setView: (v) => set({ view: v, mobileMoreOpen: false, readerDocId: null }),
       openReader: (docId) => set({ readerDocId: docId }),
@@ -54,6 +58,7 @@ export const useUI = create<UIState>()(
       toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
       setMobileMoreOpen: (open) => set({ mobileMoreOpen: open }),
       setFocusTask: (t) => set({ focusTask: t }),
+      setReaderJumpPage: (p) => set({ readerJumpPage: p }),
     }),
     {
       name: 'cortex-ui',
