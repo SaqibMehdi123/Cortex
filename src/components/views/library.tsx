@@ -17,6 +17,8 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/hooks/use-toast'
 import { useUI } from '@/lib/nav-config'
@@ -42,7 +44,7 @@ const STATUS_STYLES: Record<string, string> = {
 
 // Book spines on a shelf card — height varies per slot, colour follows the
 // book's reading status so a shelf reads like a real, filled bookcase.
-const SPINE_HEIGHTS = ['h-7', 'h-10', 'h-6', 'h-9', 'h-11', 'h-8', 'h-9', 'h-6']
+const SPINE_HEIGHTS = ['h-9', 'h-14', 'h-8', 'h-12', 'h-16', 'h-10', 'h-12', 'h-8', 'h-11', 'h-9']
 const SPINE_COLORS: Record<string, string> = {
   reading: 'bg-primary/70',
   finished: 'bg-success/60',
@@ -239,21 +241,21 @@ export function LibraryView() {
                   }}
                   title="Drop a book here to take it off its shelf"
                   className={cn(
-                    'flex w-[132px] shrink-0 flex-col rounded-xl border p-2.5 text-left transition-all',
+                    'flex w-[168px] shrink-0 flex-col rounded-xl border p-3 text-left transition-all',
                     activeShelf === null ? 'border-primary/60 bg-primary/5 ring-1 ring-primary/30' : 'hover:border-primary/40 hover:bg-muted/40',
                     dragOverShelf === 'all' && 'border-primary bg-primary/10 ring-1 ring-primary/40'
                   )}
                 >
-                  <span className="flex h-14 items-center justify-center rounded-md bg-muted/60 text-muted-foreground">
-                    <FaBorderAll className="h-5 w-5" />
+                  <span className="flex h-20 items-center justify-center rounded-md bg-muted/60 text-muted-foreground">
+                    <FaBorderAll className="h-6 w-6" />
                   </span>
                   <span className="mt-2 flex items-baseline justify-between gap-1">
-                    <span className="truncate text-xs font-semibold">All books</span>
-                    <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">{allDocs?.length ?? 0}</span>
+                    <span className="truncate text-[13px] font-semibold">All books</span>
+                    <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">{allDocs?.length ?? 0}</span>
                   </span>
                 </button>
                 {shelves.map((s) => {
-                  const spineDocs = (allDocs ?? []).filter((d) => d.shelfId === s.id).slice(0, 8)
+                  const spineDocs = (allDocs ?? []).filter((d) => d.shelfId === s.id).slice(0, 10)
                   return (
                     <div
                       key={s.id}
@@ -275,28 +277,28 @@ export function LibraryView() {
                         if (doc && doc.shelfId !== s.id) moveDoc(doc, s.id, s.name)
                       }}
                       className={cn(
-                        'group relative flex w-[132px] shrink-0 cursor-pointer flex-col rounded-xl border p-2.5 text-left outline-none transition-all focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+                        'group relative flex w-[168px] shrink-0 cursor-pointer flex-col rounded-xl border p-3 text-left outline-none transition-all focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
                         activeShelf === s.id ? 'border-primary/60 bg-primary/5 ring-1 ring-primary/30' : 'hover:border-primary/40 hover:bg-muted/40',
                         dragOverShelf === s.id && 'border-primary bg-primary/10 ring-1 ring-primary/40'
                       )}
                     >
                       {/* The books + the plank they sit on */}
-                      <span className="flex h-14 items-end justify-center gap-[3px] rounded-md border-b-2 border-primary/30 bg-muted/40 px-2">
+                      <span className="flex h-20 items-end justify-center gap-1 rounded-md border-b-2 border-primary/30 bg-muted/40 px-2.5">
                         {spineDocs.length === 0 ? (
-                          <span className="pb-1 text-[10px] italic text-muted-foreground">empty — drop a book</span>
+                          <span className="pb-1.5 text-[11px] italic text-muted-foreground">empty — drop a book</span>
                         ) : (
                           spineDocs.map((d, i) => (
                             <span
                               key={d.id}
                               title={d.title}
-                              className={cn('w-[7px] rounded-t-[3px]', SPINE_HEIGHTS[i % SPINE_HEIGHTS.length], SPINE_COLORS[d.status] ?? 'bg-muted-foreground/40')}
+                              className={cn('w-[9px] rounded-t-[4px]', SPINE_HEIGHTS[i % SPINE_HEIGHTS.length], SPINE_COLORS[d.status] ?? 'bg-muted-foreground/40')}
                             />
                           ))
                         )}
                       </span>
                       <span className="mt-2 flex items-baseline justify-between gap-1">
-                        <span className="truncate text-xs font-medium">{s.name}</span>
-                        <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">{s._count?.documents ?? spineDocs.length}</span>
+                        <span className="truncate text-[13px] font-medium">{s.name}</span>
+                        <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">{s._count?.documents ?? spineDocs.length}</span>
                       </span>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -655,7 +657,18 @@ export function LibraryView() {
         </TabsContent>
       </Tabs>
 
-      <ImportDialog open={importOpen} onOpenChange={setImportOpen} onImported={() => { reload(); toast({ title: 'Added to library' }) }} />
+      <ImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        shelves={shelves}
+        onShelfCreated={(s) => setShelves((prev) => [...prev, s])}
+        onImported={(shelfName) => {
+          reload()
+          refreshAllDocs()
+          loadShelves()
+          toast({ title: 'Added to library', description: shelfName ? `Put on the “${shelfName}” shelf.` : undefined })
+        }}
+      />
 
       {/* Delete confirmation (grid + list) */}
       <AlertDialog open={!!confirmDelete} onOpenChange={(v) => !v && setConfirmDelete(null)}>
@@ -733,7 +746,13 @@ export function LibraryView() {
   )
 }
 
-function ImportDialog({ open, onOpenChange, onImported }: { open: boolean; onOpenChange: (v: boolean) => void; onImported: () => void }) {
+function ImportDialog({ open, onOpenChange, onImported, shelves, onShelfCreated }: {
+  open: boolean
+  onOpenChange: (v: boolean) => void
+  onImported: (shelfName?: string) => void
+  shelves: ShelfItem[]
+  onShelfCreated: (s: ShelfItem) => void
+}) {
   const [mode, setMode] = useState<'pdf' | 'url' | 'paste' | 'manual'>('pdf')
   const [url, setUrl] = useState('')
   const [title, setTitle] = useState('')
@@ -745,12 +764,27 @@ function ImportDialog({ open, onOpenChange, onImported }: { open: boolean; onOpe
   const [uploadPct, setUploadPct] = useState<number | null>(null)
   const [file, setFile] = useState<File | null>(null)
   const [dragOver, setDragOver] = useState(false)
+  // Where does this book go? 'none' = the common space every book shares.
+  const [shelfChoice, setShelfChoice] = useState('none')
+  const [creatingShelf, setCreatingShelf] = useState(false)
+  const [newShelfName, setNewShelfName] = useState('')
   const { toast } = useToast()
+
+  // Fresh start every time the dialog opens — no shelf choice leaks between imports.
+  useEffect(() => {
+    if (open) {
+      setShelfChoice('none')
+      setCreatingShelf(false)
+      setNewShelfName('')
+    }
+  }, [open])
 
   // Large PDFs are sent as a raw streamed body (up to 200 MB) — the server
   // pipes the bytes straight to disk, so nothing is buffered in memory. XHR is
   // used instead of fetch because it exposes real upload progress events.
-  function uploadPdf(): Promise<void> {
+  // Resolves with the created document (id) so the book can be filed onto the
+  // chosen shelf right after the upload; the success toast is composed in submit().
+  function uploadPdf(): Promise<{ document: { id: string } | null; pages: number; chars: number; warning?: string }> {
     if (!file) return Promise.reject(new Error('Choose a PDF first'))
     return new Promise((resolve, reject) => {
       setUploadPct(0)
@@ -766,15 +800,9 @@ function ImportDialog({ open, onOpenChange, onImported }: { open: boolean; onOpe
       }
       xhr.upload.onload = () => setUploadPct(100)
       xhr.onload = () => {
-        const data = (xhr.response ?? {}) as { pages?: number; chars?: number; warning?: string; error?: string }
+        const data = (xhr.response ?? {}) as { document?: { id: string }; pages?: number; chars?: number; warning?: string; error?: string }
         if (xhr.status >= 200 && xhr.status < 300) {
-          toast({
-            title: 'PDF imported',
-            description: data.warning
-              ? data.warning
-              : `${data.pages} pages — opens with its original layout in the viewer${data.chars ? ` · ${Math.round((data.chars ?? 0) / 1000)}k characters extracted for highlights & AI` : ''}.`,
-          })
-          resolve()
+          resolve({ document: data.document ?? null, pages: data.pages ?? 0, chars: data.chars ?? 0, warning: data.warning })
         } else {
           reject(new Error(data.error || `Upload failed (${xhr.status})`))
         }
@@ -785,25 +813,67 @@ function ImportDialog({ open, onOpenChange, onImported }: { open: boolean; onOpe
     })
   }
 
+  // Create a shelf right from inside the import flow; it ends up pre-selected.
+  async function createShelfInline() {
+    const name = newShelfName.trim()
+    if (!name) return
+    try {
+      const d = await api.post<{ shelf: ShelfItem }>('/api/shelves', { name })
+      onShelfCreated(d.shelf)
+      setShelfChoice(d.shelf.id)
+      setCreatingShelf(false)
+      setNewShelfName('')
+      toast({ title: 'Shelf added', description: `“${d.shelf.name}” will take this book.` })
+    } catch (e) {
+      toast({ title: 'Could not create shelf', description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' })
+    }
+  }
+
+  // File the freshly created book onto the chosen shelf. The PATCH route
+  // validates ownership, and a failed move never undoes a successful import —
+  // the book just stays in the common space.
+  async function assignToShelf(docId: string): Promise<string | null> {
+    if (shelfChoice === 'none') return null
+    const shelf = shelves.find((s) => s.id === shelfChoice)
+    if (!shelf) return null
+    try {
+      await api.patch(`/api/documents/${docId}`, { shelfId: shelf.id })
+      return shelf.name
+    } catch {
+      toast({ title: 'Shelf move failed', description: `The book was imported but couldn't be put on “${shelf.name}” — move it from its card.`, variant: 'destructive' })
+      return null
+    }
+  }
+
   async function submit() {
     setBusy(true)
     try {
+      let shelfName: string | null = null
       if (mode === 'pdf') {
-        await uploadPdf()
+        const r = await uploadPdf()
+        shelfName = r.document ? await assignToShelf(r.document.id) : null
+        const detail = r.warning
+          ? r.warning
+          : `${r.pages} pages — opens with its original layout in the viewer${r.chars ? ` · ${Math.round(r.chars / 1000)}k characters extracted for highlights & AI` : ''}.`
+        toast({ title: 'PDF imported', description: shelfName ? `${detail} Put on the “${shelfName}” shelf.` : detail })
       } else if (mode === 'url') {
         if (!url.trim()) throw new Error('Paste a link first')
-        await api.post('/api/documents', { title: url, source: url.trim(), autoExtract: true, status: 'queued', type: 'url' })
+        const d = await api.post<{ document: { id: string } }>('/api/documents', { title: url, source: url.trim(), autoExtract: true, status: 'queued', type: 'url' })
+        shelfName = await assignToShelf(d.document.id)
       } else if (mode === 'paste') {
         if (!title.trim()) throw new Error('Give it a title')
         if (!content.trim()) throw new Error('Paste some content')
-        await api.post('/api/documents', { title, author, type, tags, content, status: 'reading' })
+        const d = await api.post<{ document: { id: string } }>('/api/documents', { title, author, type, tags, content, status: 'reading' })
+        shelfName = await assignToShelf(d.document.id)
       } else {
         if (!title.trim()) throw new Error('Give it a title')
-        await api.post('/api/documents', { title, author, type, tags, status: 'reading' })
+        const d = await api.post<{ document: { id: string } }>('/api/documents', { title, author, type, tags, status: 'reading' })
+        shelfName = await assignToShelf(d.document.id)
       }
       setUrl(''); setTitle(''); setAuthor(''); setTags(''); setContent(''); setFile(null)
+      setShelfChoice('none'); setCreatingShelf(false); setNewShelfName('')
       onOpenChange(false)
-      onImported()
+      onImported(shelfName ?? undefined)
     } catch (e) {
       toast({ title: 'Import failed', description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' })
     } finally {
@@ -892,6 +962,57 @@ function ImportDialog({ open, onOpenChange, onImported }: { open: boolean; onOpe
               <Input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="Tags, comma separated" aria-label="Tags" />
             </div>
           )}
+        </div>
+        {/* Which shelf does this book live on? 'none' = the common space every
+            book shares; a named shelf files it under the bookcase above. */}
+        <div className="space-y-1.5">
+          <Label htmlFor="import-shelf">Add to shelf</Label>
+          {creatingShelf ? (
+            <div className="flex items-center gap-2">
+              <Input
+                value={newShelfName}
+                onChange={(e) => setNewShelfName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); createShelfInline() } }}
+                placeholder="New shelf name — e.g. Thesis reading"
+                aria-label="New shelf name"
+                autoFocus
+                maxLength={60}
+                className="flex-1"
+              />
+              <Button variant="outline" onClick={createShelfInline} disabled={!newShelfName.trim()}>
+                Create
+              </Button>
+              <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => { setCreatingShelf(false); setNewShelfName('') }} aria-label="Cancel new shelf">
+                <FaXmark className="h-4 w-4" />
+              </Button>
+            </div>
+          ) : (
+            <Select
+              value={shelfChoice}
+              onValueChange={(v) => {
+                if (v === '__new') {
+                  setNewShelfName('')
+                  setCreatingShelf(true)
+                } else {
+                  setShelfChoice(v)
+                }
+              }}
+            >
+              <SelectTrigger id="import-shelf" className="w-full" aria-label="Shelf to add this book to">
+                <SelectValue placeholder="Common space — all books" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Common space — all books</SelectItem>
+                {shelves.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                ))}
+                <SelectItem value="__new" className="text-primary">
+                  <span className="flex items-center gap-1.5"><FaPlus className="h-3 w-3" /> New shelf…</span>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+          <p className="text-[11px] text-muted-foreground">Common space keeps the book in the main list — a shelf files it in the bookcase above.</p>
         </div>
         {mode === 'pdf' && busy && uploadPct !== null && (
           <div className="space-y-1.5">
