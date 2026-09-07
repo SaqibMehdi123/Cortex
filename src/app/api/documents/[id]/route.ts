@@ -34,13 +34,17 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
     const body = await req.json()
-    const allowed = ['title', 'author', 'type', 'source', 'notes', 'content', 'status', 'progress', 'tags', 'summary', 'takeaways'] as const
+    const allowed = ['title', 'author', 'type', 'source', 'notes', 'content', 'status', 'progress', 'lastPage', 'tags', 'summary', 'takeaways'] as const
 
     const data: Record<string, unknown> = {}
     for (const key of allowed) {
       if (key in body) data[key] = body[key]
     }
     if (typeof data.progress === 'number') data.progress = Math.min(100, Math.max(0, Math.round(data.progress)))
+    if (typeof data.lastPage === 'number') {
+      data.lastPage = Math.max(1, Math.round(data.lastPage))
+      if (!('status' in data)) data.lastReadAt = new Date()
+    }
     if (data.status === 'reading') data.lastReadAt = new Date()
 
     const document = await db.document.update({ where: { id }, data })

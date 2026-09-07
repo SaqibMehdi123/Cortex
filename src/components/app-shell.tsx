@@ -440,6 +440,15 @@ function UserChip({ collapsed }: { collapsed: boolean }) {
     setBusy(true)
     try {
       await api.post('/api/auth/logout', {})
+      // forget where this user left off (view, open book, scroll positions)
+      try {
+        useUI.persist.clearStorage()
+        for (const store of [sessionStorage, localStorage]) {
+          Object.keys(store)
+            .filter((k) => k.startsWith('cortex-scroll:') || k.startsWith('cortex-reader-page:'))
+            .forEach((k) => store.removeItem(k))
+        }
+      } catch { /* storage unavailable */ }
       router.replace('/login')
       router.refresh()
     } catch {

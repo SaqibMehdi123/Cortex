@@ -24,7 +24,19 @@ const PAD = 12 // px padding around pages inside the scroll area
 const ZOOMS = [0.5, 0.65, 0.8, 1, 1.25, 1.5, 1.75, 2, 2.5, 3]
 const DEFAULT_ZOOM_INDEX = 3
 
-export function PdfCanvasViewer({ url, className }: { url: string; className?: string }) {
+export function PdfCanvasViewer({
+  url,
+  className,
+  initialPage = 1,
+  onPageChange,
+}: {
+  url: string
+  className?: string
+  /** page to open on (reading resume position) — only honoured once per mount */
+  initialPage?: number
+  /** fires whenever the top-most visible page changes while scrolling */
+  onPageChange?: (page: number) => void
+}) {
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null)
   const [error, setError] = useState(false)
   const [containerWidth, setContainerWidth] = useState(0)
@@ -33,6 +45,11 @@ export function PdfCanvasViewer({ url, className }: { url: string; className?: s
   const [currentPage, setCurrentPage] = useState(1)
   const scrollRef = useRef<HTMLDivElement>(null)
   const pageRefs = useRef<(HTMLDivElement | null)[]>([])
+  const jumpedRef = useRef(false)
+  const lastReportedPage = useRef(0)
+  // keep the latest callback without re-binding the scroll handler
+  const onPageChangeRef = useRef(onPageChange)
+  onPageChangeRef.current = onPageChange
 
   const numPages = pdf?.numPages ?? 0
   const zoom = ZOOMS[zoomIndex]
@@ -49,6 +66,8 @@ export function PdfCanvasViewer({ url, className }: { url: string; className?: s
     setError(false)
     setCurrentPage(1)
     setZoomIndex(DEFAULT_ZOOM_INDEX)
+    jumpedRef.current = false
+    lastReportedPage.current = 0
     ;(async () => {
       try {
         const pdfjs = await import('pdfjs-dist')
@@ -85,6 +104,28 @@ export function PdfCanvasViewer({ url, className }: { url: string; className?: s
     return () => ro.disconnect()
   }, [pdf])
 
+  // ── Resume: jump to the initial page once the layout is real ──
+  // Wait for the container width (ResizeObserver) — before that, pages lay
+  // out at the 80px minimum and offsetTop is garbage, so the jump would land
+  // on the wrong page and a scroll event could clobber the saved position.
+  useEffect(() => {
+    if (!pdf || jumpedRef.current || containerWidth <= 0) return
+    const n = Math.min(Math.max(1, Math.round(initialPage)), pdf.numPages)
+    if (n <= 1) { jumpedRef.current = true; return }
+    jumpedRef.current = true
+    // one frame so the page placeholders (fixed heights) have final offsetTop
+    const raf = requestAnimationFrame(() => {
+      const el = pageRefs.current[n - 1]
+      const sc = scrollRef.current
+      if (el && sc) {
+        sc.scrollTo({ top: el.offsetTop - PAD / 2 })
+        lastReportedPage.current = n
+        setCurrentPage(n)
+      }
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [pdf, containerWidth, initialPage])
+
   // ── Current page from scroll position (cheapest accurate-enough way) ──
   const onScroll = useCallback(() => {
     const sc = scrollRef.current
@@ -96,6 +137,12 @@ export function PdfCanvasViewer({ url, className }: { url: string; className?: s
       if (el && el.offsetTop <= probe) page = i + 1
     }
     setCurrentPage(page)
+    // don't report until the resume jump has settled — pre-jump scroll noise
+    // (layout reflow) would otherwise overwrite the saved reading position
+    if (jumpedRef.current && page !== lastReportedPage.current) {
+      lastReportedPage.current = page
+      onPageChangeRef.current?.(page)
+    }
   }, [numPages])
 
   const scrollToPage = useCallback((n: number) => {

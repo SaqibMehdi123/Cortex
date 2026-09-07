@@ -25,6 +25,7 @@ model Document {
   pageCount      Int?
   status         String           @default("reading") // queued | reading | finished | paused
   progress       Int              @default(0) // 0-100
+  lastPage       Int? // last PDF page the reader was on (book resume position)
   tags           String? // comma separated
   summary        String?
   takeaways      String? // JSON array of strings

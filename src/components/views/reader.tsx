@@ -29,6 +29,9 @@ import {
 
 const HL_COLORS = ['yellow', 'green', 'blue', 'pink'] as const
 
+// exact-page resume position per document (mirrored to the DB as lastPage)
+const readerPageKey = (docId: string) => `cortex-reader-page:${docId}`
+
 interface SelInfo {
   text: string
   x: number
@@ -71,6 +74,11 @@ export function ReaderView() {
   const scrollRef = useRef<HTMLDivElement>(null)
   const sessionStart = useRef<number>(Date.now())
   const lastLogged = useRef<number>(Date.now())
+  const docIdRef = useRef<string | null>(null)
+  const initialPdfPageRef = useRef(1)
+  const pendingPageSave = useRef<{ page: number; pct: number | null } | null>(null)
+  const pageSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const restoredTextRef = useRef('')
 
   const isPdf = !!doc?.filePath
 
@@ -82,6 +90,9 @@ export function ReaderView() {
     setRailTab('chat')
     sessionStart.current = Date.now()
     lastLogged.current = Date.now()
+    docIdRef.current = null
+    initialPdfPageRef.current = 1
+    restoredTextRef.current = ''
     Promise.all([
       api.get<{ document: DocumentItem & { highlights: Highlight[] } }>(`/api/documents/${readerDocId}`),
       api.get<{ messages: ChatMessage[] }>(`/api/chat?documentId=${readerDocId}`),
@@ -92,14 +103,28 @@ export function ReaderView() {
         setManualProgress(d.document.progress)
         setMessages(m.messages)
         setMindmaps(mm.mindmaps)
+        docIdRef.current = d.document.id
+        // resume position for PDFs: exact page from localStorage, DB lastPage as fallback
+        if (d.document.filePath) {
+          let p = 0
+          try { p = Number(localStorage.getItem(readerPageKey(d.document.id)) ?? 0) || 0 } catch { /* ignore */ }
+          if (!p) p = d.document.lastPage ?? 0
+          const total = d.document.pageCount ?? 0
+          if (total > 0 && p > total) p = total
+          initialPdfPageRef.current = Math.max(1, p)
+        }
         // opening a PDF counts as a reading session
         if (d.document.filePath && d.document.status === 'queued') {
           api.patch(`/api/documents/${d.document.id}`, { status: 'reading' }).catch(() => {})
         }
       })
-      .catch(() => toast({ title: 'Failed to open document', variant: 'destructive' }))
+      .catch(() => {
+        // doc may be gone (or the persisted reader id went stale after reload)
+        toast({ title: 'Failed to open document', variant: 'destructive' })
+        closeReader()
+      })
       .finally(() => setLoading(false))
-  }, [readerDocId, toast])
+  }, [readerDocId, toast, closeReader])
 
   // Log reading time every minute
   useEffect(() => {
@@ -133,6 +158,70 @@ export function ReaderView() {
       api.patch(`/api/documents/${doc.id}`, { progress: pct, status: doc.status === 'queued' ? 'reading' : doc.status }).catch(() => {})
     }
   }, [doc, mode])
+
+  // ── PDF page tracking: save the exact page the reader is on ──
+  // localStorage immediately (same-device resume), DB lastPage+progress
+  // debounced (cross-device resume + library progress bars)
+  const flushPageSave = useCallback(() => {
+    if (pageSaveTimer.current) {
+      clearTimeout(pageSaveTimer.current)
+      pageSaveTimer.current = null
+    }
+    const payload = pendingPageSave.current
+    pendingPageSave.current = null
+    const id = docIdRef.current
+    if (!payload || !id) return
+    const body: Record<string, number> = { lastPage: payload.page }
+    if (payload.pct !== null) body.progress = payload.pct
+    api.patch(`/api/documents/${id}`, body).catch(() => {})
+  }, [])
+
+  const handlePdfPageChange = useCallback((page: number) => {
+    const id = docIdRef.current
+    if (!id) return
+    const total = doc?.pageCount ?? 0
+    const raw = total > 0 ? Math.round((page / total) * 100) : null
+    // progress only ever rises — re-reading an earlier page must not
+    // regress the saved progress (local state or the DB)
+    const pct = raw === null ? null : Math.min(100, Math.max(doc?.progress ?? 0, raw))
+    try { localStorage.setItem(readerPageKey(id), String(page)) } catch { /* ignore */ }
+    setDoc((d) => (d ? { ...d, lastPage: page, progress: pct ?? d.progress } : d))
+    if (pct !== null) setManualProgress((m) => Math.max(m, pct))
+    pendingPageSave.current = { page, pct }
+    if (pageSaveTimer.current) clearTimeout(pageSaveTimer.current)
+    pageSaveTimer.current = setTimeout(flushPageSave, 1500)
+  }, [doc?.pageCount, doc?.progress, flushPageSave])
+
+  // flush a pending page save when the reader closes/unmounts or doc switches
+  useEffect(() => {
+    return () => flushPageSave()
+  }, [readerDocId, flushPageSave])
+
+  // ── Text mode resume: scroll back to the saved progress position ──
+  useEffect(() => {
+    if (!doc) return
+    if (isPdf && mode === 'original') return // the pdf viewer restores its own page
+    const sig = `${doc.id}:${mode}`
+    if (restoredTextRef.current === sig) return
+    restoredTextRef.current = sig
+    const el = scrollRef.current
+    const pct = Math.min(100, Math.max(0, doc.progress))
+    if (!el || pct <= 2) return
+    const started = performance.now()
+    let raf = 0
+    let lastMax = -1
+    let stableFrames = 0
+    const tick = () => {
+      const max = el.scrollHeight - el.clientHeight
+      el.scrollTop = (pct / 100) * max
+      stableFrames = max === lastMax ? stableFrames + 1 : 0
+      lastMax = max
+      if (stableFrames >= 8 || performance.now() - started > 1200) return
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [doc, mode, isPdf])
 
   // Selection handling (text mode / extracted text)
   useEffect(() => {
@@ -445,7 +534,7 @@ export function ReaderView() {
                 />
                 <span className="w-10 shrink-0 text-right text-xs tabular-nums text-muted-foreground">{manualProgress}%</span>
               </div>
-              <p className="text-xs text-muted-foreground">{isPdf ? 'Set manually — the embedded viewer keeps its own scroll.' : 'Also advances automatically while you scroll.'}</p>
+              <p className="text-xs text-muted-foreground">{isPdf ? 'Tracks automatically from the page you are on — or set it here.' : 'Also advances automatically while you scroll.'}</p>
             </section>
 
             <section className="space-y-2 border-t pt-4">
@@ -607,8 +696,8 @@ export function ReaderView() {
                   <Download className="h-3 w-3" /> Save
                 </a>
               </div>
-              {/* pdf.js canvas pages — zoom, page nav, lazy render */}
-              <PdfCanvasViewer url={fileUrl} />
+              {/* pdf.js canvas pages — zoom, page nav, lazy render; resumes at the last page read */}
+              <PdfCanvasViewer url={fileUrl} initialPage={initialPdfPageRef.current} onPageChange={handlePdfPageChange} />
             </div>
           ) : (
             /* Text reading column (articles, extracted text, pasted content) */

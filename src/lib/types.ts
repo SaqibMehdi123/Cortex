@@ -14,6 +14,7 @@ export interface DocumentItem {
   pageCount: number | null
   status: string // queued | reading | finished | paused
   progress: number
+  lastPage?: number | null // last PDF page read — resume position
   tags: string | null
   summary: string | null
   takeaways: string | null

@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
       orderBy: [{ status: 'asc' }, { updatedAt: 'desc' }],
       select: {
         id: true, title: true, author: true, type: true, source: true,
-        status: true, progress: true, tags: true, summary: true,
+        status: true, progress: true, lastPage: true, tags: true, summary: true,
         filePath: true, fileName: true, fileSize: true, pageCount: true,
         lastReadAt: true, createdAt: true, updatedAt: true,
       },
