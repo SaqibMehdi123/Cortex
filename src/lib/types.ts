@@ -18,9 +18,18 @@ export interface DocumentItem {
   tags: string | null
   summary: string | null
   takeaways: string | null
+  shelfId: string | null // shelf the book sits on — null = unshelved
   lastReadAt: string | null
   createdAt: string
   updatedAt: string
+}
+
+export interface ShelfItem {
+  id: string
+  name: string
+  position: number
+  createdAt: string
+  _count?: { documents: number }
 }
 
 export interface Highlight {

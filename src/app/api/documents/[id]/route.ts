@@ -40,6 +40,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     for (const key of allowed) {
       if (key in body) data[key] = body[key]
     }
+    // shelfId is validated separately: it must be null (unshelve) or point to
+    // one of the user's own shelves — never somebody else's.
+    if ('shelfId' in body) {
+      const shelfId = body.shelfId
+      if (shelfId === null) {
+        data.shelfId = null
+      } else if (typeof shelfId === 'string' && shelfId) {
+        const shelf = await db.shelf.findFirst({ where: { id: shelfId, userId: user.id }, select: { id: true } })
+        if (!shelf) return NextResponse.json({ error: 'Shelf not found' }, { status: 404 })
+        data.shelfId = shelfId
+      }
+    }
     if (typeof data.progress === 'number') data.progress = Math.min(100, Math.max(0, Math.round(data.progress)))
     if (typeof data.lastPage === 'number') {
       data.lastPage = Math.max(1, Math.round(data.lastPage))

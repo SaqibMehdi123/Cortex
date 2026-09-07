@@ -6,7 +6,9 @@ import { getSessionUser, unauthorized } from '@/lib/auth-server'
 
 export const maxDuration = 120
 
-// GET /api/documents?q=&status=&tag= — the signed-in user's library
+// GET /api/documents?q=&status=&tag=&shelf= — the signed-in user's library.
+// shelf=<id> returns only books on that shelf; shelf=none returns only
+// unshelved books (the loose pile behind the bookcase).
 export async function GET(req: NextRequest) {
   try {
     const user = await getSessionUser()
@@ -16,10 +18,13 @@ export async function GET(req: NextRequest) {
     const q = searchParams.get('q')?.trim()
     const status = searchParams.get('status')?.trim()
     const tag = searchParams.get('tag')?.trim()
+    const shelf = searchParams.get('shelf')?.trim()
 
     const where: Record<string, unknown> = { userId: user.id }
     if (status && status !== 'all') where.status = status
     if (tag) where.tags = { contains: tag }
+    if (shelf === 'none') where.shelfId = null
+    else if (shelf) where.shelfId = shelf
     if (q) {
       where.OR = [
         { title: { contains: q } },
@@ -36,6 +41,7 @@ export async function GET(req: NextRequest) {
         id: true, title: true, author: true, type: true, source: true,
         status: true, progress: true, lastPage: true, tags: true, summary: true,
         filePath: true, fileName: true, fileSize: true, pageCount: true,
+        shelfId: true,
         lastReadAt: true, createdAt: true, updatedAt: true,
       },
     })

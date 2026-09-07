@@ -1,9 +1,9 @@
 'use client'
 
-import { FaBookOpen, FaBorderAll, FaFileArrowUp, FaFileLines, FaLink, FaList, FaMagnifyingGlass, FaNoteSticky, FaPaste, FaPlus, FaRegBookmark, FaSpinner, FaTrashCan } from 'react-icons/fa6'
-import { useMemo, useState, useEffect } from 'react'
+import { FaBookOpen, FaBorderAll, FaCheck, FaEllipsis, FaFileArrowUp, FaFileLines, FaLayerGroup, FaLink, FaList, FaMagnifyingGlass, FaNoteSticky, FaPaste, FaPlus, FaRegBookmark, FaSpinner, FaTrashCan, FaXmark } from 'react-icons/fa6'
+import { useMemo, useState, useEffect, useCallback } from 'react'
 import { api, fmtDate } from '@/lib/client'
-import type { DocumentItem, Note } from '@/lib/types'
+import type { DocumentItem, Note, ShelfItem } from '@/lib/types'
 import { useApi } from '@/lib/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,6 +16,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/hooks/use-toast'
 import { useUI } from '@/lib/nav-config'
@@ -39,6 +40,16 @@ const STATUS_STYLES: Record<string, string> = {
   paused: 'border-warning/50 text-warning',
 }
 
+// Book spines on a shelf card — height varies per slot, colour follows the
+// book's reading status so a shelf reads like a real, filled bookcase.
+const SPINE_HEIGHTS = ['h-7', 'h-10', 'h-6', 'h-9', 'h-11', 'h-8', 'h-9', 'h-6']
+const SPINE_COLORS: Record<string, string> = {
+  reading: 'bg-primary/70',
+  finished: 'bg-success/60',
+  queued: 'bg-zinc-400/60',
+  paused: 'bg-warning/60',
+}
+
 export function LibraryView() {
   const openReader = useUI((s) => s.openReader)
   const { toast } = useToast()
@@ -49,14 +60,33 @@ export function LibraryView() {
   const [notes, setNotes] = useState<Note[] | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<DocumentItem | null>(null)
 
+  // Shelves — named groups on the bookcase; a book sits on at most one.
+  const [shelves, setShelves] = useState<ShelfItem[]>([])
+  const [activeShelf, setActiveShelf] = useState<string | null>(null) // null = all books
+  const [dragOverShelf, setDragOverShelf] = useState<string | null>(null)
+  const [shelfDialog, setShelfDialog] = useState<{ mode: 'create' | 'rename'; shelf?: ShelfItem; assignDoc?: DocumentItem } | null>(null)
+  const [shelfNameDraft, setShelfNameDraft] = useState('')
+  const [confirmShelfDelete, setConfirmShelfDelete] = useState<ShelfItem | null>(null)
+
   const { data, loading, reload } = useApi<{ documents: DocumentItem[] }>(
-    `/api/documents?status=${status}${q ? `&q=${encodeURIComponent(q)}` : ''}`
+    `/api/documents?status=${status}${q ? `&q=${encodeURIComponent(q)}` : ''}${activeShelf ? `&shelf=${activeShelf}` : ''}`
   )
   const [allDocs, setAllDocs] = useState<DocumentItem[] | null>(null)
 
-  useEffect(() => {
+  const refreshAllDocs = useCallback(() => {
     api.get<{ documents: DocumentItem[] }>('/api/documents').then((d) => setAllDocs(d.documents)).catch(() => {})
   }, [])
+
+  const loadShelves = useCallback(() => {
+    api.get<{ shelves: ShelfItem[] }>('/api/shelves').then((d) => setShelves(d.shelves)).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    refreshAllDocs()
+    loadShelves()
+  }, [refreshAllDocs, loadShelves])
+
+  const shelfOf = (doc: DocumentItem) => shelves.find((s) => s.id === doc.shelfId) ?? null
 
   const reading = useMemo(
     () => (allDocs ?? []).filter((d) => d.status === 'reading' && d.progress > 0).sort((a, b) => (b.lastReadAt ?? b.updatedAt).localeCompare(a.lastReadAt ?? a.updatedAt)).slice(0, 4),
@@ -76,9 +106,65 @@ export function LibraryView() {
     try {
       await api.del(`/api/documents/${doc.id}`)
       setConfirmDelete(null)
-      api.get<{ documents: DocumentItem[] }>('/api/documents').then((d) => setAllDocs(d.documents)).catch(() => {})
+      refreshAllDocs()
+      loadShelves()
       reload()
       toast({ title: 'Document deleted', description: `“${doc.title}” was removed from your library.` })
+    } catch {
+      toast({ title: 'Delete failed', variant: 'destructive' })
+    }
+  }
+
+  // Put a book on a shelf (or take it off). Optimistic for the spine strip,
+  // then the filtered list and counts are refreshed from the server.
+  async function moveDoc(doc: DocumentItem, shelfId: string | null, name?: string) {
+    setAllDocs((prev) => (prev ? prev.map((d) => (d.id === doc.id ? { ...d, shelfId } : d)) : prev))
+    try {
+      await api.patch(`/api/documents/${doc.id}`, { shelfId })
+      reload()
+      loadShelves()
+      toast({
+        title: shelfId ? 'Moved to shelf' : 'Removed from shelf',
+        description: shelfId ? `“${doc.title}” now sits on “${name}”.` : `“${doc.title}” is no longer on a shelf.`,
+      })
+    } catch {
+      refreshAllDocs()
+      toast({ title: 'Move failed', variant: 'destructive' })
+    }
+  }
+
+  async function submitShelfDialog() {
+    if (!shelfDialog) return
+    const name = shelfNameDraft.trim()
+    if (!name) return
+    try {
+      if (shelfDialog.mode === 'create') {
+        const d = await api.post<{ shelf: ShelfItem }>('/api/shelves', { name })
+        setShelves((prev) => [...prev, d.shelf])
+        if (shelfDialog.assignDoc) await moveDoc(shelfDialog.assignDoc, d.shelf.id, d.shelf.name)
+        else toast({ title: 'Shelf added', description: `Drop books on “${name}” to fill it.` })
+      } else if (shelfDialog.shelf) {
+        const d = await api.patch<{ shelf: ShelfItem }>(`/api/shelves/${shelfDialog.shelf.id}`, { name })
+        setShelves((prev) => prev.map((s) => (s.id === d.shelf.id ? d.shelf : s)))
+        toast({ title: 'Shelf renamed', description: `It's now “${d.shelf.name}”.` })
+      }
+      setShelfDialog(null)
+    } catch (e) {
+      toast({ title: 'Something went wrong', description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' })
+    }
+  }
+
+  // Deleting a shelf never deletes books — Document.shelfId is SetNull, so
+  // everything on it simply becomes unshelved.
+  async function deleteShelf(shelf: ShelfItem) {
+    try {
+      await api.del(`/api/shelves/${shelf.id}`)
+      setConfirmShelfDelete(null)
+      setShelves((prev) => prev.filter((s) => s.id !== shelf.id))
+      if (activeShelf === shelf.id) setActiveShelf(null)
+      refreshAllDocs()
+      reload()
+      toast({ title: 'Shelf removed', description: 'Its books are still in your library — just unshelved.' })
     } catch {
       toast({ title: 'Delete failed', variant: 'destructive' })
     }
@@ -129,8 +215,125 @@ export function LibraryView() {
         </TabsList>
 
         <TabsContent value="documents" className="mt-4 space-y-4">
+          {/* Shelves — the bookcase. Click to browse a shelf, drop books on it to file them. */}
+          {(shelves.length > 0 || (allDocs && allDocs.length > 0)) && (
+            <section aria-label="Shelves" className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Shelves</h2>
+                <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs" onClick={() => { setShelfNameDraft(''); setShelfDialog({ mode: 'create' }) }}>
+                  <FaPlus className="h-3 w-3" /> New shelf
+                </Button>
+              </div>
+              <div className="-mx-1 flex items-stretch gap-2.5 overflow-x-auto px-1 pb-1.5">
+                {/* All books — also the drop target to take a book off its shelf */}
+                <button
+                  type="button"
+                  onClick={() => setActiveShelf(null)}
+                  onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOverShelf('all') }}
+                  onDragLeave={() => setDragOverShelf((v) => (v === 'all' ? null : v))}
+                  onDrop={(e) => {
+                    e.preventDefault()
+                    setDragOverShelf(null)
+                    const doc = (allDocs ?? []).find((d) => d.id === e.dataTransfer.getData('text/plain'))
+                    if (doc && doc.shelfId) moveDoc(doc, null)
+                  }}
+                  title="Drop a book here to take it off its shelf"
+                  className={cn(
+                    'flex w-[132px] shrink-0 flex-col rounded-xl border p-2.5 text-left transition-all',
+                    activeShelf === null ? 'border-primary/60 bg-primary/5 ring-1 ring-primary/30' : 'hover:border-primary/40 hover:bg-muted/40',
+                    dragOverShelf === 'all' && 'border-primary bg-primary/10 ring-1 ring-primary/40'
+                  )}
+                >
+                  <span className="flex h-14 items-center justify-center rounded-md bg-muted/60 text-muted-foreground">
+                    <FaBorderAll className="h-5 w-5" />
+                  </span>
+                  <span className="mt-2 flex items-baseline justify-between gap-1">
+                    <span className="truncate text-xs font-semibold">All books</span>
+                    <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">{allDocs?.length ?? 0}</span>
+                  </span>
+                </button>
+                {shelves.map((s) => {
+                  const spineDocs = (allDocs ?? []).filter((d) => d.shelfId === s.id).slice(0, 8)
+                  return (
+                    <div
+                      key={s.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setActiveShelf(activeShelf === s.id ? null : s.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          setActiveShelf(activeShelf === s.id ? null : s.id)
+                        }
+                      }}
+                      onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOverShelf(s.id) }}
+                      onDragLeave={() => setDragOverShelf((v) => (v === s.id ? null : v))}
+                      onDrop={(e) => {
+                        e.preventDefault()
+                        setDragOverShelf(null)
+                        const doc = (allDocs ?? []).find((d) => d.id === e.dataTransfer.getData('text/plain'))
+                        if (doc && doc.shelfId !== s.id) moveDoc(doc, s.id, s.name)
+                      }}
+                      className={cn(
+                        'group relative flex w-[132px] shrink-0 cursor-pointer flex-col rounded-xl border p-2.5 text-left outline-none transition-all focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+                        activeShelf === s.id ? 'border-primary/60 bg-primary/5 ring-1 ring-primary/30' : 'hover:border-primary/40 hover:bg-muted/40',
+                        dragOverShelf === s.id && 'border-primary bg-primary/10 ring-1 ring-primary/40'
+                      )}
+                    >
+                      {/* The books + the plank they sit on */}
+                      <span className="flex h-14 items-end justify-center gap-[3px] rounded-md border-b-2 border-primary/30 bg-muted/40 px-2">
+                        {spineDocs.length === 0 ? (
+                          <span className="pb-1 text-[10px] italic text-muted-foreground">empty — drop a book</span>
+                        ) : (
+                          spineDocs.map((d, i) => (
+                            <span
+                              key={d.id}
+                              title={d.title}
+                              className={cn('w-[7px] rounded-t-[3px]', SPINE_HEIGHTS[i % SPINE_HEIGHTS.length], SPINE_COLORS[d.status] ?? 'bg-muted-foreground/40')}
+                            />
+                          ))
+                        )}
+                      </span>
+                      <span className="mt-2 flex items-baseline justify-between gap-1">
+                        <span className="truncate text-xs font-medium">{s.name}</span>
+                        <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">{s._count?.documents ?? spineDocs.length}</span>
+                      </span>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="absolute right-1 top-1 h-6 w-6 text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 max-sm:opacity-100"
+                            aria-label={`Shelf options for ${s.name}`}
+                            onClick={(e) => e.stopPropagation()}
+                            onKeyDown={(e) => e.stopPropagation()}
+                          >
+                            <FaEllipsis className="h-3.5 w-3.5" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                          align="end"
+                          className="w-44"
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => e.stopPropagation()}
+                        >
+                          <DropdownMenuItem onClick={() => { setShelfNameDraft(s.name); setShelfDialog({ mode: 'rename', shelf: s }) }}>
+                            Rename shelf
+                          </DropdownMenuItem>
+                          <DropdownMenuItem className="text-danger focus:text-danger" onClick={() => setConfirmShelfDelete(s)}>
+                            Delete shelf
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  )
+                })}
+              </div>
+            </section>
+          )}
+
           {/* Continue reading — pick up where you left off */}
-          {reading.length > 0 && status === 'all' && !q && (
+          {reading.length > 0 && status === 'all' && !q && !activeShelf && (
             <section aria-label="Continue reading">
               <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Continue reading</h2>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -194,9 +397,15 @@ export function LibraryView() {
           ) : !data || data.documents.length === 0 ? (
             <EmptyState
               icon={<FaBookOpen className="h-5 w-5" />}
-              title={q ? `No matches for “${q}”` : 'Import your first paper'}
-              description="Paste a URL to any article or paper, paste raw text, or add a book you're reading. Ask AI questions about it once it's here."
-              action={{ label: 'Import a document', onClick: () => setImportOpen(true) }}
+              title={q ? `No matches for “${q}”` : activeShelf ? 'This shelf is empty' : 'Import your first paper'}
+              description={
+                q
+                  ? 'Try a different search — titles, authors, tags and summaries are all searched.'
+                  : activeShelf
+                    ? 'Drag a book onto this shelf, or open the shelf button on any book card to file it here.'
+                    : "Paste a URL to any article or paper, paste raw text, or add a book you're reading. Ask AI questions about it once it's here."
+              }
+              action={activeShelf && !q ? undefined : { label: 'Import a document', onClick: () => setImportOpen(true) }}
             />
           ) : layout === 'grid' ? (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -205,6 +414,11 @@ export function LibraryView() {
                   key={doc.id}
                   role="button"
                   tabIndex={0}
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData('text/plain', doc.id)
+                    e.dataTransfer.effectAllowed = 'move'
+                  }}
                   onClick={() => openReader(doc.id)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
@@ -225,10 +439,50 @@ export function LibraryView() {
                       <Badge variant="outline" className={cn('absolute left-2.5 top-2.5 bg-background/80 text-[10px] backdrop-blur', STATUS_STYLES[doc.status])}>
                         {doc.status === 'queued' ? 'read later' : doc.status}
                       </Badge>
+                      {/* Move to shelf — also the touch fallback for drag & drop */}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="absolute right-[30px] top-1.5 h-7 w-7 bg-background/80 text-muted-foreground opacity-0 backdrop-blur transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 max-sm:opacity-100"
+                            aria-label={`Move ${doc.title} to a shelf`}
+                            onClick={(e) => e.stopPropagation()}
+                            onKeyDown={(e) => e.stopPropagation()}
+                          >
+                            <FaLayerGroup className="h-3.5 w-3.5" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        {/* stopPropagation: portal events bubble through the React tree — a menu
+                            click would otherwise re-trigger the wrapping card's onClick/onKeyDown */}
+                        <DropdownMenuContent
+                          align="end"
+                          className="w-56"
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => e.stopPropagation()}
+                        >
+                          <DropdownMenuLabel className="text-xs text-muted-foreground">Move to shelf</DropdownMenuLabel>
+                          {doc.shelfId && (
+                            <DropdownMenuItem onClick={() => moveDoc(doc, null)}>
+                              <FaXmark className="mr-2 h-3.5 w-3.5" /> No shelf
+                            </DropdownMenuItem>
+                          )}
+                          {shelves.map((s) => (
+                            <DropdownMenuItem key={s.id} className="justify-between gap-2" onClick={() => doc.shelfId !== s.id && moveDoc(doc, s.id, s.name)}>
+                              <span className="truncate">{s.name}</span>
+                              {doc.shelfId === s.id && <FaCheck className="h-3 w-3 shrink-0 text-primary" />}
+                            </DropdownMenuItem>
+                          ))}
+                          {shelves.length > 0 && <DropdownMenuSeparator />}
+                          <DropdownMenuItem onClick={() => { setShelfNameDraft(''); setShelfDialog({ mode: 'create', assignDoc: doc }) }}>
+                            <FaPlus className="mr-2 h-3.5 w-3.5" /> New shelf…
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="absolute right-1.5 top-1.5 h-7 w-7 bg-background/80 text-muted-foreground opacity-0 backdrop-blur transition-opacity hover:text-danger focus-visible:opacity-100 group-hover:opacity-100"
+                        className="absolute right-1.5 top-1.5 h-7 w-7 bg-background/80 text-muted-foreground opacity-0 backdrop-blur transition-opacity hover:text-danger focus-visible:opacity-100 group-hover:opacity-100 max-sm:opacity-100"
                         aria-label={`Delete ${doc.title}`}
                         onClick={(e) => {
                           e.stopPropagation()
@@ -253,6 +507,12 @@ export function LibraryView() {
                           ))}
                         </div>
                       )}
+                      {shelfOf(doc) && (
+                        <div className="flex items-center gap-1.5 pt-0.5 text-[10px] text-muted-foreground">
+                          <FaLayerGroup className="h-2.5 w-2.5 shrink-0" />
+                          <span className="truncate">{shelfOf(doc)!.name}</span>
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 </div>
@@ -265,6 +525,11 @@ export function LibraryView() {
                   key={doc.id}
                   role="button"
                   tabIndex={0}
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData('text/plain', doc.id)
+                    e.dataTransfer.effectAllowed = 'move'
+                  }}
                   onClick={() => openReader(doc.id)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
@@ -279,18 +544,56 @@ export function LibraryView() {
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{doc.title}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {doc.author ?? TYPE_META[doc.type]?.label ?? 'Doc'} · updated {fmtDate(doc.updatedAt)}
+                    <p className="truncate text-xs text-muted-foreground">
+                      {doc.author ?? TYPE_META[doc.type]?.label ?? 'Doc'}
+                      {shelfOf(doc) && <> · on “{shelfOf(doc)!.name}”</>} · updated {fmtDate(doc.updatedAt)}
                     </p>
                   </div>
                   <div className="hidden w-32 items-center gap-2 sm:flex">
                     <Progress value={doc.progress} className="h-1.5" />
                     <span className="shrink-0 text-[10px] text-muted-foreground">{doc.progress}%</span>
                   </div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 max-sm:opacity-100"
+                        aria-label={`Move ${doc.title} to a shelf`}
+                        onClick={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => e.stopPropagation()}
+                      >
+                        <FaLayerGroup className="h-3.5 w-3.5" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent
+                      align="end"
+                      className="w-56"
+                      onClick={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    >
+                      <DropdownMenuLabel className="text-xs text-muted-foreground">Move to shelf</DropdownMenuLabel>
+                      {doc.shelfId && (
+                        <DropdownMenuItem onClick={() => moveDoc(doc, null)}>
+                          <FaXmark className="mr-2 h-3.5 w-3.5" /> No shelf
+                        </DropdownMenuItem>
+                      )}
+                      {shelves.map((s) => (
+                        <DropdownMenuItem key={s.id} className="justify-between gap-2" onClick={() => doc.shelfId !== s.id && moveDoc(doc, s.id, s.name)}>
+                          <span className="truncate">{s.name}</span>
+                          {doc.shelfId === s.id && <FaCheck className="h-3 w-3 shrink-0 text-primary" />}
+                        </DropdownMenuItem>
+                      ))}
+                      {shelves.length > 0 && <DropdownMenuSeparator />}
+                      <DropdownMenuItem onClick={() => { setShelfNameDraft(''); setShelfDialog({ mode: 'create', assignDoc: doc }) }}>
+                        <FaPlus className="mr-2 h-3.5 w-3.5" /> New shelf…
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-7 w-7 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-danger focus-visible:opacity-100 group-hover:opacity-100"
+                    className="h-7 w-7 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-danger focus-visible:opacity-100 group-hover:opacity-100 max-sm:opacity-100"
                     aria-label={`Delete ${doc.title}`}
                     onClick={(e) => {
                       e.stopPropagation()
@@ -370,6 +673,58 @@ export function LibraryView() {
               onClick={() => confirmDelete && deleteDoc(confirmDelete)}
             >
               Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Create / rename a shelf */}
+      <Dialog open={!!shelfDialog} onOpenChange={(v) => !v && setShelfDialog(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{shelfDialog?.mode === 'rename' ? 'Rename shelf' : 'New shelf'}</DialogTitle>
+            <DialogDescription>
+              {shelfDialog?.mode === 'rename'
+                ? 'The books stay right where they are — only the name changes.'
+                : shelfDialog?.assignDoc
+                  ? `Create a shelf and put “${shelfDialog.assignDoc.title}” on it.`
+                  : 'Shelves group related books — a thesis, a course, a research thread.'}
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            value={shelfNameDraft}
+            onChange={(e) => setShelfNameDraft(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') submitShelfDialog() }}
+            placeholder="Shelf name — e.g. Thesis reading"
+            aria-label="Shelf name"
+            autoFocus
+            maxLength={60}
+          />
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setShelfDialog(null)}>Cancel</Button>
+            <Button onClick={submitShelfDialog} disabled={!shelfNameDraft.trim()}>
+              {shelfDialog?.mode === 'rename' ? 'Rename' : 'Create shelf'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete shelf — books always survive (they become unshelved) */}
+      <AlertDialog open={!!confirmShelfDelete} onOpenChange={(v) => !v && setConfirmShelfDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete shelf “{confirmShelfDelete?.name}”?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The {confirmShelfDelete?._count?.documents ?? 0} book{confirmShelfDelete?._count?.documents === 1 ? '' : 's'} on this shelf stay in your library — they just become unshelved. This can’t be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-danger text-white hover:bg-danger/90"
+              onClick={() => confirmShelfDelete && deleteShelf(confirmShelfDelete)}
+            >
+              Delete shelf
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

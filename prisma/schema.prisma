@@ -29,6 +29,8 @@ model Document {
   tags           String? // comma separated
   summary        String?
   takeaways      String? // JSON array of strings
+  shelfId        String? // shelf this book sits on — null = loose in the library
+  shelf          Shelf?           @relation(fields: [shelfId], references: [id], onDelete: SetNull)
   lastReadAt     DateTime?
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
@@ -36,6 +38,22 @@ model Document {
   chatMessages   ChatMessage[]
   flashcards     Flashcard[]
   readingSessions ReadingSession[]
+
+  @@index([shelfId])
+}
+
+// A named shelf in the Library — books (Documents) are placed on exactly one
+// shelf at a time. Deleting a shelf leaves its books unshelved (SetNull).
+model Shelf {
+  id        String     @id @default(cuid())
+  userId    String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  position  Int        @default(0) // left-to-right order on the bookcase
+  createdAt DateTime   @default(now())
+  documents Document[]
+
+  @@index([userId])
 }
 
 model Highlight {
@@ -382,6 +400,7 @@ model User {
   createdAt     DateTime @default(now())
 
   documents         Document[]
+  shelves           Shelf[]
   highlights        Highlight[]
   chatMessages      ChatMessage[]
   notes             Note[]
