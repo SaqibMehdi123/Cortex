@@ -41,7 +41,7 @@ interface SelInfo {
   y: number
 }
 
-type RailTab = 'chat' | 'summary' | 'highlights'
+type PanelTab = 'summary' | 'highlights'
 
 // ─── Assistant answer with live citation chips ──────────────────────
 // [n] markers in the markdown become buttons that land the reader on the
@@ -113,7 +113,9 @@ function CitedAnswer({
 // PDFs render through a pdf.js canvas viewer (mobile browsers don't render
 // PDFs inside iframes — this works identically everywhere, original layout,
 // images and fonts preserved); text documents use the comfortable
-// reading column. A side rail holds AI chat, summary and highlights.
+// reading column. The canvas owns the FULL width: AI chat lives ONLY in the
+// floating popup (every Copilot icon toggles it, Sparkles ⇄ cross), while
+// summary + highlights open on demand from the header panel button.
 export function ReaderView() {
   const readerDocId = useUI((s) => s.readerDocId)
   const closeReader = useUI((s) => s.closeReader)
@@ -126,8 +128,8 @@ export function ReaderView() {
   const [loading, setLoading] = useState(true)
   const [selection, setSelection] = useState<SelInfo | null>(null)
   const [mode, setMode] = useState<'original' | 'text'>('original')
-  const [railTab, setRailTab] = useState<RailTab>('chat')
-  const [railOpen, setRailOpen] = useState(false) // mobile drawer
+  const [panelTab, setPanelTab] = useState<PanelTab>('summary')
+  const [panelOpen, setPanelOpen] = useState(false) // summary/highlights sheet
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [aiInput, setAiInput] = useState('')
   const [aiBusy, setAiBusy] = useState(false)
@@ -171,7 +173,7 @@ export function ReaderView() {
     if (!readerDocId) return
     setLoading(true)
     setMode('original')
-    setRailTab('chat')
+    setPanelTab('summary')
     sessionStart.current = Date.now()
     lastLogged.current = Date.now()
     docIdRef.current = null
@@ -353,9 +355,8 @@ export function ReaderView() {
       if (isPdf) {
         const estimate = c.page ?? estimateCitePage(c)
         if (estimate) applyPdfJump(estimate)
-        // on phones the rail is a full sheet — close it so the landing page
-        // is actually visible
-        setRailOpen(false)
+        // close the panel sheet so the landing page is actually visible
+        setPanelOpen(false)
         const raw = (c.label ?? '').replace(/…$/, '').trim()
         if (raw.length >= 12 && viewerRef.current) {
           // Copilot labels carry a "Title — passage" prefix — try the raw
@@ -369,7 +370,7 @@ export function ReaderView() {
           if (found && found !== estimate) applyPdfJump(found)
         }
       } else if (c.charStart != null) {
-        setRailOpen(false) // phones: reveal the passage behind the sheet
+        setPanelOpen(false) // reveal the passage behind the sheet
         scrollToTextOffset(c.charStart)
       } else if (c.url) {
         window.open(c.url, '_blank')
@@ -461,7 +462,7 @@ export function ReaderView() {
       })
       setDoc({ ...doc, highlights: [...doc.highlights, highlight] })
       setLastHighlightId(highlight.id)
-      toast({ title: 'Highlighted', description: 'Find it in the Highlights tab of the side panel.' })
+      toast({ title: 'Highlighted', description: 'Find it in the document panel (header icon).' })
     } catch {
       toast({ title: 'Could not save highlight', variant: 'destructive' })
     }
@@ -680,6 +681,16 @@ export function ReaderView() {
             rows={1}
             aria-label="Ask AI"
           />
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-11 w-11 shrink-0"
+            onClick={() => setMindmapOpen(true)}
+            aria-label="Create mindmap from this document"
+            title="Create mindmap"
+          >
+            <Share2 className="h-4 w-4" />
+          </Button>
           <Button size="icon" className="h-11 w-11 shrink-0" onClick={() => sendAI()} disabled={aiBusy || !aiInput.trim()} aria-label="Send question">
             <Send className="h-4 w-4" />
           </Button>
@@ -688,24 +699,20 @@ export function ReaderView() {
     </div>
   )
 
-  // ── Side rail content (shared between desktop aside and mobile sheet) ──
-  const rail = (
+  // ── Document panel content (Summary + Highlights) ──
+  // Opened on demand from the header button — one sheet for every
+  // breakpoint. Chat is deliberately NOT here: it lives only in the popup.
+  const panelBody = (
     <div className="flex min-h-0 flex-1 flex-col">
-      <Tabs value={railTab} onValueChange={(v) => setRailTab(v as RailTab)} className="flex min-h-0 flex-1 flex-col gap-0">
+      <Tabs value={panelTab} onValueChange={(v) => setPanelTab(v as PanelTab)} className="flex min-h-0 flex-1 flex-col gap-0">
         <div className="border-b px-3 pt-2.5">
           <TabsList className="h-8 w-full justify-start rounded-none border-0 bg-transparent p-0">
-            <TabsTrigger value="chat" className="h-8 rounded-none border-0 border-b-2 px-3 text-xs data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:shadow-none">Ask AI</TabsTrigger>
             <TabsTrigger value="summary" className="h-8 rounded-none border-0 border-b-2 px-3 text-xs data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:shadow-none">Summary</TabsTrigger>
             <TabsTrigger value="highlights" className="h-8 rounded-none border-0 border-b-2 px-3 text-xs data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:shadow-none">
               Highlights{doc?.highlights.length ? ` · ${doc.highlights.length}` : ''}
             </TabsTrigger>
           </TabsList>
         </div>
-
-        {/* Chat */}
-        <TabsContent value="chat" className="mt-0 min-h-0 flex-1 data-[state=inactive]:hidden">
-          {chatBody}
-        </TabsContent>
 
         {/* Summary + progress */}
         <TabsContent value="summary" className="mt-0 min-h-0 flex-1 overflow-y-auto scroll-thin data-[state=inactive]:hidden">
@@ -754,7 +761,7 @@ export function ReaderView() {
                 <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={() => setMindmapOpen(true)}>
                   <Share2 className="h-3.5 w-3.5" /> Mindmap
                 </Button>
-                <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={() => setRailTab('highlights')}>
+                <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={() => setPanelTab('highlights')}>
                   <Highlighter className="h-3.5 w-3.5" /> From a highlight
                 </Button>
               </div>
@@ -870,27 +877,28 @@ export function ReaderView() {
               <Trash2 className="h-4 w-4" />
             </Button>
             <Button
-              size="sm"
-              variant="outline"
-              className="h-8 gap-1.5 text-xs lg:hidden"
-              onClick={() => setRailOpen(true)}
-              aria-label="Open AI panel"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 shrink-0 text-muted-foreground"
+              onClick={() => setPanelOpen(true)}
+              aria-label="Open document panel (summary & highlights)"
+              title="Summary & highlights"
             >
-              <PanelRightOpen className="h-4 w-4" /> AI
+              <PanelRightOpen className="h-4 w-4" />
             </Button>
           </>
         )}
       </header>
 
-      {/* ── Content split ── */}
+      {/* ── Canvas ── */}
       <div className="flex min-h-0 flex-1 gap-0 pt-3">
-        {/* Main reading section — stretches 48px lower than the AI rail (into
-            main's bottom padding) so the PDF/text canvas uses the space the
-            floating Quick capture / Copilot buttons would otherwise occupy.
-            The buttons only float over the rail's corner (right side), so the
-            extra height is overlap-free for the reading column on every
-            breakpoint; the rail keeps its exact height. */}
-        <div className="flex min-w-0 flex-1 flex-col lg:-mb-12 lg:pr-3">
+        {/* The reading canvas owns the FULL width — the old side rail (with
+            its always-visible mini chat) is gone; AI chat lives only in the
+            floating popup. The canvas still stretches 48px lower (into main's
+            bottom padding) so it uses the space the floating Quick capture /
+            Copilot buttons would otherwise occupy — those buttons only float
+            over the canvas corner, so the extra height stays overlap-free. */}
+        <div className="flex min-w-0 flex-1 flex-col lg:-mb-12">
           {loading ? (
             <div className="flex-1 space-y-4 rounded-xl border bg-card p-8">
               {Array.from({ length: 8 }).map((_, i) => (
@@ -922,6 +930,18 @@ export function ReaderView() {
                 jump={pdfJump}
                 onFullscreenChange={handlePdfFullscreen}
                 escapeGuard={fsEscapeGuard}
+                toolbarAction={
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => setMindmapOpen(true)}
+                    aria-label="Create mindmap from this document"
+                    title="Create mindmap"
+                  >
+                    <Share2 className="h-4 w-4" />
+                  </Button>
+                }
               />
             </div>
           ) : (
@@ -965,11 +985,6 @@ export function ReaderView() {
             </div>
           )}
         </div>
-
-        {/* Desktop side rail */}
-        <aside className="hidden w-[360px] shrink-0 flex-col overflow-hidden rounded-xl border bg-card lg:flex" aria-label="Document AI panel">
-          {rail}
-        </aside>
       </div>
 
       {/* Delete confirmation */}
@@ -1002,23 +1017,25 @@ export function ReaderView() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Mobile side rail sheet */}
-      <Sheet open={railOpen} onOpenChange={setRailOpen}>
+      {/* Document panel sheet — summary + highlights on demand (all
+          breakpoints). Chat is NOT here: only the AI popup shows chat. */}
+      <Sheet open={panelOpen} onOpenChange={setPanelOpen}>
         <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-[400px]">
           <SheetHeader className="border-b p-3 pb-2.5">
             <SheetTitle className="truncate text-left text-sm">{doc?.title ?? 'Document'}</SheetTitle>
           </SheetHeader>
-          {rail}
+          {panelBody}
         </SheetContent>
       </Sheet>
 
       {/* ── Minimal AI chat popup (book open) ──
-          Opens ONLY from a Copilot icon click: the app-level Copilot FABs
-          (mobile + desktop) set `readerChatOpen` while a book is open, so
-          the right-side dock / full-screen sheet never fights the reader.
-          Same conversation as the side rail (shared chatBody) and citation
-          chips jump the pages behind it. The wrapper is pointer-events-none
-          so the PDF underneath never loses scrolling or selection. */}
+          Opens ONLY from a Copilot icon click: the app-level Copilot icons
+          (mobile + desktop) toggle `readerChatOpen` while a book is open —
+          Sparkles opens the popup, the cross minimizes it — so the right-side
+          dock / full-screen sheet never fights the reader. One conversation
+          everywhere (shared chatBody) and citation chips jump the pages
+          behind it. The wrapper is pointer-events-none so the PDF underneath
+          never loses scrolling or selection. */}
       {doc && readerChatOpen && createPortal(
         <div className={cn('pointer-events-none fixed inset-0', pdfFullscreen ? 'z-[70]' : 'z-40')}>
           <div

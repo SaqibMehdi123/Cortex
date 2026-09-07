@@ -19,7 +19,7 @@
 // Fullscreen: the whole viewer can go immersive (fixed overlay above the
 // whole app) via the toolbar button; X or Esc returns to the normal view.
 
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { Button } from '@/components/ui/button'
@@ -62,8 +62,11 @@ export const PdfCanvasViewer = forwardRef<
     /** first chance at Esc while fullscreen — return true to consume it
         (e.g. minimize the AI popup) and keep fullscreen alive */
     escapeGuard?: () => boolean
+    /** optional extra toolbar action (e.g. the reader's mindmap button),
+        rendered right next to the fullscreen toggle */
+    toolbarAction?: ReactNode
   }
->(function PdfCanvasViewer({ url, className, initialPage = 1, onPageChange, jump, onFullscreenChange, escapeGuard }, ref) {
+>(function PdfCanvasViewer({ url, className, initialPage = 1, onPageChange, jump, onFullscreenChange, escapeGuard, toolbarAction }, ref) {
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null)
   const [error, setError] = useState(false)
   const [containerWidth, setContainerWidth] = useState(0)
@@ -444,6 +447,8 @@ export const PdfCanvasViewer = forwardRef<
         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setZoomIndex((i) => Math.min(ZOOMS.length - 1, i + 1))} disabled={zoomIndex === ZOOMS.length - 1} aria-label="Zoom in">
           <ZoomIn className="h-4 w-4" />
         </Button>
+        {/* Host-provided action sits right next to the fullscreen toggle */}
+        {toolbarAction}
         <Button
           variant="ghost"
           size="icon"

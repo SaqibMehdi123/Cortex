@@ -88,6 +88,7 @@ export function CopilotDock() {
   const copilotOpen = useUI((s) => s.copilotOpen)
   const setCopilotOpen = useUI((s) => s.setCopilotOpen)
   const readerDocId = useUI((s) => s.readerDocId)
+  const readerChatOpen = useUI((s) => s.readerChatOpen)
   const setReaderChatOpen = useUI((s) => s.setReaderChatOpen)
   const setView = useUI((s) => s.setView)
   const openReader = useUI((s) => s.openReader)
@@ -279,15 +280,24 @@ export function CopilotDock() {
         </SheetContent>
       </Sheet>
 
-      {/* Floating open button (desktop, when closed). With a book open the
-          icon opens the minimal in-reader chat popup instead of this dock. */}
+      {/* Floating toggle (desktop, while the dock is closed). With a book
+          open it behaves exactly like the fullscreen overlay toggle: the
+          Copilot icon opens the minimal reader popup and turns into a cross
+          while the popup is up (click again to minimize); without a book it
+          opens the right-side Cortex Copilot dock. */}
       {!copilotOpen && (
         <button
-          onClick={() => (readerDocId ? setReaderChatOpen(true) : setCopilotOpen(true))}
-          className="fixed bottom-6 right-6 z-30 hidden h-12 w-12 items-center justify-center rounded-full border bg-card text-primary shadow-soft transition-transform hover:scale-105 active:scale-95 xl:flex"
-          aria-label="Open AI Copilot"
+          onClick={() => (readerDocId ? setReaderChatOpen(!readerChatOpen) : setCopilotOpen(true))}
+          className={cn(
+            'fixed bottom-6 right-6 z-30 hidden h-12 w-12 items-center justify-center rounded-full transition-transform hover:scale-105 active:scale-95 xl:flex',
+            readerDocId
+              ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/30'
+              : 'border bg-card text-primary shadow-soft'
+          )}
+          aria-label={readerDocId ? (readerChatOpen ? 'Minimize AI chat' : 'Open AI chat') : 'Open AI Copilot'}
+          title={readerDocId ? (readerChatOpen ? 'Minimize AI chat' : 'Ask AI about this book') : 'Open AI Copilot'}
         >
-          <Sparkles className="h-5 w-5" />
+          {readerDocId && readerChatOpen ? <X className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
         </button>
       )}    </>
   )

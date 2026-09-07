@@ -35,6 +35,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const setCopilotOpen = useUI((s) => s.setCopilotOpen)
   const copilotOpen = useUI((s) => s.copilotOpen)
   const readerDocId = useUI((s) => s.readerDocId)
+  const readerChatOpen = useUI((s) => s.readerChatOpen)
   const setReaderChatOpen = useUI((s) => s.setReaderChatOpen)
   const mobileMoreOpen = useUI((s) => s.mobileMoreOpen)
   const setMobileMoreOpen = useUI((s) => s.setMobileMoreOpen)
@@ -350,12 +351,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* ── Mobile FABs ── */}
         <div className="fixed bottom-20 right-4 z-40 flex flex-col gap-3 lg:hidden">
+          {/* Book open → toggles the minimal reader popup (Sparkles ⇄ cross,
+              same as the fullscreen overlay toggle); no book → opens the
+              Cortex Copilot dock */}
           <button
-            onClick={() => (readerDocId ? setReaderChatOpen(true) : setCopilotOpen(true))}
-            className="flex h-12 w-12 items-center justify-center rounded-full border bg-card shadow-soft transition-transform active:scale-95"
-            aria-label="Open AI Copilot"
+            onClick={() => (readerDocId ? setReaderChatOpen(!readerChatOpen) : setCopilotOpen(true))}
+            className={cn(
+              'flex h-12 w-12 items-center justify-center rounded-full transition-transform active:scale-95',
+              readerDocId
+                ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/30'
+                : 'border bg-card shadow-soft'
+            )}
+            aria-label={readerDocId ? (readerChatOpen ? 'Minimize AI chat' : 'Open AI chat') : 'Open AI Copilot'}
+            title={readerDocId ? (readerChatOpen ? 'Minimize AI chat' : 'Ask AI about this book') : 'Open AI Copilot'}
           >
-            <Sparkles className="h-5 w-5 text-muted-foreground" />
+            {readerDocId && readerChatOpen ? (
+              <X className="h-5 w-5" />
+            ) : (
+              <Sparkles className={cn('h-5 w-5', !readerDocId && 'text-muted-foreground')} />
+            )}
           </button>
           <button
             onClick={() => setCaptureOpen(true)}
