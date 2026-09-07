@@ -25,9 +25,15 @@ export default function SignupPage() {
     try {
       // 201 = fresh account, 200 = leftover unverified account got a fresh code.
       // Either way the next step is entering the emailed 6-digit code.
-      const res = await api.post<{ needsVerification?: boolean; resendHint?: string }>('/api/auth/register', { name, email, password })
+      const res = await api.post<{ needsVerification?: boolean; resendHint?: string; devCode?: string }>(
+        '/api/auth/register',
+        { name, email, password }
+      )
       const hint = res.resendHint ? `&hint=${encodeURIComponent(res.resendHint)}` : ''
-      router.replace(`/verify?email=${encodeURIComponent(email.trim())}${hint}`)
+      // When the server runs with AUTH_DEV_CODE_FALLBACK=true and no mail
+      // provider, the API returns the code so local testing can continue.
+      const dev = res.devCode ? `&dev=${encodeURIComponent(res.devCode)}` : ''
+      router.replace(`/verify?email=${encodeURIComponent(email.trim())}${hint}${dev}`)
       router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not create the account.')

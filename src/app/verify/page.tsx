@@ -25,7 +25,9 @@ function VerifyForm() {
   const [hint] = useState(params.get('hint') ?? '')
   const [code, setCode] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [devCode, setDevCode] = useState<string | null>(null)
+  // Dev fallback: signup forwards the code here when the server runs with
+  // AUTH_DEV_CODE_FALLBACK=true and no mail provider (nothing can arrive).
+  const [devCode, setDevCode] = useState<string | null>(params.get('dev'))
   const [mailIssue, setMailIssue] = useState<'not_configured' | 'send_failed' | null>(null)
   const [busy, setBusy] = useState(false)
   const [cooldown, setCooldown] = useState(0)
