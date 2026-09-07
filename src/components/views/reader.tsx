@@ -584,8 +584,13 @@ export function ReaderView() {
     if (!doc) return
     try {
       if (mindmapChoice === '__new') {
-        await api.post('/api/mindmaps/generate', { documentId: doc.id })
-        toast({ title: 'Mindmap generated', description: 'Open Mindmaps to explore it.' })
+        const res = await api.post<{ existing?: boolean }>('/api/mindmaps/generate', { documentId: doc.id })
+        if (res.existing) {
+          // server refused to duplicate — this document already has its mindmap
+          toast({ title: 'Mindmap already exists', description: 'This document already has a mindmap — no duplicate was created.' })
+        } else {
+          toast({ title: 'Mindmap generated', description: 'Open Mindmaps to explore it.' })
+        }
       } else {
         const maps = await api.get<{ mindmaps: { id: string; nodes: { x: number; y: number }[] }[] }>('/api/mindmaps')
         const target = maps.mindmaps.find((m) => m.id === mindmapChoice)
@@ -903,8 +908,11 @@ export function ReaderView() {
             </div>
           ) : isPdf && mode === 'original' ? (
             /* Embedded pdf.js viewer — canvas rendering works on every browser
-               (mobile ones don't render PDFs in iframes) */
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border bg-muted/40 shadow-soft">
+               (mobile ones don't render PDFs in iframes). On phones the card
+               stretches 56px into main's bottom padding (down to just above the
+               tab bar) so the canvas fills the screen — the floating stack only
+               overlays its corner, same trade the desktop layout already makes. */
+            <div className="-mb-14 flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border bg-muted/40 shadow-soft lg:mb-0">
               <div className="flex items-center gap-2 border-b bg-background/95 px-3 py-2">
                 <FaFileLines className="h-4 w-4 shrink-0 text-muted-foreground" />
                 <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{doc?.fileName ?? doc?.title}</p>

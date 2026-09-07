@@ -527,11 +527,15 @@ function GenerateDialog({ open, onOpenChange, onCreated }: { open: boolean; onOp
     setBusy(true)
     try {
       const body = mode === 'topic' ? { topic } : mode === 'document' ? { documentId: docId } : { source: 'notes' }
-      const { mindmap } = await api.post<{ mindmap: Mindmap }>('/api/mindmaps/generate', body)
-      toast({ title: 'Mindmap generated' })
+      const res = await api.post<{ mindmap: Mindmap; existing?: boolean }>('/api/mindmaps/generate', body)
+      if (res.existing) {
+        toast({ title: 'Mindmap already exists', description: `“${res.mindmap.title}” already has a mindmap — no duplicate was created.` })
+      } else {
+        toast({ title: 'Mindmap generated' })
+      }
       onOpenChange(false)
       setTopic('')
-      onCreated(mindmap.id)
+      onCreated(res.mindmap.id)
     } catch (e) {
       toast({ title: 'Generation failed', description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' })
     } finally {

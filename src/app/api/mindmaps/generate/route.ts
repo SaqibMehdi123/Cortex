@@ -27,6 +27,16 @@ export async function POST(req: NextRequest) {
     if (documentId) {
       const doc = await db.document.findFirst({ where: { id: documentId, userId: user.id } })
       if (!doc) return NextResponse.json({ error: 'Document not found' }, { status: 404 })
+      // One mindmap per document: re-generating must never duplicate the
+      // previous map — return the existing one untouched instead.
+      const existing = await db.mindMap.findFirst({
+        where: { userId: user.id, sourceDocId: documentId },
+        orderBy: { updatedAt: 'desc' },
+        include: { goal: { select: { id: true, title: true, color: true } } },
+      })
+      if (existing) {
+        return NextResponse.json({ mindmap: { ...existing, nodes: JSON.parse(existing.nodes || '[]') }, existing: true })
+      }
       material = `Title: ${doc.title}\n\n${(doc.content ?? doc.summary ?? '').slice(0, 14000)}`
       title = doc.title
     } else if (source === 'notes') {
@@ -103,7 +113,7 @@ export async function POST(req: NextRequest) {
     void maxDepth
 
     const map = await db.mindMap.create({
-      data: { userId: user.id, title, nodes: JSON.stringify(nodes) },
+      data: { userId: user.id, title, nodes: JSON.stringify(nodes), ...(documentId ? { sourceDocId: documentId } : {}) },
       include: { goal: { select: { id: true, title: true, color: true } } },
     })
 
