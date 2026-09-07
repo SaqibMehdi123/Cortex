@@ -544,7 +544,7 @@ function KanbanBoard({ plans, onToggle, onReload }: { plans: PlanNode[]; onToggl
   }, [plans])
 
   return (
-    <div className="grid gap-3 md:grid-cols-3">
+    <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
       {columns.map((col) => (
         <div
           key={col.key}

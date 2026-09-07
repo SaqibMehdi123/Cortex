@@ -2,7 +2,7 @@
 
 import { cn } from '@/lib/utils'
 import { useUI, type ViewKey, NAV_ITEMS, MOBILE_TABS, NAV_GROUP_LABELS } from '@/lib/nav-config'
-import { PanelLeftClose, PanelLeftOpen, Search, Sparkles, Plus, Bell, WifiOff, CheckCircle2, Loader2, Zap, Target, Share2, Layers, ChartLine, Settings, LogOut } from 'lucide-react'
+import { PanelLeftClose, PanelLeftOpen, Search, Sparkles, Plus, Bell, WifiOff, CheckCircle2, Loader2, Zap, Target, Share2, Layers, ChartLine, Settings, LogOut, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTheme } from 'next-themes'
@@ -11,7 +11,7 @@ import { api } from '@/lib/client'
 import type { DashboardData } from '@/lib/types'
 import { CortexMark } from '@/components/logo'
 import {
-  Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger,
+  Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetTrigger,
   Popover, PopoverContent, PopoverTrigger,
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from '@/components/ui'
@@ -300,9 +300,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                       {tab.label}
                     </button>
                   </SheetTrigger>
-                  <SheetContent side="bottom" className="rounded-t-2xl px-4 pb-6">
-                    <SheetHeader className="p-0 pb-3">
+                  <SheetContent side="bottom" className="rounded-t-2xl px-4 pb-6 [&>button]:hidden">
+                    {/* title + close share one flex row → perfectly aligned */}
+                    <SheetHeader className="flex-row items-center justify-between p-0 pb-2 pt-4">
                       <SheetTitle className="text-left">More</SheetTitle>
+                      <SheetClose
+                        aria-label="Close"
+                        className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                      >
+                        <X className="h-4.5 w-4.5" />
+                      </SheetClose>
                     </SheetHeader>
                     <div className="grid grid-cols-3 gap-3">
                       {MORE_ITEMS.map((item) => (

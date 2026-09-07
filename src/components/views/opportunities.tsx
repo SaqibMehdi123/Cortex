@@ -155,7 +155,7 @@ export function OpportunitiesView() {
           hint='Forward-worthy: copy any internship/job email, click "Paste email (AI)" and the fields fill themselves. Or add one manually.'
         />
       ) : (
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           {shown.map((o) => {
             const dLeft = daysUntil(o.deadline)
             const soon = dLeft !== null && dLeft >= 0 && dLeft <= 7

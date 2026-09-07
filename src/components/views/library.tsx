@@ -136,7 +136,7 @@ export function LibraryView() {
           {reading.length > 0 && status === 'all' && !q && (
             <section aria-label="Continue reading">
               <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Continue reading</h2>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 {reading.map((doc) => (
                   <button key={doc.id} onClick={() => openReader(doc.id)} className="text-left">
                     <Card className="card-lift h-full">
@@ -313,7 +313,7 @@ export function LibraryView() {
 
         <TabsContent value="notes" className="mt-4">
           {!notes ? (
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {[1, 2].map((i) => <SkeletonCard key={i} />)}
             </div>
           ) : notes.length === 0 ? (
@@ -323,7 +323,7 @@ export function LibraryView() {
               description="Use the + button (or ⌘K) from anywhere to capture a note, voice memo or link. They land here."
             />
           ) : (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {notes.map((n) => (
                 <Card key={n.id} className="group relative">
                   <CardContent className="p-4">

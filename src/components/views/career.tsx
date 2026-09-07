@@ -193,7 +193,7 @@ function PipelineTab() {
       </div>
 
       {loading ? (
-        <div className="grid gap-3 md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           {[1, 2, 3, 4].map((i) => <SkeletonCard key={i} className="h-48" />)}
         </div>
       ) : opportunities.length === 0 ? (
@@ -204,7 +204,7 @@ function PipelineTab() {
           action={{ label: 'Add first application', onClick: () => setAddOpen(true) }}
         />
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
           {STAGES.map((stage) => {
             const cards = opportunities.filter((o) => o.status === stage.key)
             return (
@@ -561,12 +561,12 @@ function DiscoverTab() {
             <BookmarkCheck className="h-3.5 w-3.5" /> Saved
           </button>
         </div>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex w-full min-w-0 items-center gap-2 sm:w-auto">
           {data?.sources && data.sources.length > 0 && (
             <select
               value={source}
               onChange={(e) => setSource(e.target.value)}
-              className="h-9 rounded-md border bg-background px-2 text-xs"
+              className="h-9 min-w-0 rounded-md border bg-background px-2 text-xs"
               aria-label="Filter by source"
             >
               <option value="">All sources</option>
@@ -575,13 +575,13 @@ function DiscoverTab() {
               ))}
             </select>
           )}
-          <div className="relative">
+          <div className="relative min-w-0 flex-1 sm:w-44 sm:flex-none">
             <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search listings…"
-              className="h-9 w-44 pl-8 text-xs"
+              className="h-9 w-full pl-8 text-xs"
               aria-label="Search listings"
             />
           </div>
@@ -620,7 +620,7 @@ function DiscoverTab() {
       )}
 
       {loading ? (
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
           {[1, 2, 3, 4, 5, 6].map((i) => <SkeletonCard key={i} className="h-32" />)}
         </div>
       ) : total === 0 ? (
@@ -641,7 +641,7 @@ function DiscoverTab() {
           description="Try a different role, type, source, or clear the search."
         />
       ) : (
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
           {listings.map((l) => (
             <Card key={l.id} className="group border transition-shadow hover:shadow-soft">
               <CardContent className="p-4">
@@ -840,7 +840,7 @@ function ScholarshipsTab() {
       </div>
 
       {loading ? (
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
           {[1, 2, 3, 4, 5, 6].map((i) => <SkeletonCard key={i} className="h-36" />)}
         </div>
       ) : total === 0 ? (
@@ -861,7 +861,7 @@ function ScholarshipsTab() {
           description="Try a different level or clear the search."
         />
       ) : (
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
           {items.map((s) => {
             const meta = LEVEL_META[s.level] ?? LEVEL_META.other
             return (
