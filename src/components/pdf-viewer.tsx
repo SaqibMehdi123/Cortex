@@ -56,8 +56,14 @@ export const PdfCanvasViewer = forwardRef<
     onPageChange?: (page: number) => void
     /** external jump request (citation click) — bump `nonce` to trigger */
     jump?: { page: number; nonce: number } | null
+    /** fullscreen state changes (the reader hosts its own AI panel above the
+        immersive overlay and needs to know when it opens/closes) */
+    onFullscreenChange?: (fullscreen: boolean) => void
+    /** first chance at Esc while fullscreen — return true to consume it
+        (e.g. minimize the AI popup) and keep fullscreen alive */
+    escapeGuard?: () => boolean
   }
->(function PdfCanvasViewer({ url, className, initialPage = 1, onPageChange, jump }, ref) {
+>(function PdfCanvasViewer({ url, className, initialPage = 1, onPageChange, jump, onFullscreenChange, escapeGuard }, ref) {
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null)
   const [error, setError] = useState(false)
   const [containerWidth, setContainerWidth] = useState(0)
@@ -81,6 +87,12 @@ export const PdfCanvasViewer = forwardRef<
   // keep the latest callback without re-binding the scroll handler
   const onPageChangeRef = useRef(onPageChange)
   onPageChangeRef.current = onPageChange
+  // same pattern for the fullscreen host callbacks (the reader passes fresh
+  // closures every render; the Esc listener must not re-subscribe for them)
+  const onFullscreenChangeRef = useRef(onFullscreenChange)
+  onFullscreenChangeRef.current = onFullscreenChange
+  const escapeGuardRef = useRef(escapeGuard)
+  escapeGuardRef.current = escapeGuard
 
   const numPages = pdf?.numPages ?? 0
   const zoom = ZOOMS[zoomIndex]
@@ -263,15 +275,26 @@ export const PdfCanvasViewer = forwardRef<
     () => (fullscreen ? exitFullscreen() : enterFullscreen()),
     [fullscreen, enterFullscreen, exitFullscreen],
   )
-  // Esc returns to the normal view
+  // Esc returns to the normal view — unless a guard consumes it first (the
+  // reader minimizes its fullscreen AI popup on the first Esc, fullscreen
+  // itself leaves on the next one)
   useEffect(() => {
     if (!fullscreen) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') exitFullscreen()
+      if (e.key === 'Escape') {
+        if (escapeGuardRef.current?.()) return
+        exitFullscreen()
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [fullscreen, exitFullscreen])
+
+  // Report fullscreen transitions after commit — covers every path (toolbar
+  // button, Esc) so the host can mount/unmount its overlay panel in step
+  useEffect(() => {
+    onFullscreenChangeRef.current?.(fullscreen)
+  }, [fullscreen])
 
   // ── Citation jump (in place, while mounted) ──
   // Runs when the nonce changes AND again once `pdf` arrives, so a request

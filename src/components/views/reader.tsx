@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { api } from '@/lib/client'
 import type { DocumentItem, Highlight, ChatMessage, Citation } from '@/lib/types'
 import { useUI } from '@/lib/nav-config'
@@ -154,6 +155,13 @@ export function ReaderView() {
   const viewerRef = useRef<PdfViewerHandle | null>(null)
   const jumpNonce = useRef(0)
   const [pdfJump, setPdfJump] = useState<{ page: number; nonce: number } | null>(null)
+  // Fullscreen reading (state lives in the pdf viewer) + the AI popup that
+  // floats above the immersive overlay. The popup reuses the rail's chat
+  // body, so messages/input/citations are the exact same conversation.
+  const [pdfFullscreen, setPdfFullscreen] = useState(false)
+  const [fsChatOpen, setFsChatOpen] = useState(false)
+  const fsChatOpenRef = useRef(false)
+  fsChatOpenRef.current = fsChatOpen
 
   const isPdf = !!doc?.filePath
 
@@ -377,6 +385,22 @@ export function ReaderView() {
     if (isPdf) applyPdfJump(readerJumpPage)
     setReaderJumpPage(null)
   }, [readerJumpPage, doc, isPdf, applyPdfJump, setReaderJumpPage])
+
+  // ── Fullscreen AI panel ──────────────────────────────────────────
+  // The viewer reports fullscreen transitions; the popup must die with the
+  // immersive mode so state never leaks into the normal view.
+  const handlePdfFullscreen = useCallback((fs: boolean) => {
+    setPdfFullscreen(fs)
+    if (!fs) setFsChatOpen(false)
+  }, [])
+
+  // Esc while fullscreen: first press minimizes the AI popup (consumed), a
+  // second press actually leaves fullscreen — handled by the viewer's guard
+  const fsEscapeGuard = useCallback(() => {
+    if (!fsChatOpenRef.current) return false
+    setFsChatOpen(false)
+    return true
+  }, [])
 
   // ── Text mode resume: scroll back to the saved progress position ──
   useEffect(() => {
@@ -604,6 +628,65 @@ export function ReaderView() {
 
   const fileUrl = doc ? `/api/documents/${doc.id}/file` : ''
 
+  // ── Chat body (shared by the side rail AND the fullscreen AI popup) ──
+  // One conversation, two hosts: messages, suggested prompts, the input box
+  // and clickable citations behave identically in both.
+  const chatBody = (
+    <div className="flex h-full flex-col">
+      <ScrollArea className="scroll-thin min-h-0 flex-1 px-4 py-4">
+        <div className="space-y-3">
+          {messages.length === 0 && (
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">Ask anything — answers cite the document.</p>
+              {['Summarize the key argument', 'What methodology was used?', 'Explain the hardest concept simply'].map((s) => (
+                <button key={s} onClick={() => sendAI(s)} className="block w-full rounded-lg border bg-card px-3 py-2 text-left text-xs transition-colors hover:bg-muted">
+                  {s}
+                </button>
+              ))}
+            </div>
+          )}
+          {messages.map((m) => (
+            <div key={m.id} className={cn('flex', m.role === 'user' ? 'justify-end' : 'justify-start')}>
+              <div className={cn('max-w-[92%] rounded-2xl px-3 py-2 text-sm', m.role === 'user' ? 'rounded-br-md bg-foreground text-background' : 'rounded-bl-md border bg-card')}>
+                {m.role === 'user' ? (
+                  m.content
+                ) : (
+                  <CitedAnswer content={m.content} citations={m.citations} onCite={jumpToCitation} />
+                )}
+              </div>
+            </div>
+          ))}
+          {aiBusy && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Reading the document…
+            </div>
+          )}
+        </div>
+      </ScrollArea>
+      <div className="border-t p-3">
+        <div className="flex items-end gap-2">
+          <Textarea
+            value={aiInput}
+            onChange={(e) => setAiInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                sendAI()
+              }
+            }}
+            placeholder="Ask about this document…"
+            className="min-h-[44px] flex-1 resize-none"
+            rows={1}
+            aria-label="Ask AI"
+          />
+          <Button size="icon" className="h-11 w-11 shrink-0" onClick={() => sendAI()} disabled={aiBusy || !aiInput.trim()} aria-label="Send question">
+            <Send className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+
   // ── Side rail content (shared between desktop aside and mobile sheet) ──
   const rail = (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -620,59 +703,7 @@ export function ReaderView() {
 
         {/* Chat */}
         <TabsContent value="chat" className="mt-0 min-h-0 flex-1 data-[state=inactive]:hidden">
-          <div className="flex h-full flex-col">
-            <ScrollArea className="scroll-thin min-h-0 flex-1 px-4 py-4">
-              <div className="space-y-3">
-                {messages.length === 0 && (
-                  <div className="space-y-2">
-                    <p className="text-sm text-muted-foreground">Ask anything — answers cite the document.</p>
-                    {['Summarize the key argument', 'What methodology was used?', 'Explain the hardest concept simply'].map((s) => (
-                      <button key={s} onClick={() => sendAI(s)} className="block w-full rounded-lg border bg-card px-3 py-2 text-left text-xs transition-colors hover:bg-muted">
-                        {s}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {messages.map((m) => (
-                  <div key={m.id} className={cn('flex', m.role === 'user' ? 'justify-end' : 'justify-start')}>
-                    <div className={cn('max-w-[92%] rounded-2xl px-3 py-2 text-sm', m.role === 'user' ? 'rounded-br-md bg-foreground text-background' : 'rounded-bl-md border bg-card')}>
-                      {m.role === 'user' ? (
-                        m.content
-                      ) : (
-                        <CitedAnswer content={m.content} citations={m.citations} onCite={jumpToCitation} />
-                      )}
-                    </div>
-                  </div>
-                ))}
-                {aiBusy && (
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Reading the document…
-                  </div>
-                )}
-              </div>
-            </ScrollArea>
-            <div className="border-t p-3">
-              <div className="flex items-end gap-2">
-                <Textarea
-                  value={aiInput}
-                  onChange={(e) => setAiInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault()
-                      sendAI()
-                    }
-                  }}
-                  placeholder="Ask about this document…"
-                  className="min-h-[44px] flex-1 resize-none"
-                  rows={1}
-                  aria-label="Ask AI"
-                />
-                <Button size="icon" className="h-11 w-11 shrink-0" onClick={() => sendAI()} disabled={aiBusy || !aiInput.trim()} aria-label="Send question">
-                  <Send className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          </div>
+          {chatBody}
         </TabsContent>
 
         {/* Summary + progress */}
@@ -888,6 +919,8 @@ export function ReaderView() {
                 initialPage={initialPdfPageRef.current}
                 onPageChange={handlePdfPageChange}
                 jump={pdfJump}
+                onFullscreenChange={handlePdfFullscreen}
+                escapeGuard={fsEscapeGuard}
               />
             </div>
           ) : (
@@ -977,6 +1010,41 @@ export function ReaderView() {
           {rail}
         </SheetContent>
       </Sheet>
+
+      {/* ── Fullscreen AI panel ──
+          The immersive reader itself is portaled to <body> at z-[60]; this
+          overlay floats above it (z-[70]) with a single AI toggle. Tap the
+          icon → the chat popup opens (same conversation as the side rail);
+          the icon becomes a cross → tap it to minimize. The wrapper is
+          pointer-events-none so PDF scrolling/selection underneath is never
+          blocked; only the popup and the toggle take input. */}
+      {pdfFullscreen && doc && createPortal(
+        <div className="pointer-events-none fixed inset-0 z-[70]">
+          {fsChatOpen && (
+            <div
+              className="anim-pop pointer-events-auto absolute bottom-[4.25rem] right-4 flex h-[min(560px,calc(100dvh-7.5rem))] w-[min(420px,calc(100vw-2rem))] flex-col overflow-hidden rounded-xl border bg-popover shadow-xl sm:right-5"
+              role="dialog"
+              aria-label="AI chat"
+            >
+              <div className="flex shrink-0 items-center gap-2 border-b px-3 py-2.5">
+                <Sparkles className="h-3.5 w-3.5 shrink-0 text-primary" />
+                <p className="shrink-0 text-xs font-semibold">Ask AI</p>
+                <p className="min-w-0 flex-1 truncate text-right text-[10px] text-muted-foreground">{doc.title}</p>
+              </div>
+              <div className="flex min-h-0 flex-1 flex-col">{chatBody}</div>
+            </div>
+          )}
+          <button
+            onClick={() => setFsChatOpen((o) => !o)}
+            aria-label={fsChatOpen ? 'Minimize AI chat' : 'Open AI chat'}
+            title={fsChatOpen ? 'Minimize AI chat' : 'Ask AI about this book'}
+            className="pointer-events-auto absolute bottom-5 right-4 flex h-11 w-11 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30 transition-transform hover:scale-105 active:scale-95 sm:right-5"
+          >
+            {fsChatOpen ? <X className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
+          </button>
+        </div>,
+        document.body
+      )}
 
       {/* ── Floating selection toolbar (text mode) ── */}
       {selection && (
