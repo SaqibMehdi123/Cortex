@@ -168,7 +168,15 @@ export function CopilotDock() {
         >
           <Trash2 className="h-4 w-4" />
         </Button>
-        <Button variant="ghost" size="icon" className="hidden h-8 w-8 xl:flex" aria-label="Close dock" onClick={() => setCopilotOpen(false)}>
+        {/* Close — always visible. On <xl the dock renders inside a
+            full-screen sheet, so this X is the only way back. */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="flex h-8 w-8 shrink-0"
+          aria-label="Close Copilot"
+          onClick={() => setCopilotOpen(false)}
+        >
           <X className="h-4 w-4" />
         </Button>
       </div>
