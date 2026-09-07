@@ -11,12 +11,24 @@
 // Features: continuous vertical scroll, fit-width default with zoom steps,
 // prev/next page, lazy page rendering + bitmap eviction (a 300-page book
 // never holds more than a handful of page bitmaps in memory).
+//
+// Text selection: the canvas is a bitmap, so an invisible pdf.js TextLayer
+// (transparent, exactly-aligned text spans) is rendered on top of every page
+// — that is what makes the text selectable and copyable.
+//
+// Fullscreen: the whole viewer can go immersive (fixed overlay above the
+// whole app) via the toolbar button; X or Esc returns to the normal view.
 
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Loader2, FileWarning } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Loader2, FileWarning, Maximize, X } from 'lucide-react'
+
+// pdf.js TextLayer constructor (obtained from the dynamic module import —
+// pdf.js must stay out of the SSR bundle)
+type TextLayerCtor = typeof import('pdfjs-dist').TextLayer
 
 const MAX_DPR = 2
 const PAD = 12 // px padding around pages inside the scroll area
@@ -52,6 +64,8 @@ export const PdfCanvasViewer = forwardRef<
   const [ratio, setRatio] = useState(1.414) // page width/height — A4-ish until known
   const [zoomIndex, setZoomIndex] = useState(DEFAULT_ZOOM_INDEX)
   const [currentPage, setCurrentPage] = useState(1)
+  const [fullscreen, setFullscreen] = useState(false)
+  const [TextLayerCls, setTextLayerCls] = useState<TextLayerCtor | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const pageRefs = useRef<(HTMLDivElement | null)[]>([])
   const jumpedRef = useRef(false)
@@ -97,6 +111,9 @@ export const PdfCanvasViewer = forwardRef<
         if (cancelled) return
         const vp = p1.getViewport({ scale: 1 })
         setRatio(vp.width / vp.height)
+        // wrap in an updater fn — React would CALL a bare class stored via
+        // setState ("cannot be invoked without 'new'")
+        setTextLayerCls(() => pdfjs.TextLayer)
         setPdf(loaded)
       } catch {
         if (!cancelled) setError(true)
@@ -109,7 +126,8 @@ export const PdfCanvasViewer = forwardRef<
   }, [url])
 
   // ── Track container width (re-attach after the loading branch swaps in the
-  // scroll container — on first mount the ref is still null) ──
+  // scroll container — on first mount the ref is still null; `fullscreen` is
+  // a dep because the portal swap mounts a fresh scroll node to observe) ──
   useEffect(() => {
     const el = scrollRef.current
     if (!el) return
@@ -127,7 +145,7 @@ export const PdfCanvasViewer = forwardRef<
     })
     ro.observe(el)
     return () => ro.disconnect()
-  }, [pdf, containerWidth])
+  }, [pdf, containerWidth, fullscreen])
 
   // ── Hold the current page across container reflows ──
   // Opening the Copilot dock / collapsing the sidebar / resizing the window
@@ -228,6 +246,32 @@ export const PdfCanvasViewer = forwardRef<
     const sc = scrollRef.current
     if (el && sc) sc.scrollTo({ top: el.offsetTop - PAD / 2, behavior: 'smooth' })
   }, [numPages])
+
+  // ── Immersive fullscreen ──
+  // The whole viewer is portaled to <body> while fullscreen: app wrappers use
+  // entrance animations (`anim-fade-up`, fill-mode both) and any element with
+  // a transform animation is a containing block for position:fixed — the
+  // overlay would pin inside the content column. A body-level portal anchors
+  // to the viewport for real and floats above every app chrome (z-[60] vs
+  // z-40 quick-capture/Copilot FABs, z-50 banner). Component state (loaded
+  // pdf, page, zoom) survives the portal swap; the ResizeObserver below
+  // re-observes the fresh scroll node and the keep-page logic re-lands the
+  // current page on both transitions.
+  const exitFullscreen = useCallback(() => setFullscreen(false), [])
+  const enterFullscreen = useCallback(() => setFullscreen(true), [])
+  const toggleFullscreen = useCallback(
+    () => (fullscreen ? exitFullscreen() : enterFullscreen()),
+    [fullscreen, enterFullscreen, exitFullscreen],
+  )
+  // Esc returns to the normal view
+  useEffect(() => {
+    if (!fullscreen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') exitFullscreen()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [fullscreen, exitFullscreen])
 
   // ── Citation jump (in place, while mounted) ──
   // Runs when the nonce changes AND again once `pdf` arrives, so a request
@@ -335,8 +379,17 @@ export const PdfCanvasViewer = forwardRef<
     )
   }
 
-  return (
-    <div className={cn('flex min-h-0 flex-1 flex-col', className)}>
+  const tree = (
+    <div
+      className={cn(
+        'flex min-h-0 flex-1 flex-col bg-background',
+        // Immersive reading: portaled to <body> — true viewport anchor, above
+        // every app chrome. The keep-page logic re-lands the current page
+        // after the swap.
+        fullscreen && 'fixed inset-0 z-[60]',
+        className,
+      )}
+    >
       {/* Toolbar */}
       <div className="flex shrink-0 items-center gap-0.5 border-b bg-background/95 px-1.5 py-1">
         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => scrollToPage(currentPage - 1)} disabled={currentPage <= 1} aria-label="Previous page">
@@ -368,6 +421,16 @@ export const PdfCanvasViewer = forwardRef<
         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setZoomIndex((i) => Math.min(ZOOMS.length - 1, i + 1))} disabled={zoomIndex === ZOOMS.length - 1} aria-label="Zoom in">
           <ZoomIn className="h-4 w-4" />
         </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="ml-auto h-7 w-7"
+          onClick={toggleFullscreen}
+          aria-label={fullscreen ? 'Exit fullscreen (Esc)' : 'Enter fullscreen'}
+          title={fullscreen ? 'Exit fullscreen (Esc)' : 'Fullscreen'}
+        >
+          {fullscreen ? <X className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
+        </Button>
       </div>
 
       {/* Pages */}
@@ -385,6 +448,7 @@ export const PdfCanvasViewer = forwardRef<
               width={pageWidth}
               ratio={i === 0 ? ratio : null}
               fallbackRatio={ratio}
+              TextLayerCls={TextLayerCls}
               ref={(el) => { pageRefs.current[i] = el }}
             />
           ))}
@@ -392,6 +456,10 @@ export const PdfCanvasViewer = forwardRef<
       </div>
     </div>
   )
+
+  // Fullscreen: render the same element tree at <body> level (see the
+  // fullscreen comment above for why a body-level anchor is required)
+  return fullscreen ? createPortal(tree, document.body) : tree
 })
 
 // normalize for citation matching: lowercase, strip punctuation, collapse
@@ -410,19 +478,24 @@ function normForMatch(s: string) {
 const squash = (s: string) => s.replace(/[^a-z0-9]/g, '')
 
 // ─── One page: placeholder until scrolled near, canvas bitmap once rendered ───
+// An invisible pdf.js TextLayer is laid out on top of the bitmap so the text
+// is selectable and copyable — the canvas alone is just a picture.
 function PdfPage({
-  pdf, pageNumber, width, ratio, fallbackRatio, ref,
+  pdf, pageNumber, width, ratio, fallbackRatio, TextLayerCls, ref,
 }: {
   pdf: PDFDocumentProxy
   pageNumber: number
   width: number
   ratio: number | null          // known only after this page's viewport is fetched
   fallbackRatio: number
+  TextLayerCls: TextLayerCtor | null
   ref: (el: HTMLDivElement | null) => void
 }) {
   const wrapRef = useRef<HTMLDivElement | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const taskRef = useRef<{ cancel: () => void } | null>(null)
+  const textWrapRef = useRef<HTMLDivElement | null>(null)
+  const tlRef = useRef<InstanceType<TextLayerCtor> | null>(null)
   const [near, setNear] = useState(pageNumber <= 2) // render first pages eagerly
   const [need, setNeed] = useState(0)               // bumped on re-entry after eviction
   const [painted, setPainted] = useState(false)
@@ -449,6 +522,9 @@ function PdfPage({
               c.height = 1
               setPainted(false)
             }
+            // drop the text spans too — rebuilt on re-entry
+            try { tlRef.current?.cancel() } catch { /* already settled */ }
+            textWrapRef.current?.replaceChildren()
           }
         }
       },
@@ -480,7 +556,26 @@ function PdfPage({
         const task = page.render({ canvas, canvasContext: ctx, viewport })
         taskRef.current = task
         await task.promise
-        if (!cancelled) setPainted(true)
+        if (cancelled) return
+        setPainted(true)
+
+        // Text layer for selection & copy — laid out with the CSS-pixel
+        // viewport (NOT the dpr-scaled bitmap viewport) so the transparent
+        // spans align exactly over the painted canvas at any zoom.
+        const tw = textWrapRef.current
+        if (tw && TextLayerCls) {
+          const cssVp = page.getViewport({ scale: width / base.width })
+          try { tlRef.current?.cancel() } catch { /* already settled */ }
+          tw.replaceChildren()
+          tw.style.setProperty('--total-scale-factor', String(cssVp.scale))
+          const tl = new TextLayerCls({
+            textContentSource: page.streamTextContent(),
+            container: tw,
+            viewport: cssVp,
+          })
+          tlRef.current = tl
+          try { await tl.render() } catch { /* cancelled by zoom churn / eviction */ }
+        }
       } catch {
         // RenderingCancelledException during zoom churn — ignore
       }
@@ -488,8 +583,9 @@ function PdfPage({
     return () => {
       cancelled = true
       try { taskRef.current?.cancel() } catch { /* already done */ }
+      try { tlRef.current?.cancel() } catch { /* already done */ }
     }
-  }, [near, need, width, pdf, pageNumber])
+  }, [near, need, width, pdf, pageNumber, TextLayerCls])
 
   return (
     <div
@@ -502,8 +598,10 @@ function PdfPage({
       style={painted ? undefined : { width, height: displayHeight }}
     >
       <canvas ref={canvasRef} className="block" aria-label={`Page ${pageNumber}`} />
+      {/* invisible, exactly-aligned text spans — make the page text selectable/copyable */}
+      <div ref={textWrapRef} className="textLayer" aria-hidden="true" />
       {!painted && (
-        <div className="absolute inset-0 flex items-center justify-center">
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
           <span className="text-xs tabular-nums text-neutral-400">{pageNumber}</span>
         </div>
       )}
