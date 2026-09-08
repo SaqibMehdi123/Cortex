@@ -43,7 +43,9 @@ export async function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
-    // everything except Next internals and static assets
-    '/((?!_next/static|_next/image|favicon.ico|icon.svg|robots.txt|logo.svg|sitemap.xml).*)',
+    // everything except Next internals, static assets, and the crawler/social
+    // surface (robots, sitemap, PWA manifest, OG image) — those MUST be
+    // reachable without a session or link previews and indexing break.
+    '/((?!_next/static|_next/image|favicon.ico|icon.svg|robots.txt|logo.svg|sitemap.xml|manifest.webmanifest|opengraph-image|twitter-image|apple-icon|pdf.worker).*)',
   ],
 }

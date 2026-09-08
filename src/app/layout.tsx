@@ -1,8 +1,16 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Geist_Mono, Literata, Newsreader } from "next/font/google";
+import { Analytics } from "@vercel/analytics/react";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "@/components/theme-provider";
+import {
+  SITE_DESCRIPTION,
+  SITE_KEYWORDS,
+  SITE_NAME,
+  SITE_TAGLINE,
+  SITE_URL,
+} from "@/lib/site";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -31,11 +39,40 @@ const newsreader = Newsreader({
 });
 
 export const metadata: Metadata = {
-  title: "Cortex — Personal Knowledge & Productivity Workspace",
-  description:
-    "One coherent workspace for your reading, documents, plans and goals, AI news radar, career pipeline, mindmaps, flashcards and an AI copilot — synced across laptop and mobile.",
-  keywords: ["Cortex", "second brain", "knowledge hub", "reading tracker", "AI news", "goals", "mindmap", "flashcards", "internship tracker"],
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: `${SITE_NAME} — Your AI Second Brain for Reading, Notes & Goals`,
+    template: `%s — ${SITE_NAME}`,
+  },
+  description: SITE_DESCRIPTION,
+  keywords: SITE_KEYWORDS,
+  applicationName: SITE_NAME,
   // Favicon: app/icon.svg (the Cortex mark) is served automatically by Next.js
+  openGraph: {
+    type: "website",
+    url: "/",
+    siteName: SITE_NAME,
+    title: `${SITE_NAME} — ${SITE_TAGLINE}`,
+    description: SITE_DESCRIPTION,
+    locale: "en_US",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: `${SITE_NAME} — ${SITE_TAGLINE}`,
+    description: SITE_DESCRIPTION,
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
+  },
+  category: "productivity",
 };
 
 export const viewport: Viewport = {
@@ -61,6 +98,7 @@ export default function RootLayout({
           {children}
           <Toaster />
         </ThemeProvider>
+        <Analytics />
       </body>
     </html>
   );
