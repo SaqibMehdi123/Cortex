@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { usedCitationNumbers } from '@/lib/citations'
-import ZAI from 'z-ai-web-dev-sdk'
+import { createAI } from '@/lib/ai'
 import { getSessionUser, unauthorized } from '@/lib/auth-server'
+
+// Long AI generations must not hit the default serverless timeout (Vercel Hobby caps at 60 s).
+export const maxDuration = 60
 
 // GET /api/chat?documentId= — conversation for one of the user's documents
 export async function GET(req: NextRequest) {
@@ -81,7 +84,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const zai = await ZAI.create()
+    const zai = await createAI()
 
     // Step 1: pick the most relevant paragraph indexes to cite
     let citeHints: { text: string; start: number }[] = []

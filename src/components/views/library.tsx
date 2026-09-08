@@ -782,12 +782,48 @@ function ImportDialog({ open, onOpenChange, onImported, shelves, onShelfCreated 
   // Large PDFs are sent as a raw streamed body (up to 200 MB) — the server
   // pipes the bytes straight to disk, so nothing is buffered in memory. XHR is
   // used instead of fetch because it exposes real upload progress events.
+  // On Vercel (when a Blob store is connected) the browser instead uploads
+  // DIRECTLY to Vercel Blob — the bytes never pass through the serverless
+  // function, so its 4.5 MB request cap doesn't apply. The mode probe keeps
+  // both worlds working: disk streaming locally/VPS, Blob on serverless.
   // Resolves with the created document (id) so the book can be filed onto the
   // chosen shelf right after the upload; the success toast is composed in submit().
-  function uploadPdf(): Promise<{ document: { id: string } | null; pages: number; chars: number; warning?: string }> {
-    if (!file) return Promise.reject(new Error('Choose a PDF first'))
+  async function uploadPdf(): Promise<{ document: { id: string } | null; pages: number; chars: number; warning?: string }> {
+    if (!file) throw new Error('Choose a PDF first')
+    setUploadPct(0)
+
+    let blobMode = false
+    try {
+      const probe = await fetch('/api/documents/upload-url')
+      blobMode = probe.ok && (await probe.json()).mode === 'blob'
+    } catch {
+      blobMode = false
+    }
+
+    if (blobMode && file) {
+      const { upload } = await import('@vercel/blob/client')
+      const blob = await upload(file.name, file, {
+        access: 'public',
+        handleUploadUrl: '/api/documents/upload-url',
+        onUploadProgress: (p) => setUploadPct(Math.min(99, Math.round(p.percentage))),
+      })
+      setUploadPct(100)
+      const res = await fetch('/api/documents/pdf/from-blob', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          blobUrl: blob.url,
+          name: file.name,
+          ...(author.trim() ? { author: author.trim() } : {}),
+          ...(tags.trim() ? { tags: tags.trim() } : {}),
+        }),
+      })
+      const data = (await res.json().catch(() => ({}))) as { document?: { id: string }; pages?: number; chars?: number; warning?: string; error?: string }
+      if (!res.ok) throw new Error(data.error || `Import failed (${res.status})`)
+      return { document: data.document ?? null, pages: data.pages ?? 0, chars: data.chars ?? 0, warning: data.warning }
+    }
+
     return new Promise((resolve, reject) => {
-      setUploadPct(0)
       const params = new URLSearchParams({ name: file.name })
       if (author.trim()) params.set('author', author.trim())
       if (tags.trim()) params.set('tags', tags.trim())

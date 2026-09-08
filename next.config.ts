@@ -1,7 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  output: "standalone",
+  // Standalone output is for self-hosting (VPS/containers). On Vercel it is
+  // unnecessary (Vercel builds and serves Next.js itself) — skip it there.
+  ...(process.env.VERCEL ? {} : { output: "standalone" as const }),
   // Cortex gates every route with middleware — without raising this, Next.js
   // truncates request bodies at its 10MB default and large PDF uploads arrive
   // silently cut off (broken viewer files, failed text extraction).

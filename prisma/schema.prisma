@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -19,7 +19,7 @@ model Document {
   source         String?
   notes          String?
   content        String?
-  filePath       String? // original PDF stored on disk (uploads/) — rendered in the embedded viewer
+  filePath       String? // original PDF — a Vercel Blob URL (serverless) or a uploads/<id>.pdf disk name (VPS/dev) — rendered in the embedded viewer
   fileName       String?
   fileSize       Int?
   pageCount      Int?

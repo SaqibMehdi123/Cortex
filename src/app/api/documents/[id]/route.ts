@@ -80,11 +80,16 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     })
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     await db.document.delete({ where: { id } })
-    // clean up the stored PDF from disk
+    // clean up the stored PDF — from Vercel Blob (URL ref) or from disk
     if (existing?.filePath) {
-      const { unlink } = await import('fs/promises')
-      const path = await import('path')
-      await unlink(path.join(process.cwd(), 'uploads', path.basename(existing.filePath))).catch(() => {})
+      if (existing.filePath.startsWith('https://')) {
+        const { del } = await import('@vercel/blob')
+        await del(existing.filePath).catch(() => {})
+      } else {
+        const { unlink } = await import('fs/promises')
+        const path = await import('path')
+        await unlink(path.join(process.cwd(), 'uploads', path.basename(existing.filePath))).catch(() => {})
+      }
     }
     return NextResponse.json({ ok: true })
   } catch (e) {

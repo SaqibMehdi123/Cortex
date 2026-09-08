@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Parser from 'rss-parser'
 import { db } from '@/lib/db'
-import ZAI from 'z-ai-web-dev-sdk'
+import { createAI } from '@/lib/ai'
 import { CURATED_FEEDS, stripHtml, type FeedSource } from '@/lib/feeds'
 import { getSessionUser, unauthorized } from '@/lib/auth-server'
 
@@ -142,7 +142,7 @@ export async function POST(req: NextRequest) {
     const summaries = new Map<string, string>()
     if (fresh.length > 0) {
       try {
-        const zai = await ZAI.create()
+        const zai = await createAI()
         const batch = fresh.slice(0, 15)
         const listInput = batch
           .map((a, i) => `${i}. TITLE: ${a.title}\n   SOURCE: ${a.source}\n   CONTENT: ${a.snippet?.slice(0, 350) ?? '(none)'}`)

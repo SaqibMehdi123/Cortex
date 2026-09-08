@@ -1,3 +1,4 @@
+import { createAI } from '@/lib/ai'
 import { db } from '@/lib/db'
 
 // Analyze one paper with the LLM: problem solved / innovation / key results /
@@ -6,8 +7,7 @@ import { db } from '@/lib/db'
 export async function analyzePaper(paperId: string) {
   const paper = await db.paper.findUnique({ where: { id: paperId } })
   if (!paper) throw new Error('Paper not found')
-  const ZAI = (await import('z-ai-web-dev-sdk')).default
-  const zai = await ZAI.create()
+  const zai = await createAI()
 
   const completion = await zai.chat.completions.create({
     messages: [

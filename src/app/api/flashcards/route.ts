@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import ZAI from 'z-ai-web-dev-sdk'
+import { createAI } from '@/lib/ai'
 import { getSessionUser, unauthorized } from '@/lib/auth-server'
+
+// Long AI generations must not hit the default serverless timeout (Vercel Hobby caps at 60 s).
+export const maxDuration = 60
 
 // GET /api/flashcards?mode=due|all — the signed-in user's cards
 export async function GET(req: NextRequest) {
@@ -52,7 +55,7 @@ export async function POST(req: NextRequest) {
       })
       if (!highlight) return NextResponse.json({ error: 'Highlight not found' }, { status: 404 })
 
-      const zai = await ZAI.create()
+      const zai = await createAI()
       const completion = await zai.chat.completions.create({
         messages: [
           {

@@ -25,6 +25,28 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     if (!doc?.filePath) {
       return NextResponse.json({ error: 'No file attached to this document' }, { status: 404 })
     }
+
+    // Blob-backed document: proxy the bytes from Vercel Blob through this
+    // auth-checked route so the (unguessable but public) storage URL is
+    // never shared with anyone but the owner's own browser session.
+    if (doc.filePath.startsWith('https://')) {
+      const upstream = await fetch(doc.filePath)
+      if (!upstream.ok || !upstream.body) {
+        return NextResponse.json({ error: 'File not found in storage' }, { status: 404 })
+      }
+      return new NextResponse(upstream.body as unknown as BodyInit, {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/pdf',
+          ...(upstream.headers.get('content-length')
+            ? { 'Content-Length': upstream.headers.get('content-length')! }
+            : {}),
+          'Content-Disposition': `inline; filename="${encodeURIComponent(doc.fileName ?? 'document.pdf')}"`,
+          'Cache-Control': 'private, max-age=3600',
+        },
+      })
+    }
+
     // filePath is server-generated (<id>.pdf) — strip anything path-like anyway
     const safeName = path.basename(doc.filePath)
     const abs = path.join(process.cwd(), 'uploads', safeName)

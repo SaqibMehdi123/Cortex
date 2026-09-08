@@ -1,3 +1,4 @@
+import { createAI } from '@/lib/ai'
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getAccessToken, googleGet } from '@/lib/google'
@@ -82,8 +83,7 @@ export async function POST() {
     }
 
     // 3) AI classification in one batched call
-    const ZAI = (await import('z-ai-web-dev-sdk')).default
-    const zai = await ZAI.create()
+    const zai = await createAI()
     const listInput = candidates
       .map((e, i) => `${i}. FROM: ${e.from}\n   SUBJECT: ${e.subject}\n   SNIPPET: ${e.snippet}`)
       .join('\n')

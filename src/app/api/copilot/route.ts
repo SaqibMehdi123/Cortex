@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { usedCitationNumbers } from '@/lib/citations'
-import ZAI from 'z-ai-web-dev-sdk'
+import { createAI } from '@/lib/ai'
 import { getSessionUser, unauthorized } from '@/lib/auth-server'
+
+// Long AI generations must not hit the default serverless timeout (Vercel Hobby caps at 60 s).
+export const maxDuration = 60
 
 interface Cite {
   n: number
@@ -142,7 +145,7 @@ export async function POST(req: NextRequest) {
       take: 30,
     })
 
-    const zai = await ZAI.create()
+    const zai = await createAI()
     const completion = await zai.chat.completions.create({
       messages: [
         {

@@ -43,7 +43,7 @@ Everything else (RSS fetching, ATS job data, Google OAuth) is plain outbound HTT
 
 Zero card anywhere in this stack: **Vercel + Neon + Vercel Blob + Resend + Groq (or OpenRouter)**.
 
-**Phase 0 — Code changes (one-time, before anything else):** Path B's three changes, with Blob instead of R2. Without them the deploy builds but crashes at runtime.
+**Phase 0 — Code changes (one-time, before anything else):** Path B's three changes, with Blob instead of R2. Without them the deploy builds but crashes at runtime. **Status: DONE — these changes are in the repo as of `deploy: serverless-ready` (Postgres provider, direct-to-Blob uploads with automatic disk fallback, OpenAI-compatible AI wrapper). Just `git pull`.**
 
 **Phase 1 — Collect credentials, in this order (~15 min):**
 
