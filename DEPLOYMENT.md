@@ -35,9 +35,49 @@ Everything else (RSS fetching, ATS job data, Google OAuth) is plain outbound HTT
 | Effort | ~45 min first time | Half a day (refactor) | ~20 min |
 | Best for | Real daily use | You specifically want Vercel/CI | Quick demos |
 
-- **Path A (recommended):** Oracle Cloud "Always Free" VM — genuinely free forever, persistent disk, run the app exactly as it runs in dev.
-- **Path B:** Vercel Hobby + Neon Postgres + Cloudflare R2 — the classic free serverless stack, needs the three changes described.
+- **Path A (recommended):** Oracle Cloud "Always Free" VM — genuinely free forever, persistent disk, run the app exactly as it runs in dev. *Caveat: signup verifies via a small card authorization and Oracle declines most debit cards — if yours was declined, don't fight it, use the no-card path below.*
+- **Path B:** Vercel Hobby + Neon Postgres + Cloudflare R2 — the classic free serverless stack, needs the three changes described. *Caveat: R2 requires adding a payment card to Cloudflare even on the free tier. **No card? Swap R2 for Vercel Blob** (included in Hobby, no card — see the note in Change 2).*
 - **Path C:** Koyeb / Render / Hugging Face Spaces — free container hosting, but the disk is ephemeral (fine for demos, bad for a real library).
+
+### No credit card? Follow this exact order
+
+Zero card anywhere in this stack: **Vercel + Neon + Vercel Blob + Resend + Groq (or OpenRouter)**.
+
+**Phase 0 — Code changes (one-time, before anything else):** Path B's three changes, with Blob instead of R2. Without them the deploy builds but crashes at runtime.
+
+**Phase 1 — Collect credentials, in this order (~15 min):**
+
+1. **Neon** (database) — sign in with GitHub at neon.tech → Create project → copy the **pooled** connection string.
+2. **Groq** (AI) — console.groq.com → API Keys → create (free tier, no card). Note the base URL `https://api.groq.com/openai/v1`.
+3. **Resend** (email codes) — resend.com → API Keys → create (free 100/day). Without a verified domain it can only deliver to your own inbox — fine for personal use.
+4. **Vercel** — sign in with GitHub. Do **not** import the repo yet.
+
+**Phase 2 — Create the database tables (~2 min, from your machine):**
+
+```bash
+git pull
+DATABASE_URL="<neon pooled connection string>" npx prisma db push
+```
+
+**Phase 3 — Vercel, once, with everything ready (~5 min):**
+
+1. Add New Project → import the repo → framework auto-detected.
+2. Project → Storage → Create Database → **Blob** → connect to this project (this injects `BLOB_READ_WRITE_TOKEN` automatically).
+3. Settings → Environment Variables:
+
+```
+DATABASE_URL=<neon pooled connection string>
+AUTH_SECRET=<openssl rand -hex 32>
+RESEND_API_KEY=re_xxxxxxxx
+OPENAI_API_KEY=<groq key>
+OPENAI_BASE_URL=https://api.groq.com/openai/v1
+```
+
+4. Deploy.
+
+**Phase 4 — Verify in this order:** landing loads on HTTPS → sign up → code email arrives → login sticks → import a PDF → ask it a question (AI) → create a shelf → reload → everything still there.
+
+Then continue with section 4 for the code-change details (Change 1 and Change 3 are identical; Change 2 uses Blob instead of R2).
 
 ---
 
@@ -199,6 +239,8 @@ The pattern:
 - **Delete:** `unlink()` becomes an R2 `DeleteObject`.
 
 Use `@aws-sdk/client-s3` + `@aws-sdk/s3-request-presigner` with R2's S3-compatible endpoint (`https://<account>.r2.cloudflarestorage.com`), bucket private, region `auto`.
+
+> **No credit card? Use Vercel Blob instead of R2.** R2 requires a payment card on Cloudflare even for the free tier; Vercel Blob is included in Hobby and needs none. Same pattern, simpler SDK (`@vercel/blob`): server issues a client upload token via `handleUpload()` from `@vercel/blob/client` (new tiny route `/api/documents/upload-url`), browser uploads directly with `upload()` — bypassing the 4.5 MB body cap exactly like presigned URLs. Serve: `head()`/download URL behind the existing auth check in `[id]/file/route.ts`. Delete: `del()`. Env: `BLOB_READ_WRITE_TOKEN` — created automatically when you connect a Blob store to the Vercel project (Storage tab).
 
 ### Change 3 — AI provider: SDK → any OpenAI-compatible API
 
