@@ -1,37 +1,84 @@
 // Outgoing email for verification / password-reset codes.
 //
-// Two delivery channels, tried in this order:
-//   1. Brevo HTTPS API   — set BREVO_API_KEY (free tier: 300 emails/day to ANY
-//      recipient; only the sender address must be confirmed in the Brevo
-//      dashboard — no custom domain required, unlike Resend)
-//   2. Raw SMTP          — set SMTP_HOST + SMTP_USER + SMTP_PASS
-//      (Gmail users: create an App Password, regular passwords are rejected)
+// Delivery channels, tried in this order — the first configured one sends,
+// and the next configured one is the automatic fallback if a send fails:
+//   1. SendGrid HTTPS API — set SENDGRID_API_KEY (free tier: 100 emails/day
+//      to ANY recipient; only the sender address must be verified in the
+//      SendGrid dashboard — no custom domain, and crucially NO IP allow-list,
+//      which is exactly what killed Brevo on Vercel's rotating egress IPs)
+//   2. Raw SMTP           — set SMTP_HOST + SMTP_USER + SMTP_PASS
+//      (works with SMTP2GO, Postmark, Gmail App Password, any provider)
+//   3. Brevo HTTPS API    — set BREVO_API_KEY (legacy fallback only; Brevo's
+//      Authorised-IPs feature intermittently blocks serverless egress, so
+//      don't rely on it — remove the BREVO_* env vars once SendGrid works)
 //
-// If neither is configured the email content is printed to the server log and
+// If none is configured the email content is printed to the server log and
 // the caller receives { delivered: false, reason: 'not_configured' } — the
 // verification code is NEVER returned to the browser unless the operator
 // explicitly opts in with AUTH_DEV_CODE_FALLBACK=true (local development only).
 //
 // Environment (all optional):
-//   BREVO_API_KEY             xkeysib-… key from Brevo → SMTP & API → API keys
-//   BREVO_SENDER_EMAIL        the sender address you confirmed inside Brevo
-//                             (Senders, Domains & Dedicated IPs → Senders)
-//   BREVO_SENDER_NAME         optional display name (default "Cortex")
-//   MAIL_FROM                 overrides the two above, full RFC form:
-//                             e.g. "Cortex <you@example.com>"
+//   SENDGRID_API_KEY          key from SendGrid → Settings → API Keys
+//                             (needs "Mail Send" permission; SG.xxxx…)
+//   SENDGRID_SENDER_EMAIL     the sender address verified under SendGrid →
+//                             Settings → Sender Authentication
+//   MAIL_FROM                 full RFC form override, e.g.
+//                             "Cortex <you@example.com>" (display name
+//                             defaults to "Cortex" when not set)
 //   SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_SECURE ("true" for 465)
+//   BREVO_API_KEY             legacy — see above
+//   BREVO_SENDER_EMAIL        legacy sender address (BREVO mode)
 //   AUTH_DEV_CODE_FALLBACK    "true" → API responses may include devCode
 //                             when delivery is impossible (DEV ONLY)
+//
+// TEST HOOKS (never set in production): SENDGRID_API_BASE and BREVO_API_BASE
+// override https://api.sendgrid.com / https://api.brevo.com so tests can point
+// the HTTP clients at a local mock server.
 
 export type MailReason = 'not_configured' | 'send_failed'
+export type MailProviderId = 'sendgrid' | 'smtp' | 'brevo'
 
 export interface SendCodeResult {
   delivered: boolean // true = handed to a real mail provider
   reason?: MailReason
 }
 
+/** Providers configured via env vars, in the order the mailer will try them. */
+export function configuredProviders(): MailProviderId[] {
+  const list: MailProviderId[] = []
+  if ((process.env.SENDGRID_API_KEY || '').trim()) list.push('sendgrid')
+  if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) list.push('smtp')
+  if ((process.env.BREVO_API_KEY || '').trim()) list.push('brevo')
+  return list
+}
+
+/** The provider that will actually send (first configured one). */
+export function activeMailProvider(): MailProviderId | null {
+  return configuredProviders()[0] ?? null
+}
+
 export function mailConfigured(): boolean {
-  return Boolean(process.env.BREVO_API_KEY || (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS))
+  return configuredProviders().length > 0
+}
+
+/** Bare sender address the current env resolves to (no display name). */
+export function configuredFromEmail(): string | null {
+  const raw =
+    process.env.MAIL_FROM ||
+    process.env.SENDGRID_SENDER_EMAIL ||
+    process.env.BREVO_SENDER_EMAIL ||
+    process.env.SMTP_USER ||
+    ''
+  const m = raw.match(/<([^>]+)>/)
+  const email = (m ? m[1] : raw).trim()
+  return email && email.includes('@') ? email.toLowerCase() : null
+}
+
+/** RFC "Name <email>" form actually used on outgoing messages. */
+export function mailFrom(): string {
+  if (process.env.MAIL_FROM) return process.env.MAIL_FROM
+  const email = configuredFromEmail()
+  return email ? `Cortex <${email}>` : 'Cortex <no-reply@unconfigured.local>'
 }
 
 /** Explicit operator opt-in to show codes in the UI (local dev only). */
@@ -72,6 +119,16 @@ const codeEmailHtml = (name: string, code: string, kind: 'verify' | 'reset'): st
 </body></html>`
 }
 
+/** Crude plain-text projection of the code email — improves deliverability. */
+function htmlToText(html: string): string {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 const logDevBanner = (to: string, subject: string, code: string) => {
   console.log(
     [
@@ -94,9 +151,42 @@ function parseFrom(from: string): { name?: string; email: string } {
   return { email: from.trim() }
 }
 
+async function sendViaSendGrid(to: string, from: string, subject: string, html: string): Promise<boolean> {
+  const apiKey = (process.env.SENDGRID_API_KEY || '').trim()
+  const base = process.env.SENDGRID_API_BASE || 'https://api.sendgrid.com'
+  const f = parseFrom(from)
+  const res = await fetch(`${base}/v3/mail/send`, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${apiKey}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      personalizations: [{ to: [{ email: to }] }],
+      from: f.name ? { email: f.email, name: f.name } : { email: f.email },
+      subject,
+      content: [
+        { type: 'text/plain', value: htmlToText(html) },
+        { type: 'text/html', value: html },
+      ],
+    }),
+    signal: AbortSignal.timeout(15_000),
+  })
+  // SendGrid accepts async with 202 Accepted — that's our success contract.
+  if (res.status === 202) return true
+  const detail = await res.text().catch(() => '')
+  console.error(`SendGrid send failed (${res.status}):`, detail.slice(0, 400))
+  if (res.status === 401 || res.status === 403)
+    console.error('SendGrid: API key rejected — check SENDGRID_API_KEY (SendGrid → Settings → API Keys, needs "Mail Send" permission).')
+  if (/verified sender|sender identity|from address/i.test(detail))
+    console.error('SendGrid: the From address is not a verified Sender Identity — verify it under SendGrid → Settings → Sender Authentication → Verify a Single Sender (then set SENDGRID_SENDER_EMAIL / MAIL_FROM to it).')
+  return false
+}
+
 async function sendViaBrevo(to: string, from: string, subject: string, html: string): Promise<boolean> {
   const apiKey = (process.env.BREVO_API_KEY || '').trim()
-  const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+  const base = process.env.BREVO_API_BASE || 'https://api.brevo.com'
+  const res = await fetch(`${base}/v3/smtp/email`, {
     method: 'POST',
     headers: {
       'api-key': apiKey,
@@ -139,6 +229,12 @@ async function sendViaSmtp(to: string, from: string, subject: string, html: stri
   return true
 }
 
+const senders: Record<MailProviderId, (to: string, from: string, subject: string, html: string) => Promise<boolean>> = {
+  sendgrid: sendViaSendGrid,
+  smtp: sendViaSmtp,
+  brevo: sendViaBrevo,
+}
+
 export async function sendCodeEmail(
   to: string,
   name: string,
@@ -148,35 +244,20 @@ export async function sendCodeEmail(
   const subject = kind === 'verify' ? 'Your Cortex verification code' : 'Your Cortex password reset code'
   const html = codeEmailHtml(name, code, kind)
 
-  const brevoKey = process.env.BREVO_API_KEY
-  const smtpReady = Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS)
-
-  if (!brevoKey && !smtpReady) {
+  const providers = configuredProviders()
+  if (providers.length === 0) {
     logDevBanner(to, subject, code)
     return { delivered: false, reason: 'not_configured' }
   }
 
-  const from =
-    process.env.MAIL_FROM ||
-    (brevoKey
-      ? `Cortex <${process.env.BREVO_SENDER_EMAIL || process.env.SMTP_USER || 'no-reply@unconfigured.local'}>`
-      : String(process.env.SMTP_USER))
-
-  try {
-    const delivered = brevoKey ? await sendViaBrevo(to, from, subject, html) : await sendViaSmtp(to, from, subject, html)
-    if (delivered) return { delivered: true }
-    // Provider exists but rejected/failed — fall through to SMTP when both are set.
-    if (brevoKey && smtpReady) {
-      try {
-        await sendViaSmtp(to, from, subject, html)
-        return { delivered: true }
-      } catch (e2) {
-        console.error('SMTP fallback send failed:', e2)
-      }
+  const from = mailFrom()
+  for (const p of providers) {
+    try {
+      if (await senders[p](to, from, subject, html)) return { delivered: true }
+      console.error(`Mail provider "${p}" rejected the message — trying the next configured provider`)
+    } catch (e) {
+      console.error(`Mail provider "${p}" threw:`, e)
     }
-    return { delivered: false, reason: 'send_failed' }
-  } catch (e) {
-    console.error('Email send failed:', e)
-    return { delivered: false, reason: 'send_failed' }
   }
+  return { delivered: false, reason: 'send_failed' }
 }

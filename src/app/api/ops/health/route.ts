@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { activeMailProvider, configuredFromEmail } from '@/lib/mailer'
 
 // GET /api/ops/health — operator diagnostic for the two external services
 // Cortex depends on at runtime (transactional email + PDF Blob storage).
@@ -7,11 +8,23 @@ import { NextResponse } from 'next/server'
 // error classes and a MASKED sender address — never API keys, tokens, or
 // account payloads. Its purpose is to answer "is production actually able to
 // send mail / use Blob right now?" without granting dashboard access.
+//
+// Mail section reflects the active provider (first configured of
+// sendgrid → smtp → brevo, same order the mailer sends with).
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 const noStore = { 'Cache-Control': 'no-store' }
+
+interface MailCheck {
+  provider: 'sendgrid' | 'smtp' | 'brevo' | null
+  from: string | null
+  keyValid: boolean | null
+  senderFound: boolean | null
+  senderConfirmed: boolean | null
+  note: string | null
+}
 
 function maskEmail(email: string | null): string | null {
   if (!email) return null
@@ -27,30 +40,86 @@ function safeDetail(text: string): string {
   return text.replace(/\b\d{1,3}(\.\d{1,3}){3}\b/g, '*.*.*.*').replace(/\s+/g, ' ').slice(0, 140)
 }
 
-/** Same derivation the mailer uses for the From address. */
-function configuredFromEmail(): string | null {
-  const raw =
-    process.env.MAIL_FROM ||
-    (process.env.BREVO_API_KEY
-      ? `${process.env.BREVO_SENDER_EMAIL || process.env.SMTP_USER || ''}`
-      : process.env.SMTP_USER || '')
-  const m = raw.match(/<([^>]+)>/)
-  const email = (m ? m[1] : raw).trim()
-  return email && email.includes('@') ? email.toLowerCase() : null
+async function checkSendGrid(): Promise<MailCheck> {
+  const key = (process.env.SENDGRID_API_KEY || '').trim()
+  const base: MailCheck = {
+    provider: 'sendgrid',
+    from: maskEmail(configuredFromEmail()),
+    keyValid: null,
+    senderFound: null,
+    senderConfirmed: null,
+    note: null,
+  }
+  if (!key) return { ...base, note: 'no provider configured' }
+  const headers = { authorization: `Bearer ${key}`, accept: 'application/json' }
+
+  try {
+    // 1) Key validity — /v3/scopes lists the key's own scopes; free, read-only.
+    const scopesRes = await fetch('https://api.sendgrid.com/v3/scopes', {
+      headers,
+      signal: AbortSignal.timeout(10_000),
+    })
+    if (scopesRes.status === 401 || scopesRes.status === 403) {
+      return {
+        ...base,
+        keyValid: false,
+        note: 'API key rejected by SendGrid — re-create it under SendGrid → Settings → API Keys (needs "Mail Send" permission) and update SENDGRID_API_KEY',
+      }
+    }
+    if (!scopesRes.ok) return { ...base, keyValid: null, note: `scopes check returned ${scopesRes.status}` }
+
+    // 2) Sender verification — the #1 cause of "provider rejected it".
+    const from = configuredFromEmail()
+    if (!from)
+      return { ...base, keyValid: true, note: 'key valid, but no sender email configured (set MAIL_FROM or SENDGRID_SENDER_EMAIL)' }
+
+    const sendersRes = await fetch('https://api.sendgrid.com/v3/senders', {
+      headers,
+      signal: AbortSignal.timeout(10_000),
+    })
+    if (sendersRes.status === 401 || sendersRes.status === 403)
+      return {
+        ...base,
+        keyValid: true,
+        note: 'key valid, but restricted — it cannot read sender identities. If sends still fail, verify the From address under SendGrid → Settings → Sender Authentication',
+      }
+    if (!sendersRes.ok) return { ...base, keyValid: true, note: `senders check returned ${sendersRes.status}` }
+
+    const list = (await sendersRes.json()) as Array<{ from?: { email?: string }; verified?: boolean }>
+    const match = Array.isArray(list) ? list.find((s) => (s?.from?.email || '').toLowerCase() === from) : undefined
+    if (!match) {
+      return {
+        ...base,
+        keyValid: true,
+        senderFound: false,
+        senderConfirmed: false,
+        note: 'configured sender is NOT a verified Sender Identity — SendGrid → Settings → Sender Authentication → Verify a Single Sender, then click the link in the email',
+      }
+    }
+    const confirmed = match.verified !== false
+    return {
+      ...base,
+      keyValid: true,
+      senderFound: true,
+      senderConfirmed: confirmed,
+      note: confirmed ? 'ok' : 'sender exists but is NOT verified yet — click the confirmation link SendGrid emailed you',
+    }
+  } catch (e) {
+    return { ...base, keyValid: null, note: `sendgrid unreachable: ${e instanceof Error ? e.message : 'network error'}` }
+  }
 }
 
-async function checkBrevo() {
+async function checkBrevo(): Promise<MailCheck> {
   const key = (process.env.BREVO_API_KEY || '').trim()
-  const provider = key ? 'brevo' : process.env.SMTP_HOST ? 'smtp' : null
-  const base = {
-    provider,
+  const base: MailCheck = {
+    provider: 'brevo',
     from: maskEmail(configuredFromEmail()),
-    keyValid: null as boolean | null,
-    senderFound: null as boolean | null,
-    senderConfirmed: null as boolean | null,
-    note: null as string | null,
+    keyValid: null,
+    senderFound: null,
+    senderConfirmed: null,
+    note: null,
   }
-  if (!key) return { ...base, note: provider === 'smtp' ? 'smtp mode — live check skipped' : 'no provider configured' }
+  if (!key) return { ...base, note: 'no provider configured' }
 
   try {
     // 1) Key validity — /v3/account is a free, side-effect-free call.
@@ -100,6 +169,20 @@ async function checkBrevo() {
   }
 }
 
+async function checkMail(): Promise<MailCheck> {
+  const provider = activeMailProvider()
+  if (provider === 'sendgrid') return checkSendGrid()
+  if (provider === 'brevo') return checkBrevo()
+  return {
+    provider,
+    from: maskEmail(configuredFromEmail()),
+    keyValid: null,
+    senderFound: null,
+    senderConfirmed: null,
+    note: provider === 'smtp' ? 'smtp mode — live check skipped' : 'no provider configured',
+  }
+}
+
 async function checkBlob() {
   const tokenPresent = Boolean(process.env.BLOB_READ_WRITE_TOKEN)
   if (!tokenPresent) {
@@ -117,7 +200,7 @@ async function checkBlob() {
   }
 }
 
-/** Last transactional-email events from Brevo, aggregated & anonymised. */
+/** Last transactional-email events from Brevo, aggregated & anonymised (Brevo is the only provider with a pull-API for events). */
 async function checkBrevoEvents(key: string) {
   try {
     const res = await fetch('https://api.brevo.com/v3/smtp/statistics/events?limit=25&sort=desc', {
@@ -144,13 +227,29 @@ async function checkBrevoEvents(key: string) {
 }
 
 export async function GET() {
-  const [mail, blob] = await Promise.all([checkBrevo(), checkBlob()])
+  const [mail, blob] = await Promise.all([checkMail(), checkBlob()])
   const brevoEvents =
     mail.provider === 'brevo' && (process.env.BREVO_API_KEY || '').trim() && mail.keyValid
       ? await checkBrevoEvents((process.env.BREVO_API_KEY || '').trim())
-      : { available: false, note: 'brevo key not valid — events unavailable' }
+      : {
+          available: false,
+          note:
+            mail.provider === 'brevo'
+              ? 'brevo key not valid — events unavailable'
+              : `events feed is Brevo-only (active provider: ${mail.provider ?? 'none'})`,
+        }
+  const mailOk =
+    mail.provider === 'sendgrid' || mail.provider === 'brevo'
+      ? mail.keyValid === true && mail.senderConfirmed === true
+      : mail.provider === 'smtp'
   return NextResponse.json(
-    { ok: (mail.provider === 'brevo' ? mail.keyValid && mail.senderConfirmed : Boolean(mail.provider)) && (blob.tokenPresent ? blob.tokenValid === true : true), mail, brevoEvents, blob, checkedAt: new Date().toISOString() },
+    {
+      ok: mailOk && (blob.tokenPresent ? blob.tokenValid === true : true),
+      mail,
+      brevoEvents,
+      blob,
+      checkedAt: new Date().toISOString(),
+    },
     { headers: noStore }
   )
 }
