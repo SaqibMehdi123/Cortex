@@ -474,31 +474,7 @@
   transform: scaleX(1);
 }
 
-/* shimmering announcement border */
-@keyframes shimmer-border {
-  to { background-position: 200% center; }
-}
-.announce {
-  background:
-    linear-gradient(to right, var(--border), var(--border)) padding-box,
-    linear-gradient(
-      100deg,
-      color-mix(in srgb, var(--chart-1) 55%, transparent),
-      color-mix(in srgb, var(--chart-2) 55%, transparent),
-      color-mix(in srgb, var(--chart-5) 55%, transparent),
-      color-mix(in srgb, var(--chart-1) 55%, transparent)
-    ) border-box;
-  background-size: 100% 100%, 200% 100%;
-  animation: shimmer-border 7s linear infinite;
-}
-
-/* tilted mockup easing */
-.tilt {
-  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
-  will-change: transform;
-}
-
-/* ─── Hero: entrance stagger + a mock that feels alive ────────────────── */
+/* ─── Hero: entrance stagger for headline + briefing rows ─────────────── */
 
 /* headline lines rise out of a clipped mask, one after another */
 @keyframes line-up {
@@ -510,105 +486,13 @@
   animation: line-up 0.95s cubic-bezier(0.22, 1, 0.36, 1) backwards;
 }
 
-/* small pieces inside the mock stagger up as the window lands */
+/* briefing rows stagger up as the card lands */
 @keyframes mock-rise-anim {
   from { opacity: 0; transform: translateY(9px); }
   to { opacity: 1; transform: translateY(0); }
 }
 .mock-rise {
   animation: mock-rise-anim 0.75s cubic-bezier(0.22, 1, 0.36, 1) backwards;
-}
-
-/* slow vertical bob — window and floating chips, phase-offset */
-@keyframes float-y {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-9px); }
-}
-.mock-float { animation: float-y 10s ease-in-out infinite; }
-.chip-float { animation: float-y 7.5s ease-in-out infinite; will-change: transform; }
-
-/* soft pool of light breathing behind the window */
-.mock-glow {
-  background: radial-gradient(
-    50% 50% at 50% 50%,
-    color-mix(in srgb, var(--chart-1) 13%, transparent),
-    color-mix(in srgb, var(--chart-5) 7%, transparent) 55%,
-    transparent 75%
-  );
-  filter: blur(36px);
-  animation: glow-pulse 7s ease-in-out infinite;
-}
-@keyframes glow-pulse {
-  0%, 100% { opacity: 0.55; }
-  50% { opacity: 1; }
-}
-
-/* light seam across the top edge of the window */
-.mock-topline {
-  position: absolute;
-  inset: 0 0 auto 0;
-  height: 1px;
-  z-index: 1;
-  background: linear-gradient(
-    90deg,
-    transparent 4%,
-    color-mix(in srgb, var(--chart-1) 55%, transparent) 32%,
-    color-mix(in srgb, var(--chart-2) 45%, transparent) 62%,
-    transparent 96%
-  );
-}
-
-/* AI digest card — tinted, with a slow light pass */
-.digest-card {
-  position: relative;
-  overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--chart-1) 20%, transparent);
-  background: linear-gradient(
-    110deg,
-    color-mix(in srgb, var(--chart-1) 8%, transparent),
-    color-mix(in srgb, var(--chart-2) 6%, transparent) 48%,
-    color-mix(in srgb, var(--chart-5) 7%, transparent)
-  );
-}
-.digest-card::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(110deg, transparent 32%, rgb(255 255 255 / 0.16) 50%, transparent 68%);
-  background-size: 220% 100%;
-  animation: digest-sheen 5.5s ease-in-out infinite;
-  pointer-events: none;
-}
-@keyframes digest-sheen {
-  0% { background-position: 130% 0; }
-  55%, 100% { background-position: -130% 0; }
-}
-
-/* focus ring draws itself once the window settles */
-.mock-ring { transform: rotate(-90deg); }
-@keyframes ring-draw {
-  from { stroke-dashoffset: 97.4; }
-  to { stroke-dashoffset: var(--ring-off, 31.2); }
-}
-.mock-ring .ring-val {
-  animation: ring-draw 1.7s cubic-bezier(0.22, 1, 0.36, 1) 0.85s backwards;
-}
-
-/* moving gleam on the goal bar */
-.bar-shimmer {
-  position: relative;
-  overflow: hidden;
-}
-.bar-shimmer::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  transform: translateX(-110%);
-  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.4), transparent);
-  animation: bar-sweep 3s ease-in-out 1.4s infinite;
-}
-@keyframes bar-sweep {
-  55%, 100% { transform: translateX(110%); }
 }
 
 /* ─── Section identity: one small index chip + hairline rule ──────────── */
@@ -805,7 +689,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .reveal { opacity: 1; transform: none; filter: none; transition: none; }
-  .marquee-track, .aurora, .type-caret, .announce { animation: none; }
+  .marquee-track, .aurora, .type-caret { animation: none; }
   .draw-line { transform: scaleX(1); transition: none; }
   .sheen::after { display: none; }
   .ping-dot, .radar-sweep, .radar-blip { animation: none; }
@@ -813,9 +697,6 @@
   .reveal .bar-fill { transform: scaleX(var(--w, 0.8)); transition: none; }
   .flow-fill { transition: none; }
   .h1-line, .mock-rise { animation: none; }
-  .mock-float, .chip-float, .mock-glow { animation: none; }
-  .mock-ring .ring-val { animation: none; stroke-dashoffset: var(--ring-off, 31.2); }
-  .digest-card::after, .bar-shimmer::after { animation: none; display: none; }
 }
 
 /* ── Citation landing flash (reader text mode) ────────────────────────
