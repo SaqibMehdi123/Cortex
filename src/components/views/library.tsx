@@ -779,25 +779,25 @@ function ImportDialog({ open, onOpenChange, onImported, shelves, onShelfCreated 
     }
   }, [open])
 
-  // Large PDFs are sent as a raw streamed body (up to 200 MB) — the server
-  // pipes the bytes straight to disk, so nothing is buffered in memory. XHR is
-  // used instead of fetch because it exposes real upload progress events.
-  // On Vercel (when a Blob store is connected) the browser instead uploads
-  // DIRECTLY to Vercel Blob — the bytes never pass through the serverless
-  // function, so its 4.5 MB request cap doesn't apply. The @vercel/blob
-  // client PUTs to the vercel.com/api/blob gateway, which some networks and
-  // WAFs block — when that happens the uploader automatically retries the
-  // same bytes through our own function (/api/documents/blob/relay, capped at
-  // 4.2 MB), which reaches Blob from the serverless side and is unaffected.
-  // The mode probe keeps both worlds working: disk streaming locally/VPS,
-  // Blob (direct, then relay fallback) on serverless.
+  // Upload path map (the mode probe keeps local/VPS disk streaming working):
+  // ≤ 4.2 MB → direct-to-Blob via the @vercel/blob client (bytes bypass the
+  //            serverless function and its 4.5 MB request cap), with our own
+  //            /api/documents/blob/relay as the fallback.
+  // > 4.2 MB → staged chunks (/api/documents/blob/staged/*): the file is cut
+  //            into ≤4 MB pieces that each pass through a function — the only
+  //            route that always reaches Blob, since some networks/WAFs block
+  //            the vercel.com/api/blob gateway the @vercel/blob client PUTs
+  //            to — and the pieces are assembled server-side with a multipart
+  //            upload, which has no size limit. Large books go here FIRST:
+  //            a failed multi-MB gateway PUT is a slow way to discover that
+  //            the network blocks it.
   // Resolves with the created document (id) so the book can be filed onto the
   // chosen shelf right after the upload; the success toast is composed in submit().
   async function uploadPdf(): Promise<{ document: { id: string } | null; pages: number; chars: number; warning?: string }> {
     if (!file) throw new Error('Choose a PDF first')
     setUploadPct(0)
 
-    const RELAY_MAX_BYTES = 4.2 * 1024 * 1024
+    const DIRECT_MAX_BYTES = 4.2 * 1024 * 1024
 
     let blobMode = false
     try {
@@ -809,38 +809,21 @@ function ImportDialog({ open, onOpenChange, onImported, shelves, onShelfCreated 
 
     if (blobMode && file) {
       let uploadedUrl: string
-      try {
-        const { upload } = await import('@vercel/blob/client')
-        const blob = await upload(file.name, file, {
-          access: 'public',
-          handleUploadUrl: '/api/documents/upload-url',
-          onUploadProgress: (p) => setUploadPct(Math.min(99, Math.round(p.percentage))),
-        })
-        uploadedUrl = blob.url
-      } catch (directErr) {
-        console.warn('Direct-to-Blob upload failed — trying the server relay fallback', directErr)
-        if (file.size > RELAY_MAX_BYTES) {
-          throw new Error(
-            `"${file.name}" is ${(file.size / 1048576).toFixed(1)} MB — too large for the backup upload path (4 MB), and the direct upload failed: ${(directErr as Error).message}. Retrying often works; if it keeps failing, try a different network.`
-          )
+      if (file.size <= DIRECT_MAX_BYTES) {
+        try {
+          const { upload } = await import('@vercel/blob/client')
+          const blob = await upload(file.name, file, {
+            access: 'public',
+            handleUploadUrl: '/api/documents/upload-url',
+            onUploadProgress: (p) => setUploadPct(Math.min(99, Math.round(p.percentage))),
+          })
+          uploadedUrl = blob.url
+        } catch (directErr) {
+          console.warn('Direct-to-Blob upload failed — trying the server relay fallback', directErr)
+          uploadedUrl = await relayUpload(file)
         }
-        uploadedUrl = await new Promise<string>((resolve, reject) => {
-          const xhr = new XMLHttpRequest()
-          xhr.open('POST', `/api/documents/blob/relay?name=${encodeURIComponent(file.name)}`)
-          xhr.responseType = 'json'
-          xhr.upload.onprogress = (e) => {
-            if (e.lengthComputable) setUploadPct(Math.min(99, Math.round((e.loaded / e.total) * 100)))
-          }
-          xhr.upload.onload = () => setUploadPct(100)
-          xhr.onload = () => {
-            const data = (xhr.response ?? {}) as { url?: string; error?: string }
-            if (xhr.status >= 200 && xhr.status < 300 && data.url) resolve(data.url)
-            else reject(new Error(data.error || `Backup upload failed (${xhr.status})`))
-          }
-          xhr.onerror = () => reject(new Error('Backup upload failed — check your connection and try again'))
-          xhr.onabort = () => reject(new Error('Upload cancelled'))
-          xhr.send(file)
-        })
+      } else {
+        uploadedUrl = await stagedUpload(file)
       }
       setUploadPct(100)
       const res = await fetch('/api/documents/pdf/from-blob', {
@@ -882,6 +865,100 @@ function ImportDialog({ open, onOpenChange, onImported, shelves, onShelfCreated 
       xhr.onabort = () => reject(new Error('Upload cancelled'))
       xhr.send(file)
     })
+  }
+
+  // Small-file fallback: the whole file as one raw body through our own
+  // function — possible only because ≤4.2 MB fits under Vercel's 4.5 MB
+  // request cap. XHR instead of fetch for real upload progress events.
+  function relayUpload(f: File): Promise<string> {
+    return new Promise<string>((resolve, reject) => {
+      const xhr = new XMLHttpRequest()
+      xhr.open('POST', `/api/documents/blob/relay?name=${encodeURIComponent(f.name)}`)
+      xhr.responseType = 'json'
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) setUploadPct(Math.min(99, Math.round((e.loaded / e.total) * 100)))
+      }
+      xhr.upload.onload = () => setUploadPct(100)
+      xhr.onload = () => {
+        const data = (xhr.response ?? {}) as { url?: string; error?: string }
+        if (xhr.status >= 200 && xhr.status < 300 && data.url) resolve(data.url)
+        else reject(new Error(data.error || `Backup upload failed (${xhr.status})`))
+      }
+      xhr.onerror = () => reject(new Error('Backup upload failed — check your connection and try again'))
+      xhr.onabort = () => reject(new Error('Upload cancelled'))
+      xhr.send(f)
+    })
+  }
+
+  // Large-file path: begin → ≤4 MB chunks (2 in flight, 3 attempts each) →
+  // server-side multipart assembly → final blob URL. Progress is reported
+  // per completed chunk; ordering is restored server-side from the index.
+  async function stagedUpload(f: File): Promise<string> {
+    const CHUNK_BYTES = 4 * 1024 * 1024
+    const firstBytes = await f.slice(0, 8192).arrayBuffer()
+
+    const beginRes = await fetch('/api/documents/blob/staged/begin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: f.name, size: f.size, firstBytes: bytesToBase64(firstBytes) }),
+    })
+    const beginData = (await beginRes.json().catch(() => ({}))) as { uploadId?: string; error?: string }
+    if (!beginRes.ok || !beginData.uploadId) {
+      throw new Error(beginData.error || `Upload could not start (${beginRes.status})`)
+    }
+    const uploadId = beginData.uploadId
+
+    const totalChunks = Math.ceil(f.size / CHUNK_BYTES)
+    let doneBytes = 0
+    let nextChunk = 0
+
+    async function chunkWorker() {
+      while (nextChunk < totalChunks) {
+        const index = nextChunk++
+        const slice = f.slice(index * CHUNK_BYTES, Math.min((index + 1) * CHUNK_BYTES, f.size))
+        let lastError: unknown = null
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            const res = await fetch(
+              `/api/documents/blob/staged/chunk?uploadId=${encodeURIComponent(uploadId)}&index=${index}&total=${totalChunks}`,
+              { method: 'POST', body: slice }
+            )
+            const data = (await res.json().catch(() => ({}))) as { error?: string }
+            if (!res.ok) throw new Error(data.error || `Chunk ${index + 1}/${totalChunks} failed (${res.status})`)
+            doneBytes += slice.size
+            setUploadPct(Math.min(99, Math.round((doneBytes / f.size) * 100)))
+            lastError = null
+            break
+          } catch (err) {
+            lastError = err
+            await new Promise((r) => setTimeout(r, 600 * (attempt + 1)))
+          }
+        }
+        if (lastError) {
+          throw lastError instanceof Error ? lastError : new Error(`Chunk ${index + 1}/${totalChunks} failed`)
+        }
+      }
+    }
+
+    await Promise.all(Array.from({ length: Math.min(2, totalChunks) }, () => chunkWorker()))
+
+    const doneRes = await fetch('/api/documents/blob/staged/complete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uploadId, name: f.name }),
+    })
+    const doneData = (await doneRes.json().catch(() => ({}))) as { url?: string; error?: string }
+    if (!doneRes.ok || !doneData.url) {
+      throw new Error(doneData.error || `Finishing the upload failed (${doneRes.status})`)
+    }
+    return doneData.url
+  }
+
+  function bytesToBase64(buffer: ArrayBuffer): string {
+    const bytes = new Uint8Array(buffer)
+    let binary = ''
+    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
+    return btoa(binary)
   }
 
   // Create a shelf right from inside the import flow; it ends up pre-selected.

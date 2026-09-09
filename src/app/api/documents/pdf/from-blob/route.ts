@@ -67,7 +67,12 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Best-effort text extraction (powers highlights & doc Q&A) ───────
-    const { text, pages, metaTitle, warning } = await extractPdfText(new Uint8Array(buf), buf.length)
+    // Batched page-by-page with a deadline — large books keep whatever was
+    // extracted in time (partial: true) instead of the whole import dying.
+    const { text, pages, totalPages, metaTitle, warning, partial } = await extractPdfText(
+      new Uint8Array(buf),
+      buf.length
+    )
     const cleaned = cleanPdfText(text)
     const hasText = cleaned.length >= 40
 
@@ -86,7 +91,7 @@ export async function POST(req: NextRequest) {
         content: hasText ? cleaned.slice(0, 500000) : null,
         status: 'reading',
         tags: tags ? `pdf,${tags}` : 'pdf',
-        pageCount: pages || null,
+        pageCount: totalPages || pages || null,
         filePath: blobUrl,
         fileName: name,
         fileSize: buf.length,
@@ -94,7 +99,7 @@ export async function POST(req: NextRequest) {
     })
 
     return NextResponse.json(
-      { document, pages, chars: cleaned.length, warning },
+      { document, pages: totalPages || pages, chars: cleaned.length, warning, partial },
       { status: 201 }
     )
   } catch (e) {
