@@ -17,7 +17,7 @@ Cortex is **one fullstack app** — the Next.js server renders the UI *and* serv
 | **Long-running requests** | PDF text extraction can take a minute+ on large files | Serverless free tiers cap functions at 10–60 s |
 | **HTTPS for login** | Session cookies are `Secure` in production — browsers drop them on plain HTTP, so login silently loops | You need TLS, even on a free setup (Caddy gives this for free with a domain) |
 | **One config file for AI** | `z-ai-web-dev-sdk` reads credentials from `.z-ai-config` (project dir, `$HOME`, or `/etc`) | Works on any VM/container; cannot ship as a file on serverless |
-| **Outbound email** | Verification codes / password resets via **Resend HTTP API** (works everywhere) or SMTP ports 465/587 | Resend is the safe choice — some clouds block SMTP ports |
+| **Outbound email** | Verification codes / password resets via **Brevo HTTP API** (works everywhere) or SMTP ports 465/587 | Brevo is the safe choice — some clouds block SMTP ports |
 
 Everything else (RSS fetching, ATS job data, Google OAuth) is plain outbound HTTPS and works anywhere.
 
@@ -41,7 +41,7 @@ Everything else (RSS fetching, ATS job data, Google OAuth) is plain outbound HTT
 
 ### No credit card? Follow this exact order
 
-Zero card anywhere in this stack: **Vercel + Neon + Vercel Blob + Resend + Groq (or OpenRouter)**.
+Zero card anywhere in this stack: **Vercel + Neon + Vercel Blob + Brevo + Groq (or OpenRouter)**.
 
 **Phase 0 — Code changes (one-time, before anything else):** Path B's three changes, with Blob instead of R2. Without them the deploy builds but crashes at runtime. **Status: DONE — these changes are in the repo as of `deploy: serverless-ready` (Postgres provider, direct-to-Blob uploads with automatic disk fallback, OpenAI-compatible AI wrapper). Just `git pull`.**
 
@@ -49,7 +49,7 @@ Zero card anywhere in this stack: **Vercel + Neon + Vercel Blob + Resend + Groq 
 
 1. **Neon** (database) — sign in with GitHub at neon.tech → Create project → copy the **pooled** connection string.
 2. **Groq** (AI) — console.groq.com → API Keys → create (free tier, no card). Note the base URL `https://api.groq.com/openai/v1`.
-3. **Resend** (email codes) — resend.com → API Keys → create (free 100/day). Without a verified domain it can only deliver to your own inbox — fine for personal use.
+3. **Brevo** (email codes) — app.brevo.com → confirm a sender (Senders, Domains & Dedicated IPs → Senders — use your own address, no domain needed) → SMTP & API → API keys → create (free 300/day to any recipient).
 4. **Vercel** — sign in with GitHub. Do **not** import the repo yet.
 
 **Phase 2 — Create the database tables (~2 min, from your machine):**
@@ -68,7 +68,8 @@ DATABASE_URL="<neon pooled connection string>" npx prisma db push
 ```
 DATABASE_URL=<neon pooled connection string>
 AUTH_SECRET=<openssl rand -hex 32>
-RESEND_API_KEY=re_xxxxxxxx
+BREVO_API_KEY=xkeysib-xxxxxxxx
+BREVO_SENDER_EMAIL=you@gmail.com
 OPENAI_API_KEY=<groq key>
 OPENAI_BASE_URL=https://api.groq.com/openai/v1
 ```
@@ -133,7 +134,7 @@ Edit `.env` (see section 6 for every variable). Minimum for production:
 ```bash
 DATABASE_URL="file:./db/custom.db"
 AUTH_SECRET="$(openssl rand -hex 32)"        # required in prod — the dev fallback is unsafe
-RESEND_API_KEY=re_xxxxxxxx                    # email delivery (free: 100/day)
+BREVO_API_KEY=xkeysib-xxxxxxxx                    # email delivery (free: 300/day to any recipient)
 # AUTH_DEV_CODE_FALLBACK must NOT be set in production
 ```
 
@@ -267,7 +268,7 @@ DATABASE_URL=<neon pooled connection string>
 AUTH_SECRET=<openssl rand -hex 32>
 R2_ACCOUNT_ID= / R2_ACCESS_KEY_ID= / R2_SECRET_ACCESS_KEY= / R2_BUCKET= / R2_ENDPOINT=
 OPENAI_API_KEY= / OPENAI_BASE_URL=
-RESEND_API_KEY=          # or SMTP_*
+BREVO_API_KEY=          # or SMTP_*
 GOOGLE_CLIENT_ID= / GOOGLE_CLIENT_SECRET= / GOOGLE_REDIRECT_URI=   # optional
 ```
 
@@ -314,7 +315,8 @@ If you go this route anyway, add a survival net: a nightly job that ships `db/cu
 |---|---|---|
 | `DATABASE_URL` | Yes | `file:./db/custom.db` (VPS) or Neon pooled connection string (Vercel) |
 | `AUTH_SECRET` | **Yes in prod** | `openssl rand -hex 32` — signs session cookies; the repo's dev fallback is for localhost only |
-| `RESEND_API_KEY` | One email option | resend.com → API Keys (free 100 emails/day, HTTP API — no SMTP ports) |
+| `BREVO_API_KEY` | One email option | app.brevo.com → SMTP & API → API keys (free 300 emails/day to any recipient, HTTP API — no SMTP ports) |
+| `BREVO_SENDER_EMAIL` | With Brevo | The address you confirmed under Senders — exactly as confirmed |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` (+`SMTP_SECURE`) | One email option | Any SMTP provider; Gmail needs a 16-char App Password (see EMAIL-SETUP.md) |
 | `MAIL_FROM` | Optional | Sender identity, e.g. `Cortex <you@yourdomain>` |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_REDIRECT_URI` | Optional | Google Cloud console OAuth client; redirect must match your deployed origin exactly |
@@ -339,7 +341,7 @@ Checklist, in order:
 |---|---|---|
 | Login loops back to the form | Cookies are `Secure` in production; you're on plain HTTP | Put Caddy (or any TLS) in front; never serve prod over bare HTTP |
 | "Verification code" shown in the UI | `AUTH_DEV_CODE_FALLBACK=true` in prod env | Remove it; configure real email delivery |
-| No email arrives | SMTP port blocked (Oracle blocks 25/465/587 on free tiers) | Use `RESEND_API_KEY` — it's a plain HTTPS call, always reachable |
+| No email arrives | SMTP port blocked (Oracle blocks 25/465/587 on free tiers) | Use `BREVO_API_KEY` — it's a plain HTTPS call, always reachable |
 | PDF upload fails >few MB on Vercel | Serverless 4.5 MB body cap | Presigned-direct-to-R2 flow (Path B, Change 2) |
 | PDF opens but no text/highlights | Extraction timed out on a huge/scan PDF | Expected for scans; increase `maxDuration`/budget on Path B, or just use the VPS path |
 | AI features error | `.z-ai-config` missing or gateway unreachable from your host | Copy the file to server `$HOME` (Path A); otherwise swap the 9 call sites to an OpenAI-compatible provider (works on both paths) |

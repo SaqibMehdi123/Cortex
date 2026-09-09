@@ -48,7 +48,6 @@ import https from 'node:https'
 const results = await Promise.all([
   probe('smtp.gmail.com', 587),
   probe('smtp.gmail.com', 465),
-  httpsProbe('api.resend.com'),
   httpsProbe('api.brevo.com'),
 ])
 console.log(results.join('\n'))

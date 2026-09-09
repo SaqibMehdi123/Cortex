@@ -12,32 +12,41 @@ documented at the bottom).
 
 ---
 
-## Option A — Resend (recommended, ~2 minutes, no server ports involved)
+## Option A — Brevo (recommended, sends to ANY recipient on the free tier)
 
-Resend's free tier (100 emails/day) is plenty for a personal workspace, and
-without a verified domain it can send **to your own email address** — which is
-exactly what a personal tool needs.
+Brevo's free tier (300 emails/day, 9,000/month) delivers to **any email
+address** — Gmail, Outlook, anything — as long as the *sender* address is
+confirmed inside Brevo. No custom domain, no paid plan, no SMTP ports.
 
-1. Go to [resend.com](https://resend.com) and create a free account.
-2. **API Keys → Create API Key**, copy the key (`re_...`).
-3. Add it to `.env` on the server:
+1. Create a free account at [app.brevo.com](https://app.brevo.com).
+2. Confirm a sender: click your avatar (top right) → **Senders, Domains &
+   Dedicated IPs** → **Senders** → **Add sender**. Use an address you can
+   open (e.g. your Gmail) and click the confirmation link Brevo sends you.
+3. Generate an API key: avatar → **SMTP & API** → **API keys** → **Generate
+   new key** → copy it (`xkeysib-...`).
+4. Add to `.env` on the server:
 
    ```
-   RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxx
+   BREVO_API_KEY=xkeysib-xxxxxxxxxxxxxxxxxxxx
+   BREVO_SENDER_EMAIL=you@gmail.com
    ```
 
-4. Restart Cortex (`pkill -f "next dev"; nohup npm run dev &`) and check
+   `BREVO_SENDER_EMAIL` must be the exact address you confirmed in step 2.
+
+5. Restart Cortex (`pkill -f "next dev"; nohup npm run dev &`) and check
    `GET /api/auth/mail-status` → `{"configured": true}`.
 
 Notes:
 
-- Sender defaults to `Cortex <onboarding@resend.dev>`. With that shared
-  sandbox sender, Resend only delivers to the email address that owns the
-  Resend account — so sign up in Cortex with the **same email you registered
-  at Resend**. To deliver to arbitrary addresses, verify a domain at
-  resend.com/domains and set `MAIL_FROM="Cortex <no-reply@yourdomain.com>"`.
-- If a send fails (wrong key, recipient not allowed) the UI shows
-  "the mail provider rejected it" instead of pretending success.
+- The display name defaults to `Cortex`; override with
+  `MAIL_FROM="Cortex <you@gmail.com>"` if you want something else.
+- If a send fails (wrong key, unconfirmed sender) the UI shows
+  "the mail provider rejected it" and the exact Brevo error — including a
+  hint for unconfirmed senders — is printed in the server log.
+- Free-tier emails sit behind Brevo's shared IP pool; for a personal app's
+  verification codes this is a non-issue. Adding your domain later
+  (Senders → Domains → authenticate with DKIM/SPF records) only improves
+  deliverability, it is not required to send.
 
 ## Option B — Gmail SMTP
 
@@ -71,7 +80,7 @@ log.
 
 ## Both configured?
 
-Resend wins; SMTP acts as an automatic fallback if the Resend call fails.
+Brevo wins; SMTP acts as an automatic fallback if the Brevo call fails.
 
 ## Local development without any mail provider
 

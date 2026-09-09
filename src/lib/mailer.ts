@@ -1,8 +1,9 @@
 // Outgoing email for verification / password-reset codes.
 //
 // Two delivery channels, tried in this order:
-//   1. Resend HTTPS API  — set RESEND_API_KEY (no SMTP ports, no domain needed
-//      to mail your own address; free tier is enough for a personal tool)
+//   1. Brevo HTTPS API   — set BREVO_API_KEY (free tier: 300 emails/day to ANY
+//      recipient; only the sender address must be confirmed in the Brevo
+//      dashboard — no custom domain required, unlike Resend)
 //   2. Raw SMTP          — set SMTP_HOST + SMTP_USER + SMTP_PASS
 //      (Gmail users: create an App Password, regular passwords are rejected)
 //
@@ -12,12 +13,13 @@
 // explicitly opts in with AUTH_DEV_CODE_FALLBACK=true (local development only).
 //
 // Environment (all optional):
-//   RESEND_API_KEY            preferred channel
+//   BREVO_API_KEY             xkeysib-… key from Brevo → SMTP & API → API keys
+//   BREVO_SENDER_EMAIL        the sender address you confirmed inside Brevo
+//                             (Senders, Domains & Dedicated IPs → Senders)
+//   BREVO_SENDER_NAME         optional display name (default "Cortex")
+//   MAIL_FROM                 overrides the two above, full RFC form:
+//                             e.g. "Cortex <you@example.com>"
 //   SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_SECURE ("true" for 465)
-//   MAIL_FROM                 e.g. "Cortex <no-reply@yourdomain.com>"
-//                             (Resend default: onboarding@resend.dev — may only
-//                              send to your own account email until a domain
-//                              is verified)
 //   AUTH_DEV_CODE_FALLBACK    "true" → API responses may include devCode
 //                             when delivery is impossible (DEV ONLY)
 
@@ -29,7 +31,7 @@ export interface SendCodeResult {
 }
 
 export function mailConfigured(): boolean {
-  return Boolean(process.env.RESEND_API_KEY || (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS))
+  return Boolean(process.env.BREVO_API_KEY || (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS))
 }
 
 /** Explicit operator opt-in to show codes in the UI (local dev only). */
@@ -85,19 +87,35 @@ const logDevBanner = (to: string, subject: string, code: string) => {
   )
 }
 
-async function sendViaResend(to: string, from: string, subject: string, html: string): Promise<boolean> {
-  const res = await fetch('https://api.resend.com/emails', {
+/** "Cortex <you@example.com>" → { name: "Cortex", email: "you@example.com" } */
+function parseFrom(from: string): { name?: string; email: string } {
+  const m = from.match(/^\s*(.*?)\s*<([^>]+)>\s*$/)
+  if (m) return { name: m[1].replace(/^"|"$/g, '') || undefined, email: m[2].trim() }
+  return { email: from.trim() }
+}
+
+async function sendViaBrevo(to: string, from: string, subject: string, html: string): Promise<boolean> {
+  const res = await fetch('https://api.brevo.com/v3/smtp/email', {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-      'Content-Type': 'application/json',
+      'api-key': String(process.env.BREVO_API_KEY),
+      'content-type': 'application/json',
+      accept: 'application/json',
     },
-    body: JSON.stringify({ from, to: [to], subject, html }),
+    body: JSON.stringify({
+      sender: parseFrom(from),
+      to: [{ email: to }],
+      subject,
+      htmlContent: html,
+    }),
     signal: AbortSignal.timeout(15_000),
   })
   if (!res.ok) {
     const detail = await res.text().catch(() => '')
-    console.error(`Resend send failed (${res.status}):`, detail.slice(0, 400))
+    console.error(`Brevo send failed (${res.status}):`, detail.slice(0, 400))
+    if (res.status === 401) console.error('Brevo: API key rejected — check BREVO_API_KEY (Brevo → SMTP & API → API keys).')
+    if (res.status === 400 && detail.includes('invalid sender'))
+      console.error('Brevo: sender not confirmed — set MAIL_FROM / BREVO_SENDER_EMAIL to an address confirmed under “Senders, Domains & Dedicated IPs”.')
     return false
   }
   return true
@@ -129,21 +147,25 @@ export async function sendCodeEmail(
   const subject = kind === 'verify' ? 'Your Cortex verification code' : 'Your Cortex password reset code'
   const html = codeEmailHtml(name, code, kind)
 
-  const resendKey = process.env.RESEND_API_KEY
+  const brevoKey = process.env.BREVO_API_KEY
   const smtpReady = Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS)
 
-  if (!resendKey && !smtpReady) {
+  if (!brevoKey && !smtpReady) {
     logDevBanner(to, subject, code)
     return { delivered: false, reason: 'not_configured' }
   }
 
-  const from = process.env.MAIL_FROM || (resendKey ? 'Cortex <onboarding@resend.dev>' : String(process.env.SMTP_USER))
+  const from =
+    process.env.MAIL_FROM ||
+    (brevoKey
+      ? `Cortex <${process.env.BREVO_SENDER_EMAIL || process.env.SMTP_USER || 'no-reply@unconfigured.local'}>`
+      : String(process.env.SMTP_USER))
 
   try {
-    const delivered = resendKey ? await sendViaResend(to, from, subject, html) : await sendViaSmtp(to, from, subject, html)
+    const delivered = brevoKey ? await sendViaBrevo(to, from, subject, html) : await sendViaSmtp(to, from, subject, html)
     if (delivered) return { delivered: true }
     // Provider exists but rejected/failed — fall through to SMTP when both are set.
-    if (resendKey && smtpReady) {
+    if (brevoKey && smtpReady) {
       try {
         await sendViaSmtp(to, from, subject, html)
         return { delivered: true }
