@@ -47,6 +47,11 @@ export const metadata: Metadata = {
   description: SITE_DESCRIPTION,
   keywords: SITE_KEYWORDS,
   applicationName: SITE_NAME,
+  // Google Search Console ownership verification (HTML-tag method).
+  // Token: DpLBAgxwpBZDdfhNN8O71TNcRgFFa0g95V9iImRJ8vI
+  verification: {
+    google: "DpLBAgxwpBZDdfhNN8O71TNcRgFFa0g95V9iImRJ8vI",
+  },
   // Favicon: app/icon.svg (the Cortex mark) is served automatically by Next.js
   openGraph: {
     type: "website",
