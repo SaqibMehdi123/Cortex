@@ -486,13 +486,15 @@
   animation: line-up 0.95s cubic-bezier(0.22, 1, 0.36, 1) backwards;
 }
 
-/* briefing rows stagger up as the card lands */
-@keyframes mock-rise-anim {
-  from { opacity: 0; transform: translateY(9px); }
+/* rotating headline word — remounts on each swap, plays once */
+@keyframes swap-word-in {
+  from { opacity: 0; transform: translateY(0.3em); }
   to { opacity: 1; transform: translateY(0); }
 }
-.mock-rise {
-  animation: mock-rise-anim 0.75s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+.swap-word {
+  display: inline-block;
+  animation: swap-word-in 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
 }
 
 /* ─── Section identity: one small index chip + hairline rule ──────────── */
@@ -696,7 +698,7 @@
   .tool-card, .tool-tile { transition: none; }
   .reveal .bar-fill { transform: scaleX(var(--w, 0.8)); transition: none; }
   .flow-fill { transition: none; }
-  .h1-line, .mock-rise { animation: none; }
+  .h1-line, .swap-word { animation: none; }
 }
 
 /* ── Citation landing flash (reader text mode) ────────────────────────
