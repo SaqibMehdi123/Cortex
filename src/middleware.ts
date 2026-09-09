@@ -19,6 +19,8 @@ const PUBLIC_APIS = [
   '/api/auth/reset-password',
   // pre-login code screens check whether the server can deliver email at all
   '/api/auth/mail-status',
+  // operator diagnostic — booleans only, never secrets (see src/app/api/ops/health)
+  '/api/ops/health',
 ]
 
 export async function middleware(req: NextRequest) {
