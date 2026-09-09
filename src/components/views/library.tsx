@@ -784,13 +784,20 @@ function ImportDialog({ open, onOpenChange, onImported, shelves, onShelfCreated 
   // used instead of fetch because it exposes real upload progress events.
   // On Vercel (when a Blob store is connected) the browser instead uploads
   // DIRECTLY to Vercel Blob — the bytes never pass through the serverless
-  // function, so its 4.5 MB request cap doesn't apply. The mode probe keeps
-  // both worlds working: disk streaming locally/VPS, Blob on serverless.
+  // function, so its 4.5 MB request cap doesn't apply. The @vercel/blob
+  // client PUTs to the vercel.com/api/blob gateway, which some networks and
+  // WAFs block — when that happens the uploader automatically retries the
+  // same bytes through our own function (/api/documents/blob/relay, capped at
+  // 4.2 MB), which reaches Blob from the serverless side and is unaffected.
+  // The mode probe keeps both worlds working: disk streaming locally/VPS,
+  // Blob (direct, then relay fallback) on serverless.
   // Resolves with the created document (id) so the book can be filed onto the
   // chosen shelf right after the upload; the success toast is composed in submit().
   async function uploadPdf(): Promise<{ document: { id: string } | null; pages: number; chars: number; warning?: string }> {
     if (!file) throw new Error('Choose a PDF first')
     setUploadPct(0)
+
+    const RELAY_MAX_BYTES = 4.2 * 1024 * 1024
 
     let blobMode = false
     try {
@@ -801,18 +808,46 @@ function ImportDialog({ open, onOpenChange, onImported, shelves, onShelfCreated 
     }
 
     if (blobMode && file) {
-      const { upload } = await import('@vercel/blob/client')
-      const blob = await upload(file.name, file, {
-        access: 'public',
-        handleUploadUrl: '/api/documents/upload-url',
-        onUploadProgress: (p) => setUploadPct(Math.min(99, Math.round(p.percentage))),
-      })
+      let uploadedUrl: string
+      try {
+        const { upload } = await import('@vercel/blob/client')
+        const blob = await upload(file.name, file, {
+          access: 'public',
+          handleUploadUrl: '/api/documents/upload-url',
+          onUploadProgress: (p) => setUploadPct(Math.min(99, Math.round(p.percentage))),
+        })
+        uploadedUrl = blob.url
+      } catch (directErr) {
+        console.warn('Direct-to-Blob upload failed — trying the server relay fallback', directErr)
+        if (file.size > RELAY_MAX_BYTES) {
+          throw new Error(
+            `"${file.name}" is ${(file.size / 1048576).toFixed(1)} MB — too large for the backup upload path (4 MB), and the direct upload failed: ${(directErr as Error).message}. Retrying often works; if it keeps failing, try a different network.`
+          )
+        }
+        uploadedUrl = await new Promise<string>((resolve, reject) => {
+          const xhr = new XMLHttpRequest()
+          xhr.open('POST', `/api/documents/blob/relay?name=${encodeURIComponent(file.name)}`)
+          xhr.responseType = 'json'
+          xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable) setUploadPct(Math.min(99, Math.round((e.loaded / e.total) * 100)))
+          }
+          xhr.upload.onload = () => setUploadPct(100)
+          xhr.onload = () => {
+            const data = (xhr.response ?? {}) as { url?: string; error?: string }
+            if (xhr.status >= 200 && xhr.status < 300 && data.url) resolve(data.url)
+            else reject(new Error(data.error || `Backup upload failed (${xhr.status})`))
+          }
+          xhr.onerror = () => reject(new Error('Backup upload failed — check your connection and try again'))
+          xhr.onabort = () => reject(new Error('Upload cancelled'))
+          xhr.send(file)
+        })
+      }
       setUploadPct(100)
       const res = await fetch('/api/documents/pdf/from-blob', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          blobUrl: blob.url,
+          blobUrl: uploadedUrl,
           name: file.name,
           ...(author.trim() ? { author: author.trim() } : {}),
           ...(tags.trim() ? { tags: tags.trim() } : {}),
