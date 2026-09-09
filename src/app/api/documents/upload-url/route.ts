@@ -28,8 +28,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ mode: 'server' }, { status: 503 })
     }
 
+    // @vercel/blob expects the event as a PARSED JSON object
+    // (GenerateClientTokenEvent | UploadCompletedEvent) — NOT a stream. Passing
+    // request.body raw made body.type undefined → "Invalid event type" → 500,
+    // which the browser SDK surfaces as "Failed to retrieve the client token".
+    const body = (await request.json().catch(() => null)) as HandleUploadBody | null
+    if (!body || typeof body !== 'object' || !('type' in body)) {
+      return NextResponse.json({ error: 'Invalid upload event' }, { status: 400 })
+    }
+
     const jsonResponse = await handleUpload({
-      body: request.body as unknown as HandleUploadBody,
+      body,
       request,
       onBeforeGenerateToken: async () => ({
         allowedContentTypes: ['application/pdf'],
