@@ -1,5 +1,5 @@
 import { ImageResponse } from 'next/og'
-import { SITE_TAGLINE } from '@/lib/site'
+import { SITE_TAGLINE, SITE_URL } from '@/lib/site'
 
 export const alt = 'Cortex — Knowledge work, without the chaos'
 export const size = { width: 1200, height: 630 }
@@ -94,7 +94,7 @@ export default function OpengraphImage() {
             textTransform: 'uppercase',
           }}
         >
-          cortexdot.scrutinies.dev · free in beta
+          {new URL(SITE_URL).host} · free in beta
         </div>
       </div>
     ),

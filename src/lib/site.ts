@@ -2,11 +2,12 @@
  * Single source of truth for site identity — consumed by root metadata,
  * robots.ts, sitemap.ts, manifest.ts, JSON-LD and the OG image generator.
  *
- * NOTE: the URL is intentionally hard-coded to production (not derived from
- * VERCEL_URL) so preview deployments never emit preview URLs into canonical /
- * Open Graph tags — search engines must always see one stable origin.
+ * NOTE: the URL is intentionally hard-coded (not derived from VERCEL_URL) so
+ * preview deployments never emit preview URLs into canonical / Open Graph
+ * tags — search engines must always see one stable origin.
+ * When a custom domain goes live later, change ONLY this constant.
  */
-export const SITE_URL = 'https://cortexdot.scrutinies.dev'
+export const SITE_URL = 'https://cortex-sync.vercel.app'
 export const SITE_NAME = 'Cortex'
 export const SITE_TAGLINE = 'Knowledge work, without the chaos.'
 
