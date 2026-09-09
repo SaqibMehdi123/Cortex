@@ -95,10 +95,11 @@ function parseFrom(from: string): { name?: string; email: string } {
 }
 
 async function sendViaBrevo(to: string, from: string, subject: string, html: string): Promise<boolean> {
+  const apiKey = (process.env.BREVO_API_KEY || '').trim()
   const res = await fetch('https://api.brevo.com/v3/smtp/email', {
     method: 'POST',
     headers: {
-      'api-key': String(process.env.BREVO_API_KEY),
+      'api-key': apiKey,
       'content-type': 'application/json',
       accept: 'application/json',
     },

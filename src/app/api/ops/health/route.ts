@@ -35,7 +35,7 @@ function configuredFromEmail(): string | null {
 }
 
 async function checkBrevo() {
-  const key = process.env.BREVO_API_KEY
+  const key = (process.env.BREVO_API_KEY || '').trim()
   const provider = key ? 'brevo' : process.env.SMTP_HOST ? 'smtp' : null
   const base = {
     provider,
