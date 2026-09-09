@@ -117,10 +117,40 @@ async function checkBlob() {
   }
 }
 
+/** Last transactional-email events from Brevo, aggregated & anonymised. */
+async function checkBrevoEvents(key: string) {
+  try {
+    const res = await fetch('https://api.brevo.com/v3/smtp/statistics/events?limit=25&sort=desc', {
+      headers: { 'api-key': key, accept: 'application/json' },
+      signal: AbortSignal.timeout(10_000),
+    })
+    if (!res.ok) return { available: false, note: `events check returned ${res.status}` }
+    const data = (await res.json()) as {
+      events?: Array<{ event?: string; email?: string; reason?: string; date?: string }>
+    }
+    const events = data.events ?? []
+    const counts: Record<string, number> = {}
+    for (const ev of events) if (ev.event) counts[ev.event] = (counts[ev.event] || 0) + 1
+    const recent = events.slice(0, 5).map((ev) => ({
+      event: ev.event ?? 'unknown',
+      to: maskEmail(ev.email ?? null),
+      reason: ev.reason ? safeDetail(ev.reason) : undefined,
+      date: ev.date,
+    }))
+    return { available: true, totalRecent: events.length, counts, recent }
+  } catch (e) {
+    return { available: false, note: `events check failed: ${e instanceof Error ? e.message : 'network'}` }
+  }
+}
+
 export async function GET() {
   const [mail, blob] = await Promise.all([checkBrevo(), checkBlob()])
+  const brevoEvents =
+    mail.provider === 'brevo' && (process.env.BREVO_API_KEY || '').trim() && mail.keyValid
+      ? await checkBrevoEvents((process.env.BREVO_API_KEY || '').trim())
+      : { available: false, note: 'brevo key not valid — events unavailable' }
   return NextResponse.json(
-    { ok: (mail.provider === 'brevo' ? mail.keyValid && mail.senderConfirmed : Boolean(mail.provider)) && (blob.tokenPresent ? blob.tokenValid === true : true), mail, blob, checkedAt: new Date().toISOString() },
+    { ok: (mail.provider === 'brevo' ? mail.keyValid && mail.senderConfirmed : Boolean(mail.provider)) && (blob.tokenPresent ? blob.tokenValid === true : true), mail, brevoEvents, blob, checkedAt: new Date().toISOString() },
     { headers: noStore }
   )
 }
