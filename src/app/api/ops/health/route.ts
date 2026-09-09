@@ -22,6 +22,11 @@ function maskEmail(email: string | null): string | null {
   return `${head}${'*'.repeat(Math.max(2, local.length - 2))}${tail}@${domain}`
 }
 
+/** Public-safe error text: strip IPv4 addresses, cap length. */
+function safeDetail(text: string): string {
+  return text.replace(/\b\d{1,3}(\.\d{1,3}){3}\b/g, '*.*.*.*').replace(/\s+/g, ' ').slice(0, 140)
+}
+
 /** Same derivation the mailer uses for the From address. */
 function configuredFromEmail(): string | null {
   const raw =
@@ -54,7 +59,14 @@ async function checkBrevo() {
       signal: AbortSignal.timeout(10_000),
     })
     if (accRes.status === 401 || accRes.status === 403) {
-      return { ...base, keyValid: false, note: 'API key rejected by Brevo (401/403) — re-copy the key from Brevo → SMTP & API → API keys' }
+      const detail = safeDetail(await accRes.text().catch(() => ''))
+      if (/ip/i.test(detail) && /author|restrict|block|denied|not allowed|unauthor/i.test(detail)) {
+        return { ...base, keyValid: false, note: `Brevo IP AUTHORISATION is blocking this server (${detail}) — disable it in Brevo → Senders, Domains & Dedicated IPs → Authorised IPs` }
+      }
+      if (/suspended|blocked|deactiv/i.test(detail)) {
+        return { ...base, keyValid: false, note: `Brevo account issue (${detail}) — check account status/campaigns page` }
+      }
+      return { ...base, keyValid: false, note: `API key rejected by Brevo (401/403): ${detail || 'no detail'} — re-copy the key from Brevo → SMTP & API → API keys` }
     }
     if (!accRes.ok) {
       return { ...base, keyValid: null, note: `account check returned ${accRes.status}` }
