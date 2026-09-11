@@ -836,8 +836,19 @@ function ImportDialog({ open, onOpenChange, onImported, shelves, onShelfCreated 
           ...(tags.trim() ? { tags: tags.trim() } : {}),
         }),
       })
-      const data = (await res.json().catch(() => ({}))) as { document?: { id: string }; pages?: number; chars?: number; warning?: string; error?: string }
+      const data = (await res.json().catch(() => ({}))) as { document?: { id: string }; pages?: number; chars?: number; warning?: string; extractPending?: boolean; error?: string }
       if (!res.ok) throw new Error(data.error || `Import failed (${res.status})`)
+      // Large books are recorded instantly; their text extraction runs in a
+      // separate request so it can never fail (or time out) the upload itself.
+      if (data.extractPending && data.document?.id) {
+        const docId = data.document.id
+        fetch(`/api/documents/${docId}/extract`, { method: 'POST' })
+          .then((r) => (r.ok ? r.json() : null))
+          .then((j: { warning?: string } | null) => {
+            if (j?.warning) toast({ title: 'Text extraction note', description: j.warning })
+          })
+          .catch(() => {})
+      }
       return { document: data.document ?? null, pages: data.pages ?? 0, chars: data.chars ?? 0, warning: data.warning }
     }
 
