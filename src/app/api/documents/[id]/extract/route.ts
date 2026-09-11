@@ -56,7 +56,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     }
 
     const res = await fetch(doc.filePath).catch(() => null)
-    if (!res.ok) {
+    if (!res || !res.ok) {
       return NextResponse.json({ error: 'Could not read the stored file' }, { status: 502 })
     }
     const buf = Buffer.from(await res.arrayBuffer())
