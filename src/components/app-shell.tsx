@@ -1,6 +1,6 @@
 'use client'
 
-import { FaBell, FaBolt, FaBullseye, FaChartLine, FaCircleCheck, FaGear, FaIndent, FaLayerGroup, FaMagnifyingGlass, FaMoon, FaOutdent, FaPlus, FaRightFromBracket, FaShareNodes, FaSpinner, FaSun, FaTriangleExclamation, FaWandMagicSparkles, FaXmark } from 'react-icons/fa6'
+import { FaBell, FaBolt, FaBullseye, FaChartLine, FaCircleCheck, FaClock, FaGear, FaIndent, FaLayerGroup, FaMagnifyingGlass, FaMoon, FaOutdent, FaPlus, FaRightFromBracket, FaShareNodes, FaSpinner, FaSun, FaTriangleExclamation, FaWandMagicSparkles, FaXmark } from 'react-icons/fa6'
 import { cn } from '@/lib/utils'
 import { useUI, type ViewKey, NAV_ITEMS, MOBILE_TABS, NAV_GROUP_LABELS } from '@/lib/nav-config'
 import { useEffect, useState } from 'react'
@@ -8,6 +8,8 @@ import { useRouter } from 'next/navigation'
 import { useTheme } from 'next-themes'
 import { api } from '@/lib/client'
 import type { DashboardData } from '@/lib/types'
+import { recurrenceLabel } from '@/lib/reminder-span'
+import { hasTimePart } from '@/lib/plan-span'
 import { CortexMark } from '@/components/logo'
 import {
   Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetTrigger,
@@ -37,6 +39,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const setReaderMindmapOpen = useUI((s) => s.setReaderMindmapOpen)
   const mobileMoreOpen = useUI((s) => s.mobileMoreOpen)
   const setMobileMoreOpen = useUI((s) => s.setMobileMoreOpen)
+  const [mobileNotifOpen, setMobileNotifOpen] = useState(false)
   const { resolvedTheme, setTheme } = useTheme()
   const [online, setOnline] = useState(true)
   const [synced, setSynced] = useState(true)
@@ -87,7 +90,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const dueFlashcards = notifData?.briefing.dueFlashcards ?? 0
   const urgentDeadlines = notifData?.deadlines.filter((d) => d.daysLeft <= 2).length ?? 0
-  const notifCount = dueFlashcards + urgentDeadlines
+  const remindersToday = notifData?.todayReminders?.length ?? 0
+  const dueTodayCount = notifData?.todayTasks.length ?? 0
+  // badge = everything that needs attention today (the same rows the
+  // notification panel lists first) — not the whole day agenda
+  const notifCount = dueFlashcards + urgentDeadlines + remindersToday + dueTodayCount
   const collapsed = sidebarCollapsed
 
   return (
@@ -262,6 +269,31 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <span className="h-1.5 w-1.5 rounded-full bg-primary" aria-hidden />
           </div>
           {!online && <FaTriangleExclamation className="h-4 w-4 text-warning" aria-label="Offline" />}
+          {/* Notifications — same panel as the desktop sidebar, in a bottom
+              sheet (the desktop popover is too cramped on a phone) */}
+          <Sheet open={mobileNotifOpen} onOpenChange={setMobileNotifOpen}>
+            <SheetTrigger asChild>
+              <button
+                className="relative flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                aria-label={`Notifications${notifCount > 0 ? ` (${notifCount})` : ''}`}
+              >
+                <FaBell className="h-4 w-4" />
+                {notifCount > 0 && <span className="absolute right-1 top-1 flex h-2 w-2"><span className="h-2 w-2 rounded-full bg-danger" /></span>}
+              </button>
+            </SheetTrigger>
+            <SheetContent side="bottom" className="rounded-t-2xl px-4 pb-8 [&>button]:hidden">
+              <SheetHeader className="flex-row items-center justify-between p-0 pb-2 pt-4">
+                <SheetTitle className="text-left">Notifications</SheetTitle>
+                <SheetClose
+                  aria-label="Close"
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  <FaXmark className="h-4.5 w-4.5" />
+                </SheetClose>
+              </SheetHeader>
+              <NotificationPanel data={notifData} onNavigate={() => setMobileNotifOpen(false)} />
+            </SheetContent>
+          </Sheet>
           <button
             onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
             className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
@@ -433,26 +465,63 @@ function ChatToggleButton() {
   )
 }
 
-function NotificationPanel({ data }: { data: DashboardData | null }) {
+function NotificationPanel({ data, onNavigate }: { data: DashboardData | null; onNavigate?: () => void }) {
   const setView = useUI((s) => s.setView)
+  const go = (v: Parameters<typeof setView>[0]) => {
+    setView(v)
+    onNavigate?.()
+  }
   if (!data) return <div className="p-4 text-sm text-muted-foreground">Loading…</div>
-  const { deadlines, briefing } = data
+  const { deadlines, briefing, todayTasks, todayReminders } = data
+  const reminders = todayReminders ?? []
+  const nothing = deadlines.length === 0 && briefing.dueFlashcards === 0 && reminders.length === 0 && todayTasks.length === 0
   return (
     <div className="max-h-[420px] overflow-y-auto scroll-thin">
       <div className="border-b px-4 py-3 text-sm font-semibold">Notifications</div>
+      {nothing && (
+        <div className="px-4 py-6 text-center text-sm text-muted-foreground">All clear — nothing urgent.</div>
+      )}
       {briefing.dueFlashcards > 0 && (
-        <button onClick={() => setView('flashcards')} className="flex w-full items-center gap-3 border-b px-4 py-3 text-left text-sm transition-colors hover:bg-muted">
+        <button onClick={() => go('flashcards')} className="flex w-full items-center gap-3 border-b px-4 py-3 text-left text-sm transition-colors hover:bg-muted">
           <FaLayerGroup className="h-4 w-4 shrink-0 text-primary" />
           <span><b>{briefing.dueFlashcards}</b> flashcards due for review</span>
         </button>
       )}
-      {deadlines.length === 0 && briefing.dueFlashcards === 0 && (
-        <div className="px-4 py-6 text-center text-sm text-muted-foreground">All clear — nothing urgent.</div>
-      )}
+      {/* reminders for today — the same rows the 9 AM email carries */}
+      {reminders.map((r) => (
+        <button
+          key={`rem-${r.id}`}
+          onClick={() => go('plans')}
+          className="flex w-full items-start gap-3 border-b px-4 py-3 text-left text-sm transition-colors last:border-0 hover:bg-muted"
+        >
+          <FaBell className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+          <span className="min-w-0">
+            <span className="block truncate font-medium">{r.title}</span>
+            <span className="block text-xs text-muted-foreground">Reminder · {recurrenceLabel(r.recurrence, r.startDate)}</span>
+          </span>
+        </button>
+      ))}
+      {/* individual + plan tasks due today — mirrors the email's "Due today" */}
+      {todayTasks.map((t) => (
+        <button
+          key={`task-${t.id}`}
+          onClick={() => go('plans')}
+          className="flex w-full items-start gap-3 border-b px-4 py-3 text-left text-sm transition-colors last:border-0 hover:bg-muted"
+        >
+          <FaClock className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+          <span className="min-w-0">
+            <span className="block truncate font-medium">{t.title}</span>
+            <span className="block text-xs text-muted-foreground">
+              Due today{t.dueDate && hasTimePart(t.dueDate) ? ` · ${new Date(t.dueDate).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}` : ''}
+              {t.plan?.title ? ` · ${t.plan.title}` : ''}
+            </span>
+          </span>
+        </button>
+      ))}
       {deadlines.map((d) => (
         <button
           key={d.kind + d.id}
-          onClick={() => setView(d.kind === 'opportunity' ? 'career' : d.kind === 'goal' ? 'goals' : 'plans')}
+          onClick={() => go(d.kind === 'opportunity' ? 'career' : d.kind === 'goal' ? 'goals' : 'plans')}
           className="flex w-full items-start gap-3 border-b px-4 py-3 text-left text-sm transition-colors last:border-0 hover:bg-muted"
         >
           <span className={cn('mt-1.5 h-2 w-2 shrink-0 rounded-full', d.daysLeft < 0 ? 'bg-danger' : d.daysLeft <= 2 ? 'bg-warning' : 'bg-muted-foreground/40')} />

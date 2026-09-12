@@ -160,14 +160,14 @@ function taskRow(t: BriefingTask): string {
   const meta = [t.when, t.wasDue ? `was due ${t.wasDue}` : null, t.plan ? `Plan · ${t.plan}` : null]
     .filter(Boolean)
     .join(' · ')
-  return `<div style="margin:0 0 6px;padding:9px 12px;border:1px solid ${t.wasDue ? '#fecdd3' : '#e4e4e7'};border-left:3px solid ${t.wasDue ? '#e11d48' : '#a1a1aa'};border-radius:10px;">
+  return `<div class="row" style="margin:0 0 6px;padding:9px 12px;border:1px solid ${t.wasDue ? '#fecdd3' : '#e4e4e7'};border-left:3px solid ${t.wasDue ? '#e11d48' : '#a1a1aa'};border-radius:10px;">
     <div style="font-size:14px;font-weight:600;color:#18181b;line-height:1.4;">${escapeHtml(t.title)}${t.high ? PRIORITY_CHIP('HIGH', '#fee2e2', '#b91c1c') : ''}</div>
     ${meta ? `<div style="margin-top:2px;font-size:12px;color:${t.wasDue ? '#be123c' : '#71717a'};">${meta}</div>` : ''}
   </div>`
 }
 
 function reminderRow(r: BriefingReminder): string {
-  return `<div style="margin:0 0 6px;padding:9px 12px;border:1px solid #fde68a;border-left:3px solid #d97706;border-radius:10px;">
+  return `<div class="row" style="margin:0 0 6px;padding:9px 12px;border:1px solid #fde68a;border-left:3px solid #d97706;border-radius:10px;">
     <div style="font-size:14px;font-weight:600;color:#18181b;line-height:1.4;">${escapeHtml(r.title)}</div>
     <div style="margin-top:2px;font-size:12px;color:#92400e;">${escapeHtml(r.cadence)}</div>
   </div>`
@@ -180,7 +180,7 @@ function horizonRow(h: BriefingHorizon): string {
       : h.kind === 'goal'
         ? PRIORITY_CHIP('GOAL', '#f3e8ff', '#7e22ce')
         : ''
-  return `<div style="margin:0 0 6px;padding:9px 12px;border:1px solid #e4e4e7;border-left:3px solid #7c3aed;border-radius:10px;">
+  return `<div class="row" style="margin:0 0 6px;padding:9px 12px;border:1px solid #e4e4e7;border-left:3px solid #7c3aed;border-radius:10px;">
     <div style="font-size:14px;font-weight:600;color:#18181b;line-height:1.4;">${escapeHtml(h.title)}${tag}</div>
     <div style="margin-top:2px;font-size:12px;color:#71717a;">${escapeHtml(h.when)}</div>
   </div>`
@@ -198,18 +198,35 @@ export function briefingEmailHtml(b: Omit<Briefing, 'subject' | 'html' | 'text'>
   if (b.reminders.length) sections.push(sectionHeader('Reminders for today', b.reminders.length, '#d97706') + b.reminders.map(reminderRow).join(''))
   if (b.horizon.length) sections.push(sectionHeader('On the horizon', b.horizon.length, '#7c3aed') + b.horizon.map(horizonRow).join(''))
 
+  // Mobile: clients like iOS Mail / Gmail auto-inflate text on narrow
+  // viewports (the "everything looks huge on my phone" effect) and the
+  // desktop paddings waste half a 390px screen. Inline styles stay as the
+  // fallback — the <style> block only refines them where supported.
   return `<!doctype html>
-<html><body style="margin:0;padding:32px;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-  <div style="max-width:480px;margin:0 auto;background:#ffffff;border-radius:16px;padding:28px 28px 20px;border:1px solid #e4e4e7;">
-    <p style="margin:0 0 2px;font-size:15px;font-weight:700;color:#18181b;">${SITE_NAME}</p>
-    <h1 style="margin:0 0 4px;font-size:20px;color:#18181b;">Good morning, ${escapeHtml(first)}</h1>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  @media only screen and (max-width:620px) {
+    .card { padding:20px 14px 16px !important; border-radius:12px !important; }
+    .row { padding:8px 10px !important; border-radius:8px !important; }
+    .title { font-size:18px !important; }
+    .cta a { display:block !important; width:100% !important; box-sizing:border-box !important; text-align:center !important; }
+    .foot { padding:0 8px !important; }
+  }
+</style>
+</head>
+<body style="margin:0;padding:20px 10px;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;text-size-adjust:100%;">
+  <div class="card" style="max-width:480px;margin:0 auto;background:#ffffff;border-radius:16px;padding:28px 28px 20px;border:1px solid #e4e4e7;">
+    <p style="margin:0 0 2px;font-size:14px;font-weight:700;color:#18181b;">${SITE_NAME}</p>
+    <h1 class="title" style="margin:0 0 4px;font-size:20px;color:#18181b;">Good morning, ${escapeHtml(first)}</h1>
     <p style="margin:0 0 6px;font-size:13px;line-height:1.6;color:#71717a;">Your deadlines and reminders for today, in one pass.</p>
     ${sections.join('')}
-    <div style="margin:24px 0 4px;text-align:center;">
-      <a href="${SITE_URL}/app" style="display:inline-block;background:#18181b;color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:10px 22px;border-radius:10px;">Open Cortex</a>
+    <div class="cta" style="margin:24px 0 4px;text-align:center;">
+      <a href="${SITE_URL}/app" style="display:inline-block;background:#18181b;color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:11px 22px;border-radius:10px;">Open Cortex</a>
     </div>
   </div>
-  <p style="max-width:480px;margin:12px auto 0;font-size:11px;line-height:1.6;color:#a1a1aa;text-align:center;">
+  <p class="foot" style="max-width:480px;margin:12px auto 0;font-size:11px;line-height:1.6;color:#a1a1aa;text-align:center;">
     Sent every morning while you have deadlines or reminders coming up.
     <a href="${SITE_URL}/app" style="color:#a1a1aa;">Manage your agenda</a>.
   </p>

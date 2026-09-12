@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getSessionUser, unauthorized } from '@/lib/auth-server'
-import { copyPlanSubtree, summarizeTemplate, type TemplateSummary } from '@/lib/plan-template'
+import { copyPlanSubtree, summarizeTemplate, templateSubtreeIds, type TemplateSummary } from '@/lib/plan-template'
 
 const TEMPLATES: {
   id: string
@@ -49,11 +49,59 @@ const TEMPLATES: {
   },
 ]
 
-// GET /api/plans/templates — starter templates + the user's own saved ones
-export async function GET() {
+// GET /api/plans/templates — starter templates + the user's own saved ones.
+// GET /api/plans/templates?templateId=user:<cuid> — one template's full
+//   blueprint (sub-plan tree + tasks) for the template editor.
+export async function GET(req: NextRequest) {
   try {
     const user = await getSessionUser()
     if (!user) return unauthorized()
+
+    const templateId = req.nextUrl.searchParams.get('templateId')
+    if (templateId) {
+      if (!templateId.startsWith('user:')) {
+        return NextResponse.json({ error: 'Starter templates cannot be edited' }, { status: 400 })
+      }
+      const root = await db.plan.findFirst({
+        where: { id: templateId.slice('user:'.length), userId: user.id, timeframe: 'template', parentId: null },
+        select: { id: true, title: true, notes: true },
+      })
+      if (!root) return NextResponse.json({ error: 'Unknown template' }, { status: 404 })
+
+      // the blueprint is the (single) child of the template root
+      const blueprint = await db.plan.findFirst({
+        where: { parentId: root.id, userId: user.id },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true },
+      })
+      if (!blueprint) return NextResponse.json({ template: { id: root.id, name: root.title, description: root.notes ?? '' }, tree: null })
+
+      const ids = await templateSubtreeIds(user.id, blueprint.id)
+      const [planRows, taskRows] = await Promise.all([
+        db.plan.findMany({
+          where: { userId: user.id, id: { in: ids } },
+          select: { id: true, title: true, timeframe: true, parentId: true },
+          orderBy: { createdAt: 'asc' },
+        }),
+        db.task.findMany({
+          where: { userId: user.id, planId: { in: ids } },
+          select: { id: true, title: true, estimate: true, priority: true, planId: true },
+          orderBy: [{ order: 'asc' }, { createdAt: 'asc' }],
+        }),
+      ])
+
+      type Node = { id: string; title: string; timeframe: string; children: Node[]; tasks: { id: string; title: string; estimate: number; priority: string }[] }
+      const byId = new Map<string, Node>(planRows.map((p) => [p.id, { id: p.id, title: p.title, timeframe: p.timeframe, children: [], tasks: [] }]))
+      const tree: Node | null = byId.get(blueprint.id) ?? null
+      for (const p of planRows) {
+        if (p.parentId && byId.has(p.parentId)) byId.get(p.parentId)!.children.push(byId.get(p.id)!)
+      }
+      for (const t of taskRows) {
+        if (t.planId) byId.get(t.planId)?.tasks.push({ id: t.id, title: t.title, estimate: t.estimate, priority: t.priority })
+      }
+
+      return NextResponse.json({ template: { id: root.id, name: root.title, description: root.notes ?? '' }, tree })
+    }
 
     const roots = await db.plan.findMany({
       where: { userId: user.id, timeframe: 'template', parentId: null },
@@ -66,6 +114,39 @@ export async function GET() {
   } catch (e) {
     console.error('GET /api/plans/templates error', e)
     return NextResponse.json({ error: 'Failed to load templates' }, { status: 500 })
+  }
+}
+
+// PATCH /api/plans/templates — rename / re-describe a saved template.
+//   { templateId: 'user:<cuid>', name?, description? }
+export async function PATCH(req: NextRequest) {
+  try {
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
+    const body = await req.json()
+    const templateId: string = body?.templateId
+    if (typeof templateId !== 'string' || !templateId.startsWith('user:')) {
+      return NextResponse.json({ error: 'Starter templates cannot be edited' }, { status: 400 })
+    }
+    const root = await db.plan.findFirst({
+      where: { id: templateId.slice('user:'.length), userId: user.id, timeframe: 'template', parentId: null },
+      select: { id: true },
+    })
+    if (!root) return NextResponse.json({ error: 'Unknown template' }, { status: 404 })
+
+    const data: { title?: string; notes?: string | null } = {}
+    if (typeof body?.name === 'string' && body.name.trim()) data.title = body.name.trim().slice(0, 120)
+    if ('description' in body) {
+      data.notes = typeof body.description === 'string' && body.description.trim() ? body.description.trim().slice(0, 300) : null
+    }
+    if (Object.keys(data).length === 0) return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })
+
+    await db.plan.update({ where: { id: root.id }, data })
+    return NextResponse.json({ ok: true })
+  } catch (e) {
+    console.error('PATCH /api/plans/templates error', e)
+    return NextResponse.json({ error: 'Failed to update template' }, { status: 500 })
   }
 }
 

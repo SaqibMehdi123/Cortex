@@ -163,17 +163,23 @@ Accounts with nothing on the agenda get **no email** — no empty pings.
 
 ### Schedule & security
 
-`vercel.json` registers one Vercel cron:
+**You don't need to add anything by hand.** The schedule lives in `vercel.json`
+in the repo:
 
 ```json
 { "crons": [{ "path": "/api/cron/morning", "schedule": "0 4 * * *" }] }
 ```
 
+Vercel reads that file on every deploy and registers/updates the cron job
+automatically (Project → **Settings → Cron Jobs** lists it). If the 9 AM email
+arrives, the cron is working — there is nothing else to configure.
+
 `0 4 * * *` fires at 04:00 UTC — **09:00 in Asia/Karachi**, the owner's
 timezone. To move the delivery time, change that schedule (minute hour * * *)
 keeping in mind Vercel evaluates it in UTC.
 
-Set `CRON_SECRET` in Vercel → Settings → Environment Variables (generate with
+Optional hardening (not required for the cron to run): set `CRON_SECRET` in
+Vercel → Settings → Environment Variables (generate with
 `openssl rand -hex 32`). Vercel then signs every cron invocation with
 `Authorization: Bearer $CRON_SECRET`, and the route rejects everyone else.
 Without the secret the route falls back to the scheduler's `x-vercel-cron`

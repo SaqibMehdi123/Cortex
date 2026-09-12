@@ -68,9 +68,10 @@ export function PlansView() {
     `/api/tasks?date=${selectedDay}&tzOffset=${tzOffset}`,
     [selectedDay]
   )
-  // Tasks with no plan (quick-capture home). Undated ones surface in the day
-  // agenda's "Unscheduled" group on today; dated ones show on their day.
-  const unassignedTasks = useApi<{ tasks: Task[] }>(`/api/tasks?unassigned=1&status=open`, [])
+  // Tasks with no plan (quick-capture home AND the kanban's individual
+  // column source). ALL statuses — the kanban's Done column needs them too;
+  // the day agenda's "Unscheduled" group filters done ones out itself.
+  const unassignedTasks = useApi<{ tasks: Task[] }>(`/api/tasks?unassigned=1`, [])
   // Reminders — filtered per selected day by the shared reminder-span rules.
   const reminders = useApi<{ reminders: Reminder[] }>('/api/reminders', [])
   const activeReminders = useMemo(
@@ -296,10 +297,10 @@ export function PlansView() {
           {/* Undated standalone tasks (e.g. quick-capture without a day) —
               visible on today's agenda so they can't silently vanish; drag
               one onto a day above to schedule it. */}
-          {selectedDay === todayISO() && (unassignedTasks.data?.tasks.filter((t) => !t.dueDate).length ?? 0) > 0 && (
+          {selectedDay === todayISO() && (unassignedTasks.data?.tasks.filter((t) => !t.dueDate && t.status !== 'done').length ?? 0) > 0 && (
             <div className="space-y-1.5 pt-1">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Unscheduled — no date yet</p>
-              {unassignedTasks.data!.tasks.filter((t) => !t.dueDate).map((t) => (
+              {unassignedTasks.data!.tasks.filter((t) => !t.dueDate && t.status !== 'done').map((t) => (
                 <TaskRow key={t.id} task={t} onToggle={toggleTask} onSnooze={snoozeTask} onEdit={openEdit} draggable />
               ))}
             </div>
@@ -368,8 +369,16 @@ export function PlansView() {
         </div>
       ) : null}
 
-      {/* ── Kanban mode ── */}
-      {mode === 'kanban' && <KanbanBoard plans={data.plans} onToggle={toggleTask} onEditTask={openEdit} onReload={reload} />}
+      {/* ── Kanban mode — plan tasks AND individual (no-plan) tasks. ── */}
+      {mode === 'kanban' && (
+        <KanbanBoard
+          plans={data.plans}
+          individual={unassignedTasks.data?.tasks.filter((t) => !t.planId) ?? []}
+          onToggle={toggleTask}
+          onEditTask={openEdit}
+          onReload={reloadAll}
+        />
+      )}
 
       <EditTaskDialog open={editOpen} task={editingTask} plans={allPlansFlat} onClose={() => { setEditOpen(false); setEditingTask(null) }} onSaved={reloadAll} />
       <PlanDialog open={addOpen} onOpenChange={setAddOpen} plan={null} allPlans={allPlansFlat} onSaved={reload} />
@@ -1257,23 +1266,28 @@ function EditTaskDialog({ open, task, plans, onClose, onSaved }: {
 }
 
 // ─── Kanban board (todo / doing / done) ────────────────────────────
-function KanbanBoard({ plans, onToggle, onEditTask, onReload }: { plans: PlanNode[]; onToggle: (t: Task) => void; onEditTask: (t: Task) => void; onReload: () => void }) {
+function KanbanBoard({ plans, individual, onToggle, onEditTask, onReload }: { plans: PlanNode[]; individual: Task[]; onToggle: (t: Task) => void; onEditTask: (t: Task) => void; onReload: () => void }) {
   const columns: { key: string; label: string }[] = [
     { key: 'todo', label: 'To do' },
     { key: 'doing', label: 'In progress' },
     { key: 'done', label: 'Done' },
   ]
+  // plan-tree tasks carry their plan's name; individual (planId=null) tasks
+  // — quick capture, day-agenda adds — have none. Both belong on the board:
+  // status lives on the task, not on the plan it may or may not have.
   const allTasks = useMemo(() => {
-    const out: Task[] = []
+    const out: { t: Task; planTitle: string | null }[] = []
     const walk = (nodes: PlanNode[]) => {
       for (const n of nodes) {
-        for (const t of n.tasks ?? []) out.push(t)
+        for (const t of n.tasks ?? []) out.push({ t, planTitle: n.title })
         walk((n.children as PlanNode[]) ?? [])
       }
     }
     walk(plans)
+    for (const t of individual) out.push({ t, planTitle: null })
     return out
-  }, [plans])
+  }, [plans, individual])
+  const inColumn = (key: string) => allTasks.filter(({ t }) => t.status === key)
 
   return (
     <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
@@ -1292,10 +1306,10 @@ function KanbanBoard({ plans, onToggle, onEditTask, onReload }: { plans: PlanNod
           }}
         >
           <p className="px-1 pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            {col.label} <span className="ml-1 text-[10px] font-normal">{allTasks.filter((t) => t.status === col.key).length}</span>
+            {col.label} <span className="ml-1 text-[10px] font-normal">{inColumn(col.key).length}</span>
           </p>
           <div className="space-y-2">
-            {allTasks.filter((t) => t.status === col.key).map((t) => (
+            {inColumn(col.key).map(({ t, planTitle }) => (
               <motion.div key={t.id} layout initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} transition={{ type: 'spring', stiffness: 380, damping: 30 }}>
                 <div
                   draggable
@@ -1315,7 +1329,7 @@ function KanbanBoard({ plans, onToggle, onEditTask, onReload }: { plans: PlanNod
                     />
                     <div className="min-w-0 flex-1">
                       <p className={cn('text-sm font-medium leading-snug', t.status === 'done' && 'line-through opacity-60')}>{t.title}</p>
-                      <div className="mt-1 flex items-center gap-2 text-[10px] text-muted-foreground">
+                      <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
                         <PriorityDot priority={t.priority} /> ~{t.estimate}m
                         {t.dueDate && (
                           <span className="inline-flex items-center gap-1">
@@ -1324,13 +1338,16 @@ function KanbanBoard({ plans, onToggle, onEditTask, onReload }: { plans: PlanNod
                             {hasTimePart(t.dueDate) && <span className="tabular-nums">{new Date(t.dueDate).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</span>}
                           </span>
                         )}
+                        <span className={cn('ml-auto max-w-[110px] truncate rounded-full px-1.5 py-0.5', planTitle ? 'bg-primary/10 text-primary' : 'bg-muted')}>
+                          {planTitle ?? 'Individual'}
+                        </span>
                       </div>
                     </div>
                   </div>
                 </div>
               </motion.div>
             ))}
-            {allTasks.filter((t) => t.status === col.key).length === 0 && (
+            {inColumn(col.key).length === 0 && (
               <p className="py-6 text-center text-xs text-muted-foreground">Drag tasks here</p>
             )}
           </div>
@@ -1518,6 +1535,7 @@ function TemplatesDialog({ open, onOpenChange, onApplied }: { open: boolean; onO
   const [templates, setTemplates] = useState<BuiltinTemplate[] | null>(null)
   const [userTemplates, setUserTemplates] = useState<UserTemplate[] | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [editing, setEditing] = useState<UserTemplate | null>(null)
   const { toast } = useToast()
 
   async function fetchAll() {
@@ -1591,6 +1609,9 @@ function TemplatesDialog({ open, onOpenChange, onApplied }: { open: boolean; onO
                       {t.planCount} nested plan{t.planCount === 1 ? '' : 's'} · {t.taskCount} task{t.taskCount === 1 ? '' : 's'}
                     </span>
                   </span>
+                  <Button size="sm" variant="outline" className="px-2.5" onClick={() => setEditing(t)} disabled={busyId === t.id} aria-label={`Edit template ${t.name}`}>
+                    <FaPencil className="h-3.5 w-3.5" />
+                  </Button>
                   <Button size="sm" variant="outline" onClick={() => apply(`user:${t.id}`)} disabled={busyId === t.id}>
                     {busyId === `user:${t.id}` ? <FaSpinner className="h-4 w-4 animate-spin" /> : 'Apply'}
                   </Button>
@@ -1609,6 +1630,7 @@ function TemplatesDialog({ open, onOpenChange, onApplied }: { open: boolean; onO
           {/* starter templates */}
           <section className="space-y-2">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Starter templates</h3>
+            <p className="text-[11px] text-muted-foreground">Built into Cortex — apply them as-is; only your own saved templates can be edited.</p>
             {(templates ?? []).map((t) => (
               <button
                 key={t.id}
@@ -1630,7 +1652,297 @@ function TemplatesDialog({ open, onOpenChange, onApplied }: { open: boolean; onO
           </section>
         </div>
       </DialogContent>
+      <EditTemplateDialog template={editing} onClose={() => setEditing(null)} onSaved={fetchAll} />
     </Dialog>
+  )
+}
+
+// ─── Edit-template dialog — rename a saved template and rework its
+//     blueprint (sub-plan names, tasks: add / rename / remove). Changes
+//     only the STORED blueprint — plans already applied keep their copy. ──
+type TemplateTaskLite = { id: string; title: string; estimate: number; priority: string }
+type TemplatePlanNode = { id: string; title: string; timeframe: string; children: TemplatePlanNode[]; tasks: TemplateTaskLite[] }
+type TemplateDetail = { template: { id: string; name: string; description: string }; tree: TemplatePlanNode | null }
+
+function EditTemplateDialog({ template, onClose, onSaved }: { template: UserTemplate | null; onClose: () => void; onSaved: () => void }) {
+  const [detail, setDetail] = useState<TemplateDetail | null>(null)
+  const [name, setName] = useState('')
+  const [description, setDescription] = useState('')
+  const [busy, setBusy] = useState(false)
+  const { toast } = useToast()
+
+  const reloadDetail = useCallback(async (id: string) => {
+    try {
+      const d = await api.get<TemplateDetail>(`/api/plans/templates?templateId=user:${id}`)
+      setDetail(d)
+      setDescription(d.template.description)
+    } catch {
+      toast({ title: 'Could not load template', variant: 'destructive' })
+    }
+  }, [toast])
+
+  useEffect(() => {
+    if (template) {
+      setName(template.name)
+      setDescription('')
+      setDetail(null)
+      void reloadDetail(template.id)
+    }
+  }, [template, reloadDetail])
+
+  async function saveMeta() {
+    if (!template || !name.trim()) return
+    setBusy(true)
+    try {
+      await api.patch('/api/plans/templates', { templateId: `user:${template.id}`, name: name.trim(), description })
+      toast({ title: 'Template updated' })
+      onSaved()
+    } catch {
+      toast({ title: 'Could not update template', variant: 'destructive' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Dialog open={!!template} onOpenChange={(v) => { if (!v) onClose() }}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><FaClone className="h-4 w-4 text-primary" /> Edit template</DialogTitle>
+          <DialogDescription>
+            Rework the stored blueprint — names, sub-plans and tasks. Plans you already applied keep their copy; the next <b>Apply</b> uses this.
+          </DialogDescription>
+        </DialogHeader>
+
+        {!template ? null : (
+          <div className="space-y-3">
+            <div className="grid gap-3 sm:grid-cols-[1fr_1fr]">
+              <div>
+                <label className="text-xs text-muted-foreground">Template name</label>
+                <Input value={name} onChange={(e) => setName(e.target.value)} className="mt-1" aria-label="Template name" />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Description</label>
+                <Input value={description} onChange={(e) => setDescription(e.target.value)} className="mt-1" aria-label="Template description" placeholder="When is this blueprint useful?" />
+              </div>
+            </div>
+
+            <div className="max-h-[40vh] space-y-1 overflow-y-auto rounded-xl border bg-muted/20 p-2 scroll-thin">
+              {detail === null ? (
+                <p className="py-4 text-center text-sm text-muted-foreground">Loading blueprint…</p>
+              ) : detail.tree === null ? (
+                <p className="py-4 text-center text-sm text-muted-foreground">This template has no blueprint left inside.</p>
+              ) : (
+                <TplPlanRow node={detail.tree} depth={0} isRoot onChanged={() => template && void reloadDetail(template.id)} />
+              )}
+            </div>
+          </div>
+        )}
+
+        <div className="flex justify-between gap-2">
+          <Button variant="ghost" onClick={onClose}>Done</Button>
+          <Button onClick={saveMeta} disabled={busy || !name.trim() || !template}>
+            {busy && <FaSpinner className="mr-1.5 h-4 w-4 animate-spin" />} Save details
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// one blueprint plan row: rename inline, delete subtree, tasks below it
+function TplPlanRow({ node, depth, isRoot, onChanged }: { node: TemplatePlanNode; depth: number; isRoot: boolean; onChanged: () => void }) {
+  const { toast } = useToast()
+  const [renaming, setRenaming] = useState(false)
+  const [busy, setBusy] = useState(false)
+
+  async function saveRename(title: string) {
+    const t = title.trim()
+    if (!t || t === node.title) return setRenaming(false)
+    setBusy(true)
+    try {
+      await api.patch(`/api/plans/${node.id}`, { title: t })
+      setRenaming(false)
+      onChanged()
+    } catch {
+      toast({ title: 'Could not rename', variant: 'destructive' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function removePlan() {
+    if (!window.confirm(`Remove “${node.title}” — and its sub-plans and tasks — from this template?`)) return
+    setBusy(true)
+    try {
+      await api.del(`/api/plans/${node.id}`)
+      onChanged()
+    } catch {
+      toast({ title: 'Could not remove plan', variant: 'destructive' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div style={{ marginLeft: depth > 0 ? 14 : 0 }} className={cn(depth > 0 && 'border-l pl-2')}>
+      <div className="group flex items-center gap-1.5 rounded-lg px-1 py-1 hover:bg-muted/60">
+        <FaList className={cn('h-3 w-3 shrink-0', isRoot ? 'text-primary' : 'text-muted-foreground')} />
+        {renaming ? (
+          <Input
+            defaultValue={node.title}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') saveRename((e.target as HTMLInputElement).value)
+              if (e.key === 'Escape') setRenaming(false)
+            }}
+            onBlur={(e) => saveRename(e.target.value)}
+            disabled={busy}
+            className="h-7 text-sm"
+            autoFocus
+            aria-label="Plan name"
+          />
+        ) : (
+          <span className="min-w-0 flex-1 truncate text-sm font-semibold">{node.title}</span>
+        )}
+        <span className="hidden shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground group-hover:inline sm:inline">{node.timeframe}</span>
+        {renaming ? (
+          <button onClick={() => setRenaming(false)} className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground" aria-label="Stop renaming"><FaXmark className="h-3 w-3" /></button>
+        ) : (
+          <button onClick={() => setRenaming(true)} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100" aria-label={`Rename ${node.title}`}><FaPencil className="h-3 w-3" /></button>
+        )}
+        {!isRoot && (
+          <button onClick={removePlan} disabled={busy} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:text-danger group-hover:opacity-100" aria-label={`Remove ${node.title} from template`}>
+            {busy ? <FaSpinner className="h-3 w-3 animate-spin" /> : <FaTrashCan className="h-3 w-3" />}
+          </button>
+        )}
+      </div>
+      <div className={cn(isRoot ? 'pl-3' : 'pl-4')}>
+        {node.tasks.map((t) => (
+          <TplTaskRow key={t.id} task={t} onChanged={onChanged} />
+        ))}
+        <TplAddTask planId={node.id} onChanged={onChanged} />
+        {node.children.map((c) => (
+          <TplPlanRow key={c.id} node={c} depth={depth + 1} isRoot={false} onChanged={onChanged} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function TplTaskRow({ task, onChanged }: { task: TemplateTaskLite; onChanged: () => void }) {
+  const { toast } = useToast()
+  const [renaming, setRenaming] = useState(false)
+  const [busy, setBusy] = useState(false)
+
+  async function saveRename(title: string) {
+    const t = title.trim()
+    if (!t || t === task.title) return setRenaming(false)
+    setBusy(true)
+    try {
+      await api.patch(`/api/tasks/${task.id}`, { title: t })
+      setRenaming(false)
+      onChanged()
+    } catch {
+      toast({ title: 'Could not rename task', variant: 'destructive' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function removeTask() {
+    setBusy(true)
+    try {
+      await api.del(`/api/tasks/${task.id}`)
+      onChanged()
+    } catch {
+      toast({ title: 'Could not remove task', variant: 'destructive' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="group flex items-center gap-1.5 rounded-lg px-1 py-0.5 hover:bg-muted/60">
+      <span className="h-1 w-1 shrink-0 rounded-full bg-muted-foreground/50" aria-hidden />
+      {renaming ? (
+        <Input
+          defaultValue={task.title}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') saveRename((e.target as HTMLInputElement).value)
+            if (e.key === 'Escape') setRenaming(false)
+          }}
+          onBlur={(e) => saveRename(e.target.value)}
+          disabled={busy}
+          className="h-7 text-sm"
+          autoFocus
+          aria-label="Task title"
+        />
+      ) : (
+        <span className="min-w-0 flex-1 truncate text-[13px]">{task.title}</span>
+      )}
+      {renaming ? (
+        <button onClick={() => setRenaming(false)} className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground" aria-label="Stop renaming"><FaXmark className="h-3 w-3" /></button>
+      ) : (
+        <>
+          <button onClick={() => setRenaming(true)} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100" aria-label={`Rename task ${task.title}`}><FaPencil className="h-3 w-3" /></button>
+          <button onClick={removeTask} disabled={busy} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:text-danger group-hover:opacity-100" aria-label={`Remove task ${task.title}`}>
+            {busy ? <FaSpinner className="h-3 w-3 animate-spin" /> : <FaTrashCan className="h-3 w-3" />}
+          </button>
+        </>
+      )}
+    </div>
+  )
+}
+
+function TplAddTask({ planId, onChanged }: { planId: string; onChanged: () => void }) {
+  const [open, setOpen] = useState(false)
+  const [title, setTitle] = useState('')
+  const [busy, setBusy] = useState(false)
+  const { toast } = useToast()
+
+  async function add() {
+    if (!title.trim()) return
+    setBusy(true)
+    try {
+      await api.post('/api/tasks', { title: title.trim(), planId })
+      setTitle('')
+      setOpen(false)
+      onChanged()
+    } catch {
+      toast({ title: 'Could not add task', variant: 'destructive' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} className="flex items-center gap-1 rounded-lg px-1 py-0.5 text-[11px] text-muted-foreground transition-colors hover:text-primary" aria-label="Add task to this plan in the template">
+        <FaPlus className="h-3 w-3" /> Add task
+      </button>
+    )
+  }
+  return (
+    <div className="flex items-center gap-1 py-0.5">
+      <Input
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') add()
+          if (e.key === 'Escape') { setTitle(''); setOpen(false) }
+        }}
+        placeholder="New task title…"
+        className="h-7 text-[13px]"
+        autoFocus
+        aria-label="New task title"
+      />
+      <button onClick={add} disabled={busy || !title.trim()} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-primary hover:bg-muted" aria-label="Add task">
+        {busy ? <FaSpinner className="h-3.5 w-3.5 animate-spin" /> : <FaCheck className="h-3.5 w-3.5" />}
+      </button>
+      <button onClick={() => { setTitle(''); setOpen(false) }} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted" aria-label="Cancel adding task">
+        <FaXmark className="h-3.5 w-3.5" />
+      </button>
+    </div>
   )
 }
 
