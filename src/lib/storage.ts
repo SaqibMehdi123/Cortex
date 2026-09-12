@@ -18,7 +18,7 @@
 // Anything else found in the column is treated as an unknown legacy ref and
 // only ever surfaces as "no file", never as a fetch target (SSRF-safe).
 
-import { S3Client, PutObjectCommand, GetObjectCommand, HeadObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3'
+import { S3Client, PutObjectCommand, GetObjectCommand, HeadObjectCommand, DeleteObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 
 export type StorageMode = 'r2' | 'blob' | 'disk'
@@ -167,15 +167,85 @@ export async function r2GetBuffer(key: string): Promise<Buffer | null> {
   }
 }
 
-/** One-shot verification for the ops health check (credentials + bucket). */
-export async function r2ConnectionOk(): Promise<boolean> {
+/**
+ * One-shot verification for the ops health check. Uses ListObjectsV2
+ * (MaxKeys 1 — read-only, side-effect-free, works on empty buckets) instead
+ * of a HEAD probe, because HEAD returns 404 for BOTH "key missing" (healthy)
+ * and "bucket missing" (broken) — which masked a mistyped R2_BUCKET as ok.
+ *
+ * Returns the S3 error code verbatim (codes are protocol constants, safe to
+ * show; error MESSAGES are NOT — they can echo the access key id/signature).
+ */
+export type R2ConnectionResult = {
+  ok: boolean
+  /** S3/SDK error code, or 'OK' / 'NOT_CONFIGURED'. */
+  code: string
+  /** Operator-facing hint naming the env var to fix. No secrets. */
+  hint: string
+}
+
+export async function r2ConnectionCheck(): Promise<R2ConnectionResult> {
+  if (!r2Configured()) {
+    return { ok: false, code: 'NOT_CONFIGURED', hint: 'one or more R2_* environment variables are missing' }
+  }
   try {
-    await r2().send(new HeadObjectCommand({ Bucket: r2Bucket(), Key: 'health-probe-nonexistent' }))
-    return true // 200 would mean someone stored a probe object; either way auth works
+    await r2().send(new ListObjectsV2Command({ Bucket: r2Bucket(), MaxKeys: 1 }))
+    return { ok: true, code: 'OK', hint: 'credentials work against the bucket' }
   } catch (e) {
-    const status = (e as { $metadata?: { httpStatusCode?: number } })?.$metadata?.httpStatusCode
-    // 404 = credentials + bucket fine, object just absent (the expected case)
-    return status === 404 || (e as { name?: string })?.name === 'NotFound'
+    const err = e as {
+      name?: string
+      code?: string
+      $metadata?: { httpStatusCode?: number }
+    }
+    const status = err?.$metadata?.httpStatusCode
+    const code = err?.code || err?.name || 'UNKNOWN'
+
+    if (code === 'SignatureDoesNotMatch') {
+      return {
+        ok: false,
+        code,
+        hint:
+          'R2_SECRET_ACCESS_KEY is wrong — re-copy the "Secret Access Key" shown at token creation (NOT the long eyJ… "Token value"; the secret is only shown once)',
+      }
+    }
+    if (code === 'InvalidAccessKeyId') {
+      return {
+        ok: false,
+        code,
+        hint: 'R2_ACCESS_KEY_ID does not exist for this account — re-copy the S3-style "Access Key ID" from Manage R2 API Tokens',
+      }
+    }
+    if (code === 'AccessDenied' || status === 403) {
+      return {
+        ok: false,
+        code,
+        hint: 'token valid but denied on this bucket — the API token needs "Object Read & Write" scoped to (at least) this bucket',
+      }
+    }
+    if (code === 'NoSuchBucket' || status === 404) {
+      return {
+        ok: false,
+        code,
+        hint: 'R2_BUCKET does not match an existing bucket — check exact name and case (bucket ids and account ids are not bucket names)',
+      }
+    }
+    if (
+      code === 'NetworkingError' ||
+      code === 'ENOTFOUND' ||
+      code === 'EAI_AGAIN' ||
+      code === 'ERR_INVALID_URL' ||
+      code === 'InvalidEndpoint' ||
+      code === 'TypeError' ||
+      status === 400
+    ) {
+      return {
+        ok: false,
+        code,
+        hint:
+          'endpoint does not resolve — R2_ACCOUNT_ID must be the 32-hex Account ID (dash.cloudflare.com → R2 → Account details), not the endpoint URL and not the bucket id',
+      }
+    }
+    return { ok: false, code, hint: `unexpected S3 error — verify all four R2_* values (status ${status ?? 'n/a'})` }
   }
 }
 

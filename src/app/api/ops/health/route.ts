@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { activeMailProvider, configuredFromEmail } from '@/lib/mailer'
-import { r2Configured, r2ConnectionOk } from '@/lib/storage'
+import { r2Configured, r2ConnectionCheck } from '@/lib/storage'
 
 // GET /api/ops/health — operator diagnostic for the two external services
 // Cortex depends on at runtime (transactional email + PDF Blob storage).
@@ -227,22 +227,25 @@ async function checkBrevoEvents(key: string) {
   }
 }
 
-/** Public-safe R2 check: booleans only, no bucket names, no endpoints. */
+/** Public-safe R2 check: booleans + S3 protocol error CODE only (codes are
+ * constants like SignatureDoesNotMatch — no bucket names, endpoints, IPs, or
+ * SDK messages, which can echo credentials). */
 async function checkR2() {
   const configured = r2Configured()
   if (!configured) {
-    return { configured, connectionOk: null as boolean | null, note: 'R2 env vars not set — uploads use Vercel Blob (or disk locally)' }
-  }
-  try {
-    const ok = await r2ConnectionOk()
     return {
       configured,
-      connectionOk: ok,
-      note: ok ? 'ok — credentials work against the bucket' : 'credentials rejected or bucket unreachable — check R2_* env vars',
+      connectionOk: null as boolean | null,
+      errorCode: 'NOT_CONFIGURED' as string,
+      hint: 'R2 env vars not set — uploads use Vercel Blob (or disk locally)',
     }
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e)
-    return { configured, connectionOk: false, note: msg.slice(0, 140) }
+  }
+  const check = await r2ConnectionCheck()
+  return {
+    configured,
+    connectionOk: check.ok,
+    errorCode: check.code,
+    hint: check.hint,
   }
 }
 
