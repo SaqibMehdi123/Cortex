@@ -117,6 +117,27 @@ export function ensurePdfJsNodeGlobals(): void {
   if (!g.Path2D) g.Path2D = StubPath2D
   if (!g.ImageData) g.ImageData = StubImageData
 }
+
+// Single loading choke point for pdf-parse in server runtimes. Order matters:
+//  1) browser-global stubs — Vercel's Node lacks DOMMatrix etc., and without
+//     them the pdf.js module fails to even LOAD (verified in production via
+//     /api/ops/url-import-probe);
+//  2) the pdf.js worker — in Node, pdf.js runs a "fake worker" by importing
+//     GlobalWorkerOptions.workerSrc, a COMPUTED "./pdf.worker.mjs" path that
+//     Vercel's module tracer never packs, so extraction died there with
+//     "Cannot find module .../pdf.worker.mjs". The vendored worker
+//     (./pdf-worker/pdf.worker.min.mjs) is imported with a static relative
+//     specifier — bundled with OUR code, always present — and registers
+//     itself as globalThis.pdfjsWorker, which pdf.js checks first;
+//  3) pdf-parse itself (external package, loaded from node_modules).
+export function loadPdfParse(): Promise<typeof import('pdf-parse')> {
+  ensurePdfJsNodeGlobals()
+  const g = globalThis as unknown as { pdfjsWorker?: unknown }
+  if (!g.pdfjsWorker) {
+    return import('./pdf-worker/pdf.worker.min.mjs').then(() => import('pdf-parse'))
+  }
+  return import('pdf-parse')
+}
 // Above this size, PDFs are stored + recorded immediately and their text
 // extraction is deferred to /api/documents/[id]/extract — parsing inline
 // (URL import, upload relay) risks the function's memory/time window and
@@ -172,12 +193,9 @@ export async function extractPdfText(
   const deadline = started + budgetMs
 
   try {
-    // pdf-parse v2 is ESM-only and ships pdf.js — dynamic import keeps the
-    // Next.js bundler away from it (also declared in serverExternalPackages).
-    // The globals shim must land BEFORE the import: without it the module
-    // fails to load on Vercel (DOMMatrix is not defined).
-    ensurePdfJsNodeGlobals()
-    const { PDFParse } = await import('pdf-parse')
+    // loadPdfParse: globals shim + vendored worker registration + pdf-parse
+    // (see the function's comment for the production failure history).
+    const { PDFParse } = await loadPdfParse()
     const parser = new PDFParse({ data })
 
     const textParts: string[] = []

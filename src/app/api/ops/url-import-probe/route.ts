@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { safeFetch } from '@/lib/safe-fetch'
 import { putBuffer, deleteByRef, storageMode } from '@/lib/storage'
-import { ensurePdfJsNodeGlobals } from '@/lib/pdf-extract'
+import { loadPdfParse } from '@/lib/pdf-extract'
 
 // GET /api/ops/url-import-probe — end-to-end check of the exact pipeline the
 // Library "Import from URL" runs, executed in the LIVE runtime (Vercel
@@ -75,13 +75,12 @@ export async function GET() {
       return NextResponse.json({ ok: false, at: 'magic', bytes: buffer.length, magic, steps }, { headers: noStore })
     }
 
-    // 3 ── pdf-parse loads in THIS runtime (dynamic import, external package)
+    // 3 ── pdf-parse + pdf.js worker load in THIS runtime
     const s3 = Date.now()
     try {
-      ensurePdfJsNodeGlobals()
-      const mod = await import('pdf-parse')
+      const mod = await loadPdfParse()
       const loaded = typeof mod.PDFParse === 'function'
-      t('import-pdf-parse', s3, { loaded })
+      t('import-pdf-parse', s3, { loaded, workerHook: typeof (globalThis as { pdfjsWorker?: unknown }).pdfjsWorker })
       if (!loaded) {
         return NextResponse.json({ ok: false, at: 'import-pdf-parse', steps }, { headers: noStore })
       }
@@ -95,8 +94,7 @@ export async function GET() {
     let chars = 0
     let pages = 0
     try {
-      ensurePdfJsNodeGlobals()
-      const { PDFParse } = await import('pdf-parse')
+      const { PDFParse } = await loadPdfParse()
       const parser = new PDFParse({ data: new Uint8Array(buffer) })
       try {
         const result = await parser.getText()
