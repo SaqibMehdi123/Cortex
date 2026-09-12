@@ -1,6 +1,6 @@
 'use client'
 
-import { FaBullseye, FaCalendarDays, FaCheck, FaChevronDown, FaChevronRight, FaCircleCheck, FaClock, FaEllipsis, FaList, FaPencil, FaPlus, FaSpinner, FaTableColumns, FaTrashCan, FaWandMagicSparkles } from 'react-icons/fa6'
+import { FaBullseye, FaCalendarDays, FaCheck, FaChevronDown, FaChevronRight, FaCircleCheck, FaClock, FaEllipsis, FaInbox, FaList, FaPencil, FaPlus, FaSpinner, FaTableColumns, FaTrashCan, FaWandMagicSparkles } from 'react-icons/fa6'
 import { useCallback, useMemo, useState, useEffect } from 'react'
 import { api, todayISO } from '@/lib/client'
 import type { Plan, Task, Goal } from '@/lib/types'
@@ -45,7 +45,16 @@ export function PlansView() {
     })
   }, [])
 
-  const dayTasks = useApi<{ tasks: Task[] }>(`/api/tasks?date=${selectedDay}`, [selectedDay])
+  // tzOffset (Date#getTimezoneOffset, minutes) lets the server build the day
+  // window on the USER's calendar instead of the server's UTC clock.
+  const tzOffset = new Date().getTimezoneOffset()
+  const dayTasks = useApi<{ tasks: Task[] }>(
+    `/api/tasks?date=${selectedDay}&tzOffset=${tzOffset}`,
+    [selectedDay]
+  )
+  // Quick-capture tasks (and any task not attached to a plan) land here —
+  // they used to be invisible on this page entirely.
+  const inboxTasks = useApi<{ tasks: Task[] }>(`/api/tasks?unassigned=1&status=open`, [])
 
   async function toggleTask(t: Task) {
     const next = t.status === 'done' ? 'todo' : 'done'
@@ -53,6 +62,7 @@ export function PlansView() {
       await api.patch(`/api/tasks/${t.id}`, { status: next })
       reload()
       dayTasks.reload()
+      inboxTasks.reload()
     } catch {
       toast({ title: 'Could not update task', variant: 'destructive' })
     }
@@ -64,6 +74,7 @@ export function PlansView() {
       toast({ title: 'Snoozed to tomorrow' })
       reload()
       dayTasks.reload()
+      inboxTasks.reload()
     } catch {
       toast({ title: 'Could not snooze', variant: 'destructive' })
     }
@@ -74,6 +85,19 @@ export function PlansView() {
       await api.post('/api/tasks', { title, planId, dueDate: planId ? undefined : selectedDay })
       reload()
       dayTasks.reload()
+      inboxTasks.reload()
+    } catch {
+      toast({ title: 'Could not add task', variant: 'destructive' })
+    }
+  }
+
+  // Inbox quick-add: no plan, no date — exactly what quick capture creates.
+  async function addInboxTask(title: string) {
+    try {
+      await api.post('/api/tasks', { title })
+      toast({ title: 'Task added to inbox' })
+      reload()
+      inboxTasks.reload()
     } catch {
       toast({ title: 'Could not add task', variant: 'destructive' })
     }
@@ -140,7 +164,8 @@ export function PlansView() {
       {/* Week strip — drag tasks here to reschedule */}
       <div className="grid grid-cols-7 gap-1 sm:gap-2">
         {week.map((d) => {
-          const iso = d.toISOString().slice(0, 10)
+          // local calendar date (NOT toISOString — that slices the UTC date)
+          const iso = todayISO(d)
           const isToday = iso === todayISO()
           const isSel = iso === selectedDay
           return (
@@ -152,8 +177,12 @@ export function PlansView() {
                 e.preventDefault()
                 const taskId = e.dataTransfer.getData('text/task-id')
                 if (taskId) {
-                  api.patch(`/api/tasks/${taskId}`, { dueDate: `${iso}T09:00:00` })
-                    .then(() => { reload(); dayTasks.reload(); toast({ title: `Rescheduled to ${d.toLocaleDateString('en-US', { weekday: 'short' })}` }) })
+                  // 09:00 in the USER's timezone, as a real instant — a bare
+                  // `${iso}T09:00:00` is parsed as UTC by the server and
+                  // landed at 14:00 for UTC+5 users.
+                  const due = new Date(`${iso}T09:00:00`).toISOString()
+                  api.patch(`/api/tasks/${taskId}`, { dueDate: due })
+                    .then(() => { reload(); dayTasks.reload(); inboxTasks.reload(); toast({ title: `Rescheduled to ${d.toLocaleDateString('en-US', { weekday: 'short' })}` }) })
                     .catch(() => toast({ title: 'Reschedule failed', variant: 'destructive' }))
                 }
               }}
@@ -193,6 +222,29 @@ export function PlansView() {
           </CardContent>
         </Card>
       )}
+
+      {/* ── Inbox: tasks with no plan (quick-capture home) ── */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <FaInbox className="h-4 w-4 text-primary" />
+            Inbox
+            <span className="ml-1 text-xs font-normal text-muted-foreground">— captured tasks without a plan. Drag one onto a day above to schedule it.</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-1.5">
+          {inboxTasks.loading ? (
+            <div className="space-y-2">{[1, 2].map((i) => <SkeletonCard key={i} className="h-10" />)}</div>
+          ) : (inboxTasks.data?.tasks.length ?? 0) === 0 ? (
+            <p className="py-3 text-center text-sm text-muted-foreground">Nothing here — tasks captured from anywhere (⌘K → Task) show up in this inbox.</p>
+          ) : (
+            inboxTasks.data!.tasks.map((t) => (
+              <TaskRow key={t.id} task={t} onToggle={toggleTask} onSnooze={snoozeTask} draggable />
+            ))
+          )}
+          <InboxQuickAdd onAdd={addInboxTask} />
+        </CardContent>
+      </Card>
 
       {/* ── Outline mode ── */}
       {mode === 'outline' || mode === 'day' ? (
@@ -521,6 +573,38 @@ function TaskRow({ task, onToggle, onSnooze, draggable }: { task: Task; onToggle
         <FaClock className="h-3.5 w-3.5" />
       </button>
     </div>
+  )
+}
+
+// One-line add for the inbox — creates a task with no plan and no date,
+// the same shape quick capture produces.
+function InboxQuickAdd({ onAdd }: { onAdd: (title: string) => void }) {
+  const [title, setTitle] = useState('')
+  return (
+    <form
+      className="flex items-center gap-2 pt-1"
+      onSubmit={(e) => {
+        e.preventDefault()
+        const v = title.trim()
+        if (!v) return
+        onAdd(v)
+        setTitle('')
+      }}
+    >
+      <FaPlus className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+      <Input
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        placeholder="Add a task to the inbox…"
+        aria-label="Add task to inbox"
+        className="h-9"
+      />
+      {title.trim() && (
+        <Button type="submit" size="sm" className="h-9 shrink-0">
+          Add
+        </Button>
+      )}
+    </form>
   )
 }
 

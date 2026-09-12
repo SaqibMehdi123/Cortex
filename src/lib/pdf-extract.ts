@@ -11,6 +11,11 @@
 // document is always recorded, and the viewer still renders the original PDF.
 
 export const EXTRACT_LIMIT = 100 * 1024 * 1024
+// Above this size, PDFs are stored + recorded immediately and their text
+// extraction is deferred to /api/documents/[id]/extract — parsing inline
+// (URL import, upload relay) risks the function's memory/time window and
+// killed the whole import before the deferred pipeline existed.
+export const INLINE_EXTRACT_MAX_BYTES = 30 * 1024 * 1024
 // Must fit inside the routes' maxDuration (60 s on Vercel) with headroom for
 // fetching the file from Blob, metadata and the DB write.
 export const DEFAULT_EXTRACT_BUDGET_MS = 50_000

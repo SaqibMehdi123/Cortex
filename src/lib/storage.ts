@@ -223,6 +223,9 @@ export type R2ConnectionResult = {
   code: string
   /** Operator-facing hint naming the env var to fix. No secrets. */
   hint: string
+  /** Write probe result — read success alone does NOT prove PutObject works
+   * (a read-only token lists fine and then kills every PDF import). */
+  writeOk: boolean | null
   /** Shape of the pasted R2_ACCOUNT_ID (never its value). */
   accountId: { len: number | null; hex32: boolean | null; illegalChars: boolean | null; extracted: boolean }
 }
@@ -230,80 +233,107 @@ export type R2ConnectionResult = {
 export async function r2ConnectionCheck(): Promise<R2ConnectionResult> {
   const shape = r2AccountIdShape()
   if (!r2Configured()) {
-    return { ok: false, code: 'NOT_CONFIGURED', hint: 'one or more R2_* environment variables are missing', accountId: shape }
+    return { ok: false, code: 'NOT_CONFIGURED', hint: 'one or more R2_* environment variables are missing', writeOk: null, accountId: shape }
   }
   try {
     await r2().send(new ListObjectsV2Command({ Bucket: r2Bucket(), MaxKeys: 1 }))
-    return { ok: true, code: 'OK', hint: 'credentials work against the bucket', accountId: shape }
   } catch (e) {
-    const err = e as {
-      name?: string
-      code?: string
-      $metadata?: { httpStatusCode?: number }
-      cause?: { code?: string; name?: string }
-    }
-    const status = err?.$metadata?.httpStatusCode
-    const causeCode = err?.cause?.code || err?.cause?.name
-    const code = err?.code || causeCode || err?.name || 'UNKNOWN'
-
-    if (code === 'SignatureDoesNotMatch') {
-      return {
-        ok: false,
-        code,
-        hint:
-          'R2_SECRET_ACCESS_KEY is wrong — re-copy the "Secret Access Key" shown at token creation (NOT the long eyJ… "Token value"; the secret is only shown once)',
-        accountId: shape,
-      }
-    }
-    if (code === 'InvalidAccessKeyId') {
-      return {
-        ok: false,
-        code,
-        hint:
-          'R2_ACCESS_KEY_ID does not exist for this account — re-copy the S3-style "Access Key ID" from Manage R2 API Tokens. (Both the Account ID and the Access Key ID are 32-hex strings — make sure they are not swapped.)',
-        accountId: shape,
-      }
-    }
-    if (code === 'AccessDenied' || status === 403) {
-      return {
-        ok: false,
-        code,
-        hint: 'token valid but denied on this bucket — the API token needs "Object Read & Write" scoped to (at least) this bucket',
-        accountId: shape,
-      }
-    }
-    if (code === 'NoSuchBucket' || status === 404) {
-      return {
-        ok: false,
-        code,
-        hint: 'R2_BUCKET does not match an existing bucket — check exact name and case (bucket ids and account ids are not bucket names)',
-        accountId: shape,
-      }
-    }
-    if (
-      code === 'NetworkingError' ||
-      code === 'ENOTFOUND' ||
-      code === 'EAI_AGAIN' ||
-      code === 'EAI_NONAME' ||
-      code === 'ERR_INVALID_URL' ||
-      code === 'InvalidEndpoint' ||
-      code === 'TypeError' ||
-      code === 'FailedToOpenSocket' ||
-      status === 400
-    ) {
-      return {
-        ok: false,
-        code,
-        hint: !shape.hex32
-          ? 'R2_ACCOUNT_ID is not a 32-hex Account ID after normalising — open dash.cloudflare.com → R2 → Account details and paste the 32-character hex Account ID (not the endpoint URL, not a token)'
-          : shape.extracted
-            ? 'endpoint still unresolvable although a 32-hex id was found and extracted — the extracted id may be the Access Key ID by mistake, or the Account ID itself is wrong'
-            : 'endpoint unresolvable with a valid-format 32-hex id — verify the Account ID in dash.cloudflare.com → R2 → Account details matches, then redeploy',
-        accountId: shape,
-      }
-    }
-    return { ok: false, code, hint: `unexpected S3 error — verify all four R2_* values (status ${status ?? 'n/a'})`, accountId: shape }
+    return { ...interpretR2Error(e, shape, false), writeOk: null, accountId: shape }
   }
+  // Read works — now prove WRITE, the permission the PDF-import path needs
+  // (browser uploads are presigned; server-side putBuffer is not).
+  let writeOk = true
+  let writeHint = ''
+  try {
+    await r2().send(
+      new PutObjectCommand({ Bucket: r2Bucket(), Key: 'cortex-health-probe.txt', Body: 'ok', ContentType: 'text/plain' })
+    )
+    await r2().send(new DeleteObjectCommand({ Bucket: r2Bucket(), Key: 'cortex-health-probe.txt' }))
+  } catch (e) {
+    writeOk = false
+    const interpreted = interpretR2Error(e, shape, true)
+    writeHint = `write probe failed (${interpreted.code}) — ${interpreted.hint}`
+  }
+  return {
+    ok: writeOk,
+    code: writeOk ? 'OK' : 'WRITE_DENIED',
+    hint: writeOk ? 'credentials work against the bucket (read + write verified)' : writeHint || 'write probe failed',
+    writeOk,
+    accountId: shape,
+  }
+}
+
+/** Map one S3/SDK error to a public-safe { code, hint } (never the message —
+ * SDK messages can echo credentials; codes are protocol constants). */
+function interpretR2Error(
+  e: unknown,
+  shape: R2ConnectionResult['accountId'],
+  wasWrite: boolean
+): { ok: false; code: string; hint: string } {
+  const err = e as {
+    name?: string
+    code?: string
+    $metadata?: { httpStatusCode?: number }
+    cause?: { code?: string; name?: string }
+  }
+  const status = err?.$metadata?.httpStatusCode
+  const causeCode = err?.cause?.code || err?.cause?.name
+  const code = err?.code || causeCode || err?.name || 'UNKNOWN'
+
+  if (code === 'SignatureDoesNotMatch') {
+    return {
+      ok: false,
+      code,
+      hint:
+        'R2_SECRET_ACCESS_KEY is wrong — re-copy the "Secret Access Key" shown at token creation (NOT the long eyJ… "Token value"; the secret is only shown once)',
+    }
+  }
+  if (code === 'InvalidAccessKeyId') {
+    return {
+      ok: false,
+      code,
+      hint:
+        'R2_ACCESS_KEY_ID does not exist for this account — re-copy the S3-style "Access Key ID" from Manage R2 API Tokens. (Both the Account ID and the Access Key ID are 32-hex strings — make sure they are not swapped.)',
+    }
+  }
+  if (code === 'AccessDenied' || status === 403) {
+    return {
+      ok: false,
+      code,
+      hint: wasWrite
+        ? 'token can read but is DENIED writes — re-create the R2 API token with "Object Read & Write" scoped to this bucket (a read-only token passes the list check and still breaks every PDF import)'
+        : 'token valid but denied on this bucket — the API token needs "Object Read & Write" scoped to (at least) this bucket',
+    }
+  }
+  if (code === 'NoSuchBucket' || status === 404) {
+    return {
+      ok: false,
+      code,
+      hint: 'R2_BUCKET does not match an existing bucket — check exact name and case (bucket ids and account ids are not bucket names)',
+    }
+  }
+  if (
+    code === 'NetworkingError' ||
+    code === 'ENOTFOUND' ||
+    code === 'EAI_AGAIN' ||
+    code === 'EAI_NONAME' ||
+    code === 'ERR_INVALID_URL' ||
+    code === 'InvalidEndpoint' ||
+    code === 'TypeError' ||
+    code === 'FailedToOpenSocket' ||
+    status === 400
+  ) {
+    return {
+      ok: false,
+      code,
+      hint: !shape.hex32
+        ? 'R2_ACCOUNT_ID is not a 32-hex Account ID after normalising — open dash.cloudflare.com → R2 → Account details and paste the 32-character hex Account ID (not the endpoint URL, not a token)'
+        : shape.extracted
+          ? 'endpoint still unresolvable although a 32-hex id was found and extracted — the extracted id may be the Access Key ID by mistake, or the Account ID itself is wrong'
+          : 'endpoint unresolvable with a valid-format 32-hex id — verify the Account ID in dash.cloudflare.com → R2 → Account details matches, then redeploy',
+    }
+  }
+  return { ok: false, code, hint: `unexpected S3 error — verify all four R2_* values (status ${status ?? 'n/a'})` }
 }
 
 // ── Backend-agnostic helpers ─────────────────────────────────────────────

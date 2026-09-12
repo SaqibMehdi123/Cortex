@@ -476,13 +476,33 @@ export function ReaderView() {
 
   function renderContent() {
     if (!doc?.content) {
+      const sourceUrl = doc?.source ?? null
+      const isWebDoc = !!sourceUrl && /^https?:\/\//.test(sourceUrl)
       return (
         <div className="rounded-xl border border-dashed p-8 text-center">
           <FaBookOpen className="mx-auto h-8 w-8 text-muted-foreground/50" />
-          <p className="mt-3 font-medium">No extractable text</p>
-          <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
-            This PDF has no machine-readable text (likely a scan). Paste its text to unlock highlighting and AI Q&amp;A.
-          </p>
+          {isWebDoc && sourceUrl ? (
+            <>
+              <p className="mt-3 font-medium">Couldn't extract this article</p>
+              <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
+                The page didn't return readable text (it may block readers or need JavaScript). Open the original in a
+                new tab, or paste its text here to unlock highlighting and AI Q&amp;A.
+              </p>
+              <Button variant="outline" size="sm" className="mt-4" asChild>
+                <a href={sourceUrl} target="_blank" rel="noreferrer">
+                  <FaUpRightFromSquare className="mr-1.5 h-3.5 w-3.5" /> Open original
+                </a>
+              </Button>
+            </>
+          ) : (
+            <>
+              <p className="mt-3 font-medium">No extractable text</p>
+              <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
+                This PDF has no machine-readable text (likely a scan). Paste its text to unlock highlighting and AI
+                Q&amp;A.
+              </p>
+            </>
+          )}
           <Textarea
             className="mx-auto mt-4 min-h-[160px] max-w-xl text-left"
             placeholder="Paste the full text…"

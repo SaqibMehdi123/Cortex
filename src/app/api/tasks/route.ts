@@ -2,7 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getSessionUser, unauthorized } from '@/lib/auth-server'
 
-// GET /api/tasks?date=&status= — the signed-in user's tasks
+// GET /api/tasks?date=&status=&unassigned=1&tzOffset= — the signed-in user's tasks.
+//   date=YYYY-MM-DD  → tasks due that day; tzOffset (minutes, as returned by
+//                      JS Date#getTimezoneOffset, e.g. -300 for UTC+5) makes
+//                      the day window follow the USER's calendar instead of
+//                      the server's UTC clock — a task due 02:00 PKT is Sept 12
+//                      for its owner even though it's 21:00Z on Sept 11.
+//   unassigned=1     → tasks not attached to any plan (quick-capture inbox).
 export async function GET(req: NextRequest) {
   try {
     const user = await getSessionUser()
@@ -11,14 +17,21 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url)
     const date = searchParams.get('date')
     const status = searchParams.get('status')
+    const unassigned = searchParams.get('unassigned')
+    const tzOffset = Number.parseInt(searchParams.get('tzOffset') || '', 10)
 
     const where: Record<string, unknown> = { userId: user.id }
     if (status === 'open') where.status = { not: 'done' }
     else if (status) where.status = status
+    if (unassigned === '1') where.planId = null
 
     if (date) {
-      const dayStart = new Date(`${date}T00:00:00`)
-      const dayEnd = new Date(`${date}T23:59:59.999`)
+      const offsetMin = Number.isFinite(tzOffset) ? tzOffset : 0
+      // Local midnight of `date` expressed as a UTC instant:
+      // Date.UTC(date) + offsetMin*60_000 (offset is negative east of UTC).
+      const [y, m, d] = date.split('-').map((v) => Number.parseInt(v, 10))
+      const dayStart = new Date(Date.UTC(y, (m || 1) - 1, d || 1) + offsetMin * 60_000)
+      const dayEnd = new Date(dayStart.getTime() + 86_400_000 - 1)
       where.dueDate = { gte: dayStart, lte: dayEnd }
     }
 

@@ -60,6 +60,7 @@ export function LibraryView() {
   const [layout, setLayout] = useState<'grid' | 'list'>('grid')
   const [importOpen, setImportOpen] = useState(false)
   const [notes, setNotes] = useState<Note[] | null>(null)
+  const [viewNote, setViewNote] = useState<Note | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<DocumentItem | null>(null)
 
   // Shelves — named groups on the bookcase; a book sits on at most one.
@@ -627,7 +628,11 @@ export function LibraryView() {
           ) : (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {notes.map((n) => (
-                <Card key={n.id} className="group relative">
+                <Card
+                  key={n.id}
+                  className="group relative cursor-pointer transition-shadow hover:shadow-soft"
+                  onClick={() => setViewNote(n)}
+                >
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between gap-2">
                       <p className="text-sm font-medium">{n.title ?? (n.source === 'voice' ? 'Voice memo' : 'Note')}</p>
@@ -636,9 +641,11 @@ export function LibraryView() {
                         size="icon"
                         className="h-7 w-7 opacity-0 transition-opacity group-hover:opacity-100"
                         aria-label="Delete note"
-                        onClick={async () => {
+                        onClick={async (e) => {
+                          e.stopPropagation()
                           await api.del(`/api/notes/${n.id}`)
                           setNotes(notes.filter((x) => x.id !== n.id))
+                          if (viewNote?.id === n.id) setViewNote(null)
                         }}
                       >
                         <FaTrashCan className="h-3.5 w-3.5" />
@@ -648,6 +655,7 @@ export function LibraryView() {
                     <div className="mt-2 flex items-center gap-2 text-[10px] text-muted-foreground">
                       {n.source === 'voice' && <span className="rounded-full bg-muted px-1.5 py-0.5">voice</span>}
                       {fmtDate(n.createdAt, { month: 'short', day: 'numeric' })}
+                      <span className="ml-auto opacity-0 transition-opacity group-hover:opacity-100">open</span>
                     </div>
                   </CardContent>
                 </Card>
@@ -669,6 +677,47 @@ export function LibraryView() {
           toast({ title: 'Added to library', description: shelfName ? `Put on the “${shelfName}” shelf.` : undefined })
         }}
       />
+
+      {/* Note viewer — notes used to be unopenable (cards had no click target,
+          content truncated at five lines). Click a card to read the full note. */}
+      <Dialog open={!!viewNote} onOpenChange={(v) => !v && setViewNote(null)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="pr-6">{viewNote?.title ?? (viewNote?.source === 'voice' ? 'Voice memo' : 'Note')}</DialogTitle>
+            <DialogDescription>
+              {viewNote?.source === 'voice' ? 'Captured by voice' : 'Quick capture'}
+              {viewNote ? ` · ${fmtDate(viewNote.createdAt, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}` : ''}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[55vh] overflow-y-auto whitespace-pre-wrap text-sm leading-relaxed">{viewNote?.content}</div>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="ghost"
+              onClick={() => {
+                if (viewNote) {
+                  navigator.clipboard?.writeText(viewNote.content).then(
+                    () => toast({ title: 'Copied' }),
+                    () => toast({ title: 'Copy failed', variant: 'destructive' })
+                  )
+                }
+              }}
+            >
+              Copy text
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={async () => {
+                if (!viewNote) return
+                await api.del(`/api/notes/${viewNote.id}`)
+                setNotes((prev) => (prev ? prev.filter((x) => x.id !== viewNote.id) : prev))
+                setViewNote(null)
+              }}
+            >
+              Delete
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete confirmation (grid + list) */}
       <AlertDialog open={!!confirmDelete} onOpenChange={(v) => !v && setConfirmDelete(null)}>
@@ -1068,7 +1117,18 @@ function ImportDialog({ open, onOpenChange, onImported, shelves, onShelfCreated 
         toast({ title: 'PDF imported', description: shelfName ? `${detail} Put on the “${shelfName}” shelf.` : detail })
       } else if (mode === 'url') {
         if (!url.trim()) throw new Error('Paste a link first')
-        const d = await api.post<{ document: { id: string } }>('/api/documents', { title: url, source: url.trim(), autoExtract: true, status: 'queued', type: 'url' })
+        const d = await api.post<{ document: { id: string }; extractPending?: boolean }>('/api/documents', { title: url, source: url.trim(), autoExtract: true, status: 'queued', type: 'url' })
+        // Large PDFs from URLs are stored unparsed — kick the background
+        // extractor exactly like the file-upload path does.
+        if (d.extractPending && d.document?.id) {
+          const docId = d.document.id
+          fetch(`/api/documents/${docId}/extract`, { method: 'POST' })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((j: { warning?: string } | null) => {
+              if (j?.warning) toast({ title: 'Text extraction note', description: j.warning })
+            })
+            .catch(() => {})
+        }
         shelfName = await assignToShelf(d.document.id)
       } else if (mode === 'paste') {
         if (!title.trim()) throw new Error('Give it a title')

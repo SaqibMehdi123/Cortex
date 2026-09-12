@@ -32,6 +32,7 @@ export function QuickCapture() {
   const [content, setContent] = useState('')
   const [url, setUrl] = useState('')
   const [dueDate, setDueDate] = useState('')
+  const [dueTime, setDueTime] = useState('')
   const [busy, setBusy] = useState(false)
   const [listening, setListening] = useState(false)
   const [voiceSupported, setVoiceSupported] = useState(true)
@@ -52,6 +53,7 @@ export function QuickCapture() {
     setContent('')
     setUrl('')
     setDueDate('')
+    setDueTime('')
   }
 
   const toggleMic = () => {
@@ -93,7 +95,11 @@ export function QuickCapture() {
         await api.post('/api/capture', { type: 'url', content: url.trim() })
       } else if (type === 'task') {
         if (!content.trim()) throw new Error('What is the task?')
-        await api.post('/api/capture', { type: 'task', content: content.trim(), dueDate: dueDate || undefined })
+        // Compose a real instant: `date + T + time` parses in the BROWSER's
+        // timezone, toISOString() pins it — the server would otherwise parse
+        // the bare string as UTC and shift the time for non-UTC users.
+        const due = dueDate ? new Date(`${dueDate}T${dueTime || '09:00'}:00`).toISOString() : undefined
+        await api.post('/api/capture', { type: 'task', content: content.trim(), dueDate: due })
       } else {
         if (!content.trim()) throw new Error('Write something first')
         await api.post('/api/capture', { type, content: content.trim() })
@@ -151,7 +157,17 @@ export function QuickCapture() {
           {type === 'task' && (
             <div className="mt-2">
               <label className="text-xs text-muted-foreground">Due date (optional)</label>
-              <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="mt-1" />
+              <div className="mt-1 flex gap-2">
+                <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="flex-1" />
+                <Input
+                  type="time"
+                  value={dueTime}
+                  onChange={(e) => setDueTime(e.target.value)}
+                  disabled={!dueDate}
+                  className="flex-1"
+                  aria-label="Due time (optional)"
+                />
+              </div>
             </div>
           )}
           {type === 'voice' && (

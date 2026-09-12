@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { getSessionUser, unauthorized } from '@/lib/auth-server'
 import { safeFetch } from '@/lib/safe-fetch'
 import { putBuffer } from '@/lib/storage'
+import { INLINE_EXTRACT_MAX_BYTES } from '@/lib/pdf-extract'
 
 export const maxDuration = 120
 
@@ -74,13 +75,26 @@ export async function POST(req: NextRequest) {
     if (autoExtract && source && /^https?:\/\//.test(source) && !content) {
       const pdf = await tryDownloadPdfFromUrl(source.trim())
       if (pdf) {
-        const document = await createPdfDocument(user.id, pdf.buffer, pdf.fileName, {
+        const created = await createPdfDocument(user.id, pdf.buffer, pdf.fileName, {
           requestedTitle: title.trim() !== source.trim() ? title.trim() : null,
           author: author?.trim() || null,
           tags: tags?.trim() || null,
           sourceUrl: source.trim(),
         })
-        return NextResponse.json({ document, pages: document.pageCount ?? 0, warning: document.pageCount ? undefined : 'No extractable text (probably a scan) — the original PDF still opens in the viewer.' }, { status: 201 })
+        const { extractPending, ...document } = created
+        return NextResponse.json(
+          {
+            document,
+            pages: document.pageCount ?? 0,
+            extractPending,
+            warning: extractPending
+              ? 'Large PDF — stored and openable now; text extraction runs in the background.'
+              : document.pageCount
+                ? undefined
+                : 'No extractable text (probably a scan) — the original PDF still opens in the viewer.',
+          },
+          { status: 201 }
+        )
       }
     }
 
@@ -225,29 +239,36 @@ async function fetchArxivTitle(arxivId: string): Promise<string | null> {
 
 // Store the original bytes + create the DB row (same pipeline as the
 // /api/documents/pdf upload route, so URL imports get the embedded viewer).
+// PDFs over INLINE_EXTRACT_MAX_BYTES skip inline parsing entirely — the
+// bytes are stored, the row records the file, and text extraction is left
+// to POST /api/documents/[id]/extract (the client fires it after import).
 async function createPdfDocument(
   userId: string,
   buffer: Buffer,
   fileName: string,
   opts: { requestedTitle: string | null; author: string | null; tags: string | null; sourceUrl: string | null }
 ) {
-  // pdf-parse v2 is ESM-only — dynamic import keeps it out of the bundler
-  const { PDFParse } = await import('pdf-parse')
-  const parser = new PDFParse({ data: new Uint8Array(buffer) })
+  const deferExtract = buffer.length > INLINE_EXTRACT_MAX_BYTES
+
   let text = ''
   let pages = 0
   let metaTitle = ''
-  try {
-    const result = await parser.getText()
-    text = result.text ?? ''
-    pages = result.pages?.length ?? result.total ?? 0
+  if (!deferExtract) {
+    // pdf-parse v2 is ESM-only — dynamic import keeps it out of the bundler
+    const { PDFParse } = await import('pdf-parse')
+    const parser = new PDFParse({ data: new Uint8Array(buffer) })
     try {
-      const info = await parser.getInfo()
-      const rawTitle = (info.info as { Title?: string } | undefined)?.Title
-      if (rawTitle && rawTitle.length > 3) metaTitle = rawTitle
-    } catch {}
-  } finally {
-    await parser.destroy().catch(() => {})
+      const result = await parser.getText()
+      text = result.text ?? ''
+      pages = result.pages?.length ?? result.total ?? 0
+      try {
+        const info = await parser.getInfo()
+        const rawTitle = (info.info as { Title?: string } | undefined)?.Title
+        if (rawTitle && rawTitle.length > 3) metaTitle = rawTitle
+      } catch {}
+    } finally {
+      await parser.destroy().catch(() => {})
+    }
   }
 
   const cleaned = text
@@ -296,5 +317,12 @@ async function createPdfDocument(
     data: { filePath: storageRef, fileName, fileSize: buffer.length },
   })
 
-  return { ...document, filePath: storageRef, fileName, fileSize: buffer.length, pageCount: pages || null }
+  return {
+    ...document,
+    filePath: storageRef,
+    fileName,
+    fileSize: buffer.length,
+    pageCount: pages || null,
+    extractPending: deferExtract,
+  }
 }

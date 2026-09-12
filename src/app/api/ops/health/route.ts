@@ -244,6 +244,7 @@ async function checkR2() {
   return {
     configured,
     connectionOk: check.ok,
+    writeOk: check.writeOk,
     errorCode: check.code,
     hint: check.hint,
     accountIdShape: check.accountId,

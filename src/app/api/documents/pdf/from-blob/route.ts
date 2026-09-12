@@ -2,19 +2,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import { head } from '@vercel/blob'
 import { db } from '@/lib/db'
 import { getSessionUser, unauthorized } from '@/lib/auth-server'
-import { cleanPdfText, extractPdfText } from '@/lib/pdf-extract'
+import { cleanPdfText, extractPdfText, INLINE_EXTRACT_MAX_BYTES } from '@/lib/pdf-extract'
 import { parseStorageRef, r2GetBuffer, r2GetRange, r2Head } from '@/lib/storage'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
 
 const MAX_BYTES = 200 * 1024 * 1024
-// Books bigger than this skip text extraction on the import critical path.
-// Rationale: a 100+ MB textbook can blow both the 60s serverless budget and
-// the memory limit when parsed inline — and a failed import means the document
-// never lands at all. Instead the row is created immediately (viewer works off
-// the stored file) and extraction is finished by POST /api/documents/[id]/extract.
-const INLINE_EXTRACT_MAX_BYTES = 30 * 1024 * 1024
+// INLINE_EXTRACT_MAX_BYTES (30 MB, shared with the URL-import path) lives in
+// @/lib/pdf-extract.
 
 const PENDING_WARNING =
   'This is a large book — it was stored and opens in the viewer right away. Text extraction for highlights & AI continues in the background.'

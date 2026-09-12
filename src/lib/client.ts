@@ -64,7 +64,13 @@ export function useApi<T>(url: string | null, deps: unknown[] = []) {
 // ─── Date helpers ───────────────────────────────────────────────────
 
 export function todayISO(d = new Date()) {
-  return d.toISOString().slice(0, 10)
+  // Local calendar date — toISOString() would slice the UTC date, which is a
+  // different day than the user's for most hours west of UTC and 00:00–05:00
+  // in PKT. "Today" must always mean the day the user sees on their clock.
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
 }
 
 export function weekStartISO(d = new Date()) {
