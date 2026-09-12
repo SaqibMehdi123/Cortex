@@ -10,8 +10,10 @@ const nextConfig: NextConfig = {
   experimental: {
     proxyClientMaxBodySize: "250mb",
   },
-  // pdf-parse ships pdf.js internals — keep it out of the bundler
-  serverExternalPackages: ["pdf-parse"],
+  // pdf-parse ships pdf.js internals — keep it out of the bundler.
+  // The AWS SDK (Cloudflare R2) is external for the same reason: smaller
+  // functions, no bundler edge cases with its native crypto dependencies.
+  serverExternalPackages: ["pdf-parse", "@aws-sdk/client-s3", "@aws-sdk/s3-request-presigner"],
   typescript: {
     ignoreBuildErrors: true,
   },

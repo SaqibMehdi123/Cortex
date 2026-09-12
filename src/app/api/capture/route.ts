@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getSessionUser, unauthorized } from '@/lib/auth-server'
+import { safeFetch } from '@/lib/safe-fetch'
 
 // POST /api/capture — quick capture router: note | voice | url | task
 export async function POST(req: NextRequest) {
@@ -34,10 +35,9 @@ export async function POST(req: NextRequest) {
       let extractedTitle = title?.trim() || url.replace(/^https?:\/\//, '').split('/')[0]
       let extractedContent: string | null = null
       try {
-        const res = await fetch(url, {
-          headers: { 'User-Agent': 'Mozilla/5.0 (compatible; CortexReader/1.0)' },
-          signal: AbortSignal.timeout(12000),
-        })
+        // safeFetch: SSRF-guarded — the URL is user-supplied, so internal /
+        // private hosts are unreachable and redirects are re-validated.
+        const res = await safeFetch(url, { timeoutMs: 12000 })
         const html = await res.text()
         const t = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]
         if (t) extractedTitle = t.replace(/\s+/g, ' ').trim().slice(0, 300)

@@ -14,17 +14,21 @@ export async function GET(req: NextRequest) {
   if (error) return NextResponse.redirect(`${origin}/app?google=denied:${encodeURIComponent(error)}`)
   if (!code) return NextResponse.redirect(`${origin}/app?google=error:no_code`)
 
-  // The user id that started the flow rides in `state`; fall back to the
-  // current session cookie (same browser) if the state is malformed.
-  let stateUserId = state.split('.')[0]
-  if (stateUserId) {
-    const exists = await db.user.findUnique({ where: { id: stateUserId }, select: { id: true } })
-    if (!exists) stateUserId = ''
+  // Full state binding (three checks — all must pass):
+  //   1. a session exists (the connect flow always starts signed-in),
+  //   2. the state's user id equals the session user,
+  //   3. the state's nonce equals the HttpOnly cookie set when the flow
+  //      started (proves THIS browser started THIS flow).
+  // This replaces the old "trust any state whose user exists" logic, which
+  // let a third party attach their Google tokens to a victim's account.
+  const [stateUserId, stateNonce] = state.split('.')
+  const cookieNonce = req.cookies.get('g_oauth_state')?.value
+  const sessionUser = await getSessionUser()
+  if (!sessionUser || !stateUserId || !stateNonce || !cookieNonce) {
+    return NextResponse.redirect(`${origin}/app?google=error:state_mismatch`)
   }
-  if (!stateUserId) {
-    const sessionUser = await getSessionUser()
-    if (!sessionUser) return NextResponse.redirect(`${origin}/app?google=error:no_session`)
-    stateUserId = sessionUser.id
+  if (stateUserId !== sessionUser.id || stateNonce !== cookieNonce) {
+    return NextResponse.redirect(`${origin}/app?google=error:state_mismatch`)
   }
 
   try {

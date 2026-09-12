@@ -47,7 +47,7 @@ export function SettingsView() {
 
       {me?.user && <AccountCard user={me.user} />}
       <ProfileCard data={data?.setting} save={save} />
-      <AppearanceCard mounted={mounted} theme={theme} setTheme={setTheme} save={save} />
+      <AppearanceCard mounted={mounted} theme={theme ?? 'system'} setTheme={setTheme} save={save} />
       <GoogleCard />
       <DigestCard data={data?.setting} save={save} />
 

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { activeMailProvider, configuredFromEmail } from '@/lib/mailer'
+import { r2Configured, r2ConnectionOk } from '@/lib/storage'
 
 // GET /api/ops/health — operator diagnostic for the two external services
 // Cortex depends on at runtime (transactional email + PDF Blob storage).
@@ -226,8 +227,27 @@ async function checkBrevoEvents(key: string) {
   }
 }
 
+/** Public-safe R2 check: booleans only, no bucket names, no endpoints. */
+async function checkR2() {
+  const configured = r2Configured()
+  if (!configured) {
+    return { configured, connectionOk: null as boolean | null, note: 'R2 env vars not set — uploads use Vercel Blob (or disk locally)' }
+  }
+  try {
+    const ok = await r2ConnectionOk()
+    return {
+      configured,
+      connectionOk: ok,
+      note: ok ? 'ok — credentials work against the bucket' : 'credentials rejected or bucket unreachable — check R2_* env vars',
+    }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    return { configured, connectionOk: false, note: msg.slice(0, 140) }
+  }
+}
+
 export async function GET() {
-  const [mail, blob] = await Promise.all([checkMail(), checkBlob()])
+  const [mail, blob, r2] = await Promise.all([checkMail(), checkBlob(), checkR2()])
   const brevoEvents =
     mail.provider === 'brevo' && (process.env.BREVO_API_KEY || '').trim() && mail.keyValid
       ? await checkBrevoEvents((process.env.BREVO_API_KEY || '').trim())
@@ -242,12 +262,14 @@ export async function GET() {
     mail.provider === 'sendgrid' || mail.provider === 'brevo'
       ? mail.keyValid === true && mail.senderConfirmed === true
       : mail.provider === 'smtp'
+  const storageOk = r2.configured ? r2.connectionOk === true : blob.tokenPresent ? blob.tokenValid === true : true
   return NextResponse.json(
     {
-      ok: mailOk && (blob.tokenPresent ? blob.tokenValid === true : true),
+      ok: mailOk && storageOk,
       mail,
       brevoEvents,
       blob,
+      r2,
       checkedAt: new Date().toISOString(),
     },
     { headers: noStore }

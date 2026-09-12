@@ -780,6 +780,9 @@ function ImportDialog({ open, onOpenChange, onImported, shelves, onShelfCreated 
   }, [open])
 
   // Upload path map (the mode probe keeps local/VPS disk streaming working):
+  // r2       → one presigned PUT straight to Cloudflare R2: any file size in
+  //            a single request, real progress, and neither the vercel.com
+  //            upload gateway nor the 4.5 MB serverless request cap involved.
   // ≤ 4.2 MB → direct-to-Blob via the @vercel/blob client (bytes bypass the
   //            serverless function and its 4.5 MB request cap), with our own
   //            /api/documents/blob/relay as the fallback.
@@ -799,15 +802,24 @@ function ImportDialog({ open, onOpenChange, onImported, shelves, onShelfCreated 
 
     const DIRECT_MAX_BYTES = 4.2 * 1024 * 1024
 
-    let blobMode = false
+    let uploadMode: 'r2' | 'blob' | 'server' = 'server'
     try {
       const probe = await fetch('/api/documents/upload-url')
-      blobMode = probe.ok && (await probe.json()).mode === 'blob'
+      if (probe.ok) {
+        const mode = (await probe.json()).mode
+        if (mode === 'r2' || mode === 'blob') uploadMode = mode
+      }
     } catch {
-      blobMode = false
+      uploadMode = 'server'
     }
 
-    if (blobMode && file) {
+    if (uploadMode === 'r2' && file) {
+      const uploadedRef = await r2Upload(file)
+      setUploadPct(100)
+      return finishImport(uploadedRef)
+    }
+
+    if (uploadMode === 'blob' && file) {
       let uploadedUrl: string
       if (file.size <= DIRECT_MAX_BYTES) {
         try {
@@ -826,30 +838,7 @@ function ImportDialog({ open, onOpenChange, onImported, shelves, onShelfCreated 
         uploadedUrl = await stagedUpload(file)
       }
       setUploadPct(100)
-      const res = await fetch('/api/documents/pdf/from-blob', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          blobUrl: uploadedUrl,
-          name: file.name,
-          ...(author.trim() ? { author: author.trim() } : {}),
-          ...(tags.trim() ? { tags: tags.trim() } : {}),
-        }),
-      })
-      const data = (await res.json().catch(() => ({}))) as { document?: { id: string }; pages?: number; chars?: number; warning?: string; extractPending?: boolean; error?: string }
-      if (!res.ok) throw new Error(data.error || `Import failed (${res.status})`)
-      // Large books are recorded instantly; their text extraction runs in a
-      // separate request so it can never fail (or time out) the upload itself.
-      if (data.extractPending && data.document?.id) {
-        const docId = data.document.id
-        fetch(`/api/documents/${docId}/extract`, { method: 'POST' })
-          .then((r) => (r.ok ? r.json() : null))
-          .then((j: { warning?: string } | null) => {
-            if (j?.warning) toast({ title: 'Text extraction note', description: j.warning })
-          })
-          .catch(() => {})
-      }
-      return { document: data.document ?? null, pages: data.pages ?? 0, chars: data.chars ?? 0, warning: data.warning }
+      return finishImport(uploadedUrl)
     }
 
     return new Promise((resolve, reject) => {
@@ -876,6 +865,68 @@ function ImportDialog({ open, onOpenChange, onImported, shelves, onShelfCreated 
       xhr.onabort = () => reject(new Error('Upload cancelled'))
       xhr.send(file)
     })
+  }
+
+  // Shared tail of the cloud upload paths: register the stored file as a
+  // document (the server re-validates ownership, size and the PDF magic).
+  async function finishImport(storageRef: string): Promise<{ document: { id: string } | null; pages: number; chars: number; warning?: string }> {
+    const res = await fetch('/api/documents/pdf/from-blob', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        storageRef,
+        name: file!.name,
+        ...(author.trim() ? { author: author.trim() } : {}),
+        ...(tags.trim() ? { tags: tags.trim() } : {}),
+      }),
+    })
+    const data = (await res.json().catch(() => ({}))) as { document?: { id: string }; pages?: number; chars?: number; warning?: string; extractPending?: boolean; error?: string }
+    if (!res.ok) throw new Error(data.error || `Import failed (${res.status})`)
+    // Large books are recorded instantly; their text extraction runs in a
+    // separate request so it can never fail (or time out) the upload itself.
+    if (data.extractPending && data.document?.id) {
+      const docId = data.document.id
+      fetch(`/api/documents/${docId}/extract`, { method: 'POST' })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((j: { warning?: string } | null) => {
+          if (j?.warning) toast({ title: 'Text extraction note', description: j.warning })
+        })
+        .catch(() => {})
+    }
+    return { document: data.document ?? null, pages: data.pages ?? 0, chars: data.chars ?? 0, warning: data.warning }
+  }
+
+  // Cloudflare R2 path: ask for a presigned PUT, then send the WHOLE file in
+  // one request from the browser to R2 — real progress events, no size cap
+  // beyond the 200 MB limit, and no Vercel infrastructure in the data path.
+  async function r2Upload(f: File): Promise<string> {
+    const beginRes = await fetch('/api/documents/upload-url', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: f.name, size: f.size, contentType: 'application/pdf' }),
+    })
+    const beginData = (await beginRes.json().catch(() => ({}))) as { uploadUrl?: string; storageRef?: string; error?: string }
+    if (!beginRes.ok || !beginData.uploadUrl || !beginData.storageRef) {
+      throw new Error(beginData.error || `Upload could not start (${beginRes.status})`)
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      const xhr = new XMLHttpRequest()
+      xhr.open('PUT', beginData.uploadUrl!)
+      xhr.setRequestHeader('Content-Type', 'application/pdf')
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) setUploadPct(Math.min(99, Math.round((e.loaded / e.total) * 100)))
+      }
+      xhr.upload.onload = () => setUploadPct(100)
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) resolve()
+        else reject(new Error(`Upload failed (${xhr.status}) — please try again`))
+      }
+      xhr.onerror = () => reject(new Error('Upload failed — check your connection and try again'))
+      xhr.onabort = () => reject(new Error('Upload cancelled'))
+      xhr.send(f)
+    })
+    return beginData.storageRef!
   }
 
   // Small-file fallback: the whole file as one raw body through our own

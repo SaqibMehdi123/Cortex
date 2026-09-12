@@ -16,7 +16,8 @@ export async function GET(req: NextRequest) {
   const user = await getSessionUser()
   if (!user) return unauthorized()
 
-  const state = `${user.id}.${crypto.randomUUID()}`
+  const stateNonce = crypto.randomUUID()
+  const state = `${user.id}.${stateNonce}`
   const params = new URLSearchParams({
     client_id: process.env.GOOGLE_CLIENT_ID!,
     redirect_uri: googleRedirectUri(req),
@@ -27,7 +28,20 @@ export async function GET(req: NextRequest) {
     include_granted_scopes: 'true',
     state,
   })
-  return NextResponse.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`)
+  // CSRF binding: the callback must see the same nonce in the state param AND
+  // in this HttpOnly cookie, plus a session whose user matches the state user.
+  // Without it, anyone who knew a victim's user id could complete their own
+  // Google consent with state=<victimId>.anything and attach their tokens to
+  // the victim's account.
+  const res = NextResponse.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`)
+  res.cookies.set('g_oauth_state', stateNonce, {
+    httpOnly: true,
+    sameSite: 'lax', // top-level GET navigation back from Google must send it
+    secure: process.env.NODE_ENV === 'production',
+    path: '/',
+    maxAge: 600, // consent screens rarely outlive ten minutes
+  })
+  return res
 }
 
 // DELETE /api/auth/google — disconnect the signed-in user's account and revoke stored tokens.

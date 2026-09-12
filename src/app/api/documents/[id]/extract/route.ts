@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getSessionUser, unauthorized } from '@/lib/auth-server'
 import { cleanPdfText, EXTRACT_LIMIT, extractPdfText } from '@/lib/pdf-extract'
+import { parseStorageRef, r2GetBuffer, r2Head } from '@/lib/storage'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -31,7 +32,8 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     if (!doc.filePath) {
       return NextResponse.json({ error: 'No file attached to this document' }, { status: 400 })
     }
-    if (!doc.filePath.startsWith('https://')) {
+    const ref = parseStorageRef(doc.filePath)
+    if (ref.kind !== 'r2' && ref.kind !== 'blob') {
       return NextResponse.json(
         { error: 'Background extraction is only available for cloud-stored documents' },
         { status: 400 }
@@ -44,9 +46,17 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     }
 
     // Refuse to buffer anything beyond the extraction limit straight away.
-    const probe = await fetch(doc.filePath, { method: 'GET', headers: { Range: 'bytes=0-2047' } }).catch(() => null)
-    const totalRaw = probe?.headers.get('content-range') // "bytes 0-2047/123456789"
-    const total = totalRaw ? Number(totalRaw.split('/')[1]) : NaN
+    // Size comes from the backend (R2 HEAD / Blob content-range), never from
+    // the client.
+    let total = NaN
+    if (ref.kind === 'r2') {
+      const meta = await r2Head(ref.key).catch(() => null)
+      total = meta?.size ?? NaN
+    } else {
+      const probe = await fetch(ref.url, { method: 'GET', headers: { Range: 'bytes=0-2047' } }).catch(() => null)
+      const totalRaw = probe?.headers.get('content-range') // "bytes 0-2047/123456789"
+      total = totalRaw ? Number(totalRaw.split('/')[1]) : NaN
+    }
     if (Number.isFinite(total) && total > EXTRACT_LIMIT) {
       return NextResponse.json({
         ok: true,
@@ -55,11 +65,16 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
       })
     }
 
-    const res = await fetch(doc.filePath).catch(() => null)
-    if (!res || !res.ok) {
+    let buf: Buffer | null = null
+    if (ref.kind === 'r2') {
+      buf = await r2GetBuffer(ref.key).catch(() => null)
+    } else {
+      const res = await fetch(ref.url).catch(() => null)
+      if (res && res.ok) buf = Buffer.from(await res.arrayBuffer())
+    }
+    if (!buf) {
       return NextResponse.json({ error: 'Could not read the stored file' }, { status: 502 })
     }
-    const buf = Buffer.from(await res.arrayBuffer())
     if (!buf.subarray(0, 2048).toString('latin1').includes('%PDF-')) {
       return NextResponse.json({ error: 'The stored file is not a valid PDF' }, { status: 400 })
     }

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { promises as fs } from 'fs'
-import path from 'path'
 import { db } from '@/lib/db'
 import { getSessionUser, unauthorized } from '@/lib/auth-server'
+import { safeFetch } from '@/lib/safe-fetch'
+import { putBuffer } from '@/lib/storage'
 
 export const maxDuration = 120
 
@@ -88,10 +88,9 @@ export async function POST(req: NextRequest) {
     let extracted: { title?: string; content?: string } = {}
     if (autoExtract && source && /^https?:\/\//.test(source) && !content) {
       try {
-        const res = await fetch(source, {
-          headers: { 'User-Agent': 'Mozilla/5.0 (compatible; CortexReader/1.0)' },
-          signal: AbortSignal.timeout(12000),
-        })
+        // safeFetch: SSRF-guarded (private ranges blocked, every redirect
+        // hop re-validated) — the URL here is user-supplied.
+        const res = await safeFetch(source, { timeoutMs: 12000 })
         const html = await res.text()
         const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)
         const bodyText = html
@@ -165,13 +164,13 @@ async function tryDownloadPdfFromUrl(rawUrl: string): Promise<{ buffer: Buffer; 
       let pathname = ''
       try { pathname = new URL(candidate).pathname } catch {}
       const looksPdf = /\.pdf(?:$|[?#])/i.test(candidate) || /\/pdf\//i.test(candidate)
-      const res = await fetch(candidate, {
+      // safeFetch: SSRF-guarded + manual redirect re-validation; the URL is
+      // user-supplied, so internal hosts must stay unreachable.
+      const res = await safeFetch(candidate, {
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
           Accept: 'application/pdf,text/html,*/*',
         },
-        redirect: 'follow',
-        signal: AbortSignal.timeout(90000),
+        timeoutMs: 90000,
       })
       if (!res.ok) continue
       const ctype = (res.headers.get('content-type') || '').toLowerCase()
@@ -272,9 +271,7 @@ async function createPdfDocument(
   const title = (opts.requestedTitle || metaTitle || arxivTitle || fallbackTitle).slice(0, 300)
   const hasText = cleaned.length >= 40
 
-  const uploadDir = path.join(process.cwd(), 'uploads')
-  await fs.mkdir(uploadDir, { recursive: true })
-
+  // Create the row first so we have an id for the disk-mode filename.
   const document = await db.document.create({
     data: {
       userId,
@@ -289,12 +286,15 @@ async function createPdfDocument(
     },
   })
 
-  const safeName = `${document.id}.pdf`
-  await fs.writeFile(path.join(uploadDir, safeName), buffer)
+  // Store the original bytes in the active backend (R2 / Vercel Blob / disk)
+  // and point filePath at the storage ref. Disk writes only happen in disk
+  // mode (local dev) — writing under process.cwd() on Vercel is impossible
+  // (read-only) and used to kill the whole import with a 500.
+  const storageRef = await putBuffer(userId, document.id, buffer, fileName)
   await db.document.update({
     where: { id: document.id },
-    data: { filePath: safeName, fileName, fileSize: buffer.length },
+    data: { filePath: storageRef, fileName, fileSize: buffer.length },
   })
 
-  return { ...document, filePath: safeName, fileName, fileSize: buffer.length, pageCount: pages || null }
+  return { ...document, filePath: storageRef, fileName, fileSize: buffer.length, pageCount: pages || null }
 }

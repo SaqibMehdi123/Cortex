@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getSessionUser, unauthorized } from '@/lib/auth-server'
+import { deleteByRef } from '@/lib/storage'
 
 // GET /api/documents/[id] — full document with highlights and chat
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -80,17 +81,9 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     })
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     await db.document.delete({ where: { id } })
-    // clean up the stored PDF — from Vercel Blob (URL ref) or from disk
-    if (existing?.filePath) {
-      if (existing.filePath.startsWith('https://')) {
-        const { del } = await import('@vercel/blob')
-        await del(existing.filePath).catch(() => {})
-      } else {
-        const { unlink } = await import('fs/promises')
-        const path = await import('path')
-        await unlink(path.join(process.cwd(), 'uploads', path.basename(existing.filePath))).catch(() => {})
-      }
-    }
+    // Clean up the stored PDF behind whatever storage ref the row held
+    // (r2:// object key, Vercel Blob URL, or a local uploads/ file).
+    if (existing?.filePath) await deleteByRef(existing.filePath)
     return NextResponse.json({ ok: true })
   } catch (e) {
     console.error('DELETE /api/documents/[id] error', e)
