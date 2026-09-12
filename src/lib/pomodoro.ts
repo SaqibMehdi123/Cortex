@@ -2,7 +2,11 @@
 
 // ─── Pomodoro engine (global, persisted, timestamp-based) ───────────
 //
-// Architecture modelled on TickTick's Pomo timer:
+// Architecture modelled on TickTick's Pomo timer, with one deliberate
+// deviation requested by the user: finishing a work block NEVER auto-runs
+// a break. The engine parks at the boundary and the UI offers the choice
+// — short break or long break — exactly once, right when a pomodoro
+// finishes (breakChoicePending). The options are never standing UI.
 //   • Countdown is anchored to a wall-clock deadline (`endAt`), NOT to a
 //     1-second decrement — so the timer stays accurate when the tab is
 //     throttled or the user reloads the page. State survives refresh via
@@ -10,12 +14,13 @@
 //   • A single 1s interval only RE-DERIVES the display from `endAt`; it is
 //     never the source of truth.
 //   • Configurable durations: focus, short break, long break, rounds before
-//     the long break, and auto-start of the next break / next focus block.
-//     Custom values are first-class (plus quick presets 15/25/50).
+//     the long break, auto-start of the next focus block. A session can
+//     also be armed with a one-off duration (startWithDuration) — e.g. a
+//     40-minute block on one task — without touching the saved settings
+//     (blockMin carries the ACTUAL length for exact logging).
 //   • Completed work blocks are logged to POST /api/focus (rolls into the
-//     linked task's focusMinutes and Analytics). Skipped blocks advance the
-//     cycle WITHOUT logging; ending a work block ≥1min early logs the
-//     partial time.
+//     linked task's focusMinutes and Analytics). Skipped blocks advance
+//     WITHOUT logging; ending a work block ≥1min early logs the partial.
 //   • Starting focus on a task while a session is already running switches
 //     the linked task and keeps the running timer (TickTick parity).
 
@@ -29,7 +34,7 @@ export type PomodoroTaskLink = { id: string; title: string; goalId?: string | nu
 export const WORK_PRESETS = [15, 25, 50] as const
 
 export type PomodoroSettings = {
-  /** focus block length in minutes */
+  /** focus block length in minutes (the default a session arms with) */
   workMin: number
   /** short break length in minutes */
   shortMin: number
@@ -37,7 +42,7 @@ export type PomodoroSettings = {
   longMin: number
   /** completed focus blocks before a long break */
   roundsBeforeLong: number
-  /** automatically run the break after a focus block ends */
+  /** legacy field kept for stored settings — breaks are now always chosen at the boundary */
   autoStartBreaks: boolean
   /** automatically run the next focus block after a break ends */
   autoStartWork: boolean
@@ -48,7 +53,7 @@ const DEFAULT_SETTINGS: PomodoroSettings = {
   shortMin: 5,
   longMin: 15,
   roundsBeforeLong: 4,
-  autoStartBreaks: true,
+  autoStartBreaks: false,
   autoStartWork: true,
 }
 
@@ -86,10 +91,19 @@ type PomodoroState = {
   settings: PomodoroSettings
   /** endAt of the last work boundary already logged — cross-tab/cross-tick dedup */
   handledEndAt: number | null
+  /** actual length (minutes) of the CURRENT work block — a session may be
+   * armed with a one-off duration; used for exact logging at the boundary */
+  blockMin: number
+  /** a work block just finished — the UI must offer short/long break NOW */
+  breakChoicePending: boolean
   // actions
   open: () => void
   close: () => void
   start: (link?: PomodoroTaskLink | null, now?: number) => void
+  /** start (or arm) a work block with a one-off duration in minutes */
+  startWithDuration: (link: PomodoroTaskLink | null, minutes: number, now?: number) => void
+  /** take the chosen break after a pomodoro finishes */
+  startBreak: (which: 'short' | 'long', now?: number) => void
   pause: (now?: number) => void
   resume: (now?: number) => void
   toggle: () => void
@@ -170,36 +184,38 @@ export const usePomodoro = create<PomodoroState>()(
       const settings = () => get().settings
 
       // a work block (or break) ran to its endAt. Log the work block once
-      // (deduped by its endAt) and move to the next phase. When the next
-      // phase would ALREADY be over at `now` (long absence), park at its
-      // start instead of silently auto-running/logging time nobody worked.
+      // (deduped by its endAt) and PARK — a finished pomodoro presents the
+      // short/long break choice (breakChoicePending); it never auto-runs a
+      // break. After a BREAK, the next focus block auto-runs per the
+      // autoStartWork setting; if it would already be over at `now` (long
+      // absence), park at its start instead of silently auto-running.
       const completeBoundary = (now: number) => {
         const s = get()
         const boundary = s.endAt
         if (boundary === null) return
         const shouldLog = s.phase === 'work' && s.handledEndAt !== boundary
-        if (shouldLog) void logFocus(settings().workMin, s.taskLink)
+        if (shouldLog) void logFocus(s.blockMin, s.taskLink)
 
         if (s.phase === 'work') {
           const nextCompleted = s.completed + 1
           const cfg = settings()
-          const nextPhase: PomodoroPhase = nextCompleted % cfg.roundsBeforeLong === 0 ? 'long' : 'short'
-          const nextLen = phaseSeconds(nextPhase, cfg)
-          const autoRun = cfg.autoStartBreaks && now < boundary + nextLen * 1000
           set({
             completed: nextCompleted,
-            phase: nextPhase,
+            phase: 'work',
             handledEndAt: boundary,
             phaseElapsed: 0,
             // deltas already counted the partial phase — replace it with the
-            // full block so focusSeconds ends up at exactly N × workMin
-            focusSeconds: s.focusSeconds - s.phaseElapsed + cfg.workMin * 60,
-            secondsLeft: nextLen,
-            pausedRemaining: nextLen,
-            running: autoRun,
-            endAt: autoRun ? now + nextLen * 1000 : null,
+            // full block (at its ACTUAL armed length) so focusSeconds ends up
+            // at exactly N × blockMin
+            focusSeconds: s.focusSeconds - s.phaseElapsed + s.blockMin * 60,
+            secondsLeft: cfg.workMin * 60,
+            pausedRemaining: cfg.workMin * 60,
+            running: false,
+            endAt: null,
+            breakChoicePending: true,
+            blockMin: cfg.workMin,
           })
-          notify(`${phaseLabel(nextPhase)} — ${Math.round(nextLen / 60)} min`)
+          notify(`Pomodoro ${nextCompleted} done — take a break?`)
         } else {
           const cfg = settings()
           const nextLen = phaseSeconds('work', cfg)
@@ -213,41 +229,44 @@ export const usePomodoro = create<PomodoroState>()(
             pausedRemaining: nextLen,
             running: autoRun,
             endAt: autoRun ? now + nextLen * 1000 : null,
+            breakChoicePending: false,
+            blockMin: cfg.workMin,
           })
           notify('Back to focus')
         }
       }
 
-      // move to the next phase WITHOUT logging (user skipped it).
-      // Next phase follows the auto-start settings.
+      // move on WITHOUT logging (user skipped the running phase). A skipped
+      // work block still parks at the break choice; a skipped break parks at
+      // the start of the next focus block — nothing ever auto-runs from a
+      // manual skip.
       const advanceWithoutLog = () => {
         const s = get()
         const cfg = settings()
-        const now = Date.now()
         if (s.phase === 'work') {
           const nextCompleted = s.completed + 1
-          const nextPhase: PomodoroPhase = nextCompleted % cfg.roundsBeforeLong === 0 ? 'long' : 'short'
-          const nextLen = phaseSeconds(nextPhase, cfg)
-          const autoRun = cfg.autoStartBreaks
           set({
             completed: nextCompleted,
-            phase: nextPhase,
+            phase: 'work',
             phaseElapsed: 0,
-            secondsLeft: nextLen,
-            pausedRemaining: nextLen,
-            running: autoRun,
-            endAt: autoRun ? now + nextLen * 1000 : null,
+            secondsLeft: cfg.workMin * 60,
+            pausedRemaining: cfg.workMin * 60,
+            running: false,
+            endAt: null,
+            breakChoicePending: true,
+            blockMin: cfg.workMin,
           })
         } else {
           const nextLen = phaseSeconds('work', cfg)
-          const autoRun = cfg.autoStartWork
           set({
             phase: 'work',
             phaseElapsed: 0,
             secondsLeft: nextLen,
             pausedRemaining: nextLen,
-            running: autoRun,
-            endAt: autoRun ? now + nextLen * 1000 : null,
+            running: false,
+            endAt: null,
+            breakChoicePending: false,
+            blockMin: cfg.workMin,
           })
         }
       }
@@ -265,15 +284,18 @@ export const usePomodoro = create<PomodoroState>()(
         taskLink: null,
         settings: DEFAULT_SETTINGS,
         handledEndAt: null,
+        blockMin: DEFAULT_SETTINGS.workMin,
+        breakChoicePending: false,
 
         open: () => set({ dialogOpen: true }),
         close: () => set({ dialogOpen: false }),
 
         start: (link, now) => {
           const s = get()
-          const midSession = s.running || s.endAt !== null || s.phaseElapsed > 0 || s.completed > 0
-          if (midSession) {
-            // session in progress — only switch the linked task (TickTick parity)
+          // active (running or mid-block) — only switch the linked task
+          // (TickTick parity). Parked at a boundary / idle → a fresh session.
+          const active = s.running || s.endAt !== null || s.phaseElapsed > 0
+          if (active) {
             set(link ? { taskLink: link, dialogOpen: true } : { dialogOpen: true })
             return
           }
@@ -290,6 +312,54 @@ export const usePomodoro = create<PomodoroState>()(
             phaseElapsed: 0,
             focusSeconds: 0,
             handledEndAt: null,
+            breakChoicePending: false,
+            blockMin: settings().workMin,
+          })
+        },
+
+        startWithDuration: (link, minutes, now) => {
+          const s = get()
+          // active (running or mid-block) — only switch the linked task;
+          // parked at a finished pomodoro / idle → a fresh session with the
+          // requested duration
+          const active = s.running || s.endAt !== null || s.phaseElapsed > 0
+          if (active) {
+            set(link ? { taskLink: link, dialogOpen: true } : { dialogOpen: true })
+            return
+          }
+          if (link) set({ taskLink: link })
+          const min = clampMin(minutes, 1, 180)
+          set({
+            phase: 'work',
+            secondsLeft: min * 60,
+            pausedRemaining: min * 60,
+            running: true,
+            endAt: (now ?? Date.now()) + min * 60_000,
+            dialogOpen: true,
+            completed: 0,
+            phaseElapsed: 0,
+            focusSeconds: 0,
+            handledEndAt: null,
+            breakChoicePending: false,
+            blockMin: min,
+          })
+        },
+
+        startBreak: (which, now) => {
+          const s = get()
+          // only meaningful once a work block has finished
+          if (s.running && s.endAt !== null) return
+          const cfg = settings()
+          const len = phaseSeconds(which, cfg)
+          set({
+            phase: which,
+            secondsLeft: len,
+            pausedRemaining: len,
+            phaseElapsed: 0,
+            running: true,
+            endAt: (now ?? Date.now()) + len * 1000,
+            breakChoicePending: false,
+            blockMin: cfg.workMin,
           })
         },
 
@@ -307,7 +377,8 @@ export const usePomodoro = create<PomodoroState>()(
           const t = now ?? Date.now()
           const len = phaseSeconds(s.phase, settings())
           const remaining = s.pausedRemaining > 0 ? s.pausedRemaining : len
-          set({ running: true, endAt: t + remaining * 1000, pausedRemaining: 0 })
+          // resuming from the parked boundary = declining the break choice
+          set({ running: true, endAt: t + remaining * 1000, pausedRemaining: 0, breakChoicePending: false })
         },
 
         toggle: () => {
@@ -316,7 +387,27 @@ export const usePomodoro = create<PomodoroState>()(
           else get().resume()
         },
 
-        skip: advanceWithoutLog,
+        skip: () => {
+          const s = get()
+          // at a finished-pomodoro boundary "skip" means "no break" — park
+          // ready for the next focus block (never increments the round twice)
+          if (s.breakChoicePending) {
+            const cfg = settings()
+            const len = phaseSeconds('work', cfg)
+            set({
+              breakChoicePending: false,
+              phase: 'work',
+              secondsLeft: len,
+              pausedRemaining: len,
+              phaseElapsed: 0,
+              running: false,
+              endAt: null,
+              blockMin: cfg.workMin,
+            })
+            return
+          }
+          advanceWithoutLog()
+        },
 
         // End = stop everything; a partially-elapsed work block (≥1 min) logs
         stop: () => {
@@ -337,6 +428,8 @@ export const usePomodoro = create<PomodoroState>()(
             focusSeconds: 0,
             taskLink: null,
             handledEndAt: null,
+            breakChoicePending: false,
+            blockMin: settings().workMin,
           })
         },
 

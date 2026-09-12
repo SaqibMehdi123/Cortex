@@ -1,7 +1,7 @@
 'use client'
 
 import { FaBolt, FaBookOpen, FaBullseye, FaCalendarDay, FaChevronRight, FaClock, FaCloudSun, FaFire, FaLayerGroup, FaMoon, FaNewspaper, FaSpinner, FaStopwatch, FaSun, FaTriangleExclamation } from 'react-icons/fa6'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { api, todayISO, fmtDate } from '@/lib/client'
 import { useUI } from '@/lib/nav-config'
 import type { DashboardData, Task } from '@/lib/types'
@@ -23,6 +23,45 @@ function greeting() {
   if (h < 12) return { text: 'Good morning', icon: <FaSun className="h-4 w-4" /> }
   if (h < 18) return { text: 'Good afternoon', icon: <FaSun className="h-4 w-4" /> }
   return { text: 'Good evening', icon: <FaCloudSun className="h-4 w-4" /> }
+}
+
+// task row body shared by nested (under-plan) and individual timeline rows
+function NestedTaskBody({ task: t, completing, onToggle, onFocus }: {
+  task: Task
+  completing: boolean
+  onToggle: (t: Task) => void
+  onFocus: () => void
+}) {
+  return (
+    <div className={cn('flex items-start gap-3 px-3 py-2.5', completing && 'opacity-40')}>
+      <Checkbox
+        checked={false}
+        onCheckedChange={() => onToggle(t)}
+        aria-label={`Complete ${t.title}`}
+        className="mt-0.5"
+      />
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium">{t.title}</p>
+        <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
+          <PriorityDot priority={t.priority} />
+          {t.dueDate && <span>{fmtDate(t.dueDate, { hour: 'numeric', minute: '2-digit' })}</span>}
+          <span>~{t.estimate}m</span>
+          {t.goal && (
+            <span className="inline-flex items-center gap-1">
+              <FaBullseye className="h-3 w-3" style={{ color: colorHex(t.goal.color) }} /> {t.goal.title}
+            </span>
+          )}
+        </div>
+      </div>
+      <button
+        onClick={onFocus}
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-primary"
+        aria-label={`Focus on ${t.title}`}
+      >
+        <FaStopwatch className="h-4 w-4" />
+      </button>
+    </div>
+  )
 }
 
 export function DashboardView() {
@@ -49,6 +88,33 @@ export function DashboardView() {
   })
 
   const g = greeting()
+
+  // ── Today's timeline grouping ──
+  // Tasks attached to a plan render UNDER that plan (never in a second flat
+  // list — no duplication); tasks without a plan are "individual". Counts
+  // are capped so the dashboard stays a briefing, not a backlog.
+  const timeline = useMemo(() => {
+    const byPlan = new Map<string, Task[]>()
+    const individual: Task[] = []
+    for (const t of data?.todayTasks ?? []) {
+      if (t.planId) {
+        const arr = byPlan.get(t.planId) ?? []
+        arr.push(t)
+        byPlan.set(t.planId, arr)
+      } else {
+        individual.push(t)
+      }
+    }
+    const shownPlans = (data?.todayPlans ?? []).slice(0, 5).map((p) => ({ id: p.id, title: p.title, tasks: byPlan.get(p.id) ?? [] }))
+    const shownIds = new Set(shownPlans.map((s) => s.id))
+    // tasks whose plan didn't make the "today" cut still stay under their own
+    // plan (mini rows), never dumped into the flat list
+    const extras = [...byPlan.entries()]
+      .filter(([id]) => !shownIds.has(id))
+      .slice(0, 3)
+      .map(([id, tasks]) => ({ id, title: tasks[0]?.plan?.title ?? 'Plan', tasks }))
+    return { shownPlans, extras, individual }
+  }, [data])
 
   async function toggleTask(t: Task) {
     const done = t.status === 'done'
@@ -177,45 +243,66 @@ export function DashboardView() {
               <p className="py-6 text-center text-sm text-muted-foreground">Nothing scheduled today. Enjoy the calm — or plan something.</p>
             ) : (
               <>
-                {data.todayPlans.map((p) => (
-                  <div key={p.id} className="flex items-center gap-2.5 rounded-lg border bg-muted/40 px-3 py-2 text-sm">
-                    <FaCalendarDay className="h-4 w-4 text-primary" />
-                    <span className="font-medium">{p.title}</span>
-                    <Badge variant="outline" className="ml-auto text-[10px]">plan</Badge>
+                {/* plans active today — each with its own tasks nested beneath it */}
+                {timeline.shownPlans.map((section) => (
+                  <div key={section.id} className="space-y-1.5">
+                    <div className="flex items-center gap-2.5 rounded-lg border bg-muted/40 px-3 py-2 text-sm">
+                      <FaCalendarDay className="h-4 w-4 shrink-0 text-primary" />
+                      <span className="min-w-0 flex-1 truncate font-medium">{section.title}</span>
+                      {section.tasks.length > 0 && (
+                        <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">{section.tasks.length} task{section.tasks.length === 1 ? '' : 's'}</span>
+                      )}
+                      <Badge variant="outline" className="shrink-0 text-[10px]">plan</Badge>
+                    </div>
+                    {section.tasks.slice(0, 3).map((t) => (
+                      <div key={t.id} className="ml-5 sm:ml-7">
+                        <SwipeTaskRow task={t} onToggle={toggleTask} onSnooze={snoozeTask}>
+                          <NestedTaskBody task={t} completing={completingIds.has(t.id)} onToggle={toggleTask} onFocus={() => setFocusTask({ id: t.id, title: t.title, goalId: t.goalId })} />
+                        </SwipeTaskRow>
+                      </div>
+                    ))}
+                    {section.tasks.length > 3 && (
+                      <button onClick={() => setView('plans')} className="block w-full pl-5 text-left text-[10px] text-muted-foreground transition-colors hover:text-primary sm:pl-7">
+                        + {section.tasks.length - 3} more in this plan — open Plans
+                      </button>
+                    )}
                   </div>
                 ))}
-                {data.todayTasks.map((t) => (
-                  <SwipeTaskRow key={t.id} task={t} onToggle={toggleTask} onSnooze={snoozeTask}>
-                    <div className={cn('flex items-start gap-3 px-3 py-2.5', completingIds.has(t.id) && 'opacity-40')}>
-                      <Checkbox
-                        checked={false}
-                        onCheckedChange={() => toggleTask(t)}
-                        aria-label={`Complete ${t.title}`}
-                        className="mt-0.5"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium">{t.title}</p>
-                        <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
-                          <PriorityDot priority={t.priority} />
-                          {t.dueDate && <span>{fmtDate(t.dueDate, { hour: 'numeric', minute: '2-digit' })}</span>}
-                          <span>~{t.estimate}m</span>
-                          {t.goal && (
-                            <span className="inline-flex items-center gap-1">
-                              <FaBullseye className="h-3 w-3" style={{ color: colorHex(t.goal.color) }} /> {t.goal.title}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => setFocusTask({ id: t.id, title: t.title, goalId: t.goalId })}
-                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-primary"
-                        aria-label={`Focus on ${t.title}`}
-                      >
-                        <FaStopwatch className="h-4 w-4" />
-                      </button>
+
+                {/* tasks from plans not active today — still under their plan */}
+                {timeline.extras.map((section) => (
+                  <div key={section.id} className="space-y-1.5">
+                    <div className="flex items-center gap-2.5 rounded-lg border border-dashed px-3 py-2 text-sm">
+                      <FaCalendarDay className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <span className="min-w-0 flex-1 truncate font-medium text-muted-foreground">{section.title}</span>
+                      <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">{section.tasks.length} task{section.tasks.length === 1 ? '' : 's'}</span>
                     </div>
-                  </SwipeTaskRow>
+                    {section.tasks.slice(0, 3).map((t) => (
+                      <div key={t.id} className="ml-5 sm:ml-7">
+                        <SwipeTaskRow task={t} onToggle={toggleTask} onSnooze={snoozeTask}>
+                          <NestedTaskBody task={t} completing={completingIds.has(t.id)} onToggle={toggleTask} onFocus={() => setFocusTask({ id: t.id, title: t.title, goalId: t.goalId })} />
+                        </SwipeTaskRow>
+                      </div>
+                    ))}
+                  </div>
                 ))}
+
+                {/* individual tasks — no plan attached */}
+                {timeline.individual.length > 0 && (
+                  <>
+                    <p className="pt-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Individual tasks</p>
+                    {timeline.individual.slice(0, 6).map((t) => (
+                      <SwipeTaskRow key={t.id} task={t} onToggle={toggleTask} onSnooze={snoozeTask}>
+                        <NestedTaskBody task={t} completing={completingIds.has(t.id)} onToggle={toggleTask} onFocus={() => setFocusTask({ id: t.id, title: t.title, goalId: t.goalId })} />
+                      </SwipeTaskRow>
+                    ))}
+                    {timeline.individual.length > 6 && (
+                      <button onClick={() => setView('plans')} className="block w-full text-center text-[10px] text-muted-foreground transition-colors hover:text-primary">
+                        + {timeline.individual.length - 6} more — open Plans
+                      </button>
+                    )}
+                  </>
+                )}
                 <p className="hidden pt-1 text-center text-[10px] text-muted-foreground sm:block lg:hidden xl:block">
                   Swipe right to complete, left to snooze (touch devices)
                 </p>

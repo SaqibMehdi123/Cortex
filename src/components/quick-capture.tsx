@@ -8,6 +8,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import { TimePicker } from '@/components/ui/time-picker'
 import { api } from '@/lib/client'
 import { useToast } from '@/hooks/use-toast'
 
@@ -159,15 +160,16 @@ export function QuickCapture() {
               <label className="text-xs text-muted-foreground">Due date (optional)</label>
               <div className="mt-1 flex gap-2">
                 <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="flex-1" />
-                <Input
-                  type="time"
+                <TimePicker
                   value={dueTime}
-                  onChange={(e) => setDueTime(e.target.value)}
+                  onChange={setDueTime}
                   disabled={!dueDate}
-                  className="flex-1"
-                  aria-label="Due time (optional)"
+                  className="flex-1 h-9"
+                  ariaLabel="Due time (deadline)"
+                  placeholder="due time"
                 />
               </div>
+              <p className="mt-1 text-[10px] text-muted-foreground">The time is when the task is DUE (its deadline).</p>
             </div>
           )}
           {type === 'voice' && (

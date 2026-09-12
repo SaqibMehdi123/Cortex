@@ -31,24 +31,54 @@ export const api = {
 }
 
 // ─── Minimal data-fetching hook (avoid pulling a state lib) ─────────
+//
+// Stale-while-revalidate with a module-level cache:
+//   • Remounting a view (tab switch) renders the CACHED payload instantly —
+//     no skeleton flash, no "the page reloaded" feeling — then quietly
+//     revalidates in the background.
+//   • reload() NEVER blanks the screen: existing data stays mounted while
+//     the fresh payload is fetched; loading=true only when there is no data
+//     at all (first ever load of that URL).
+
+const apiCache = new Map<string, unknown>()
+const API_CACHE_MAX = 60
+
+function cacheGet<T>(url: string): T | undefined {
+  return apiCache.get(url) as T | undefined
+}
+
+function cacheSet(url: string, value: unknown) {
+  // bounded cache — evict the oldest entry (Map preserves insertion order)
+  if (!apiCache.has(url) && apiCache.size >= API_CACHE_MAX) {
+    const oldest = apiCache.keys().next().value
+    if (oldest !== undefined) apiCache.delete(oldest)
+  }
+  // re-insert to mark it most-recently-used
+  apiCache.delete(url)
+  apiCache.set(url, value)
+}
 
 export function useApi<T>(url: string | null, deps: unknown[] = []) {
-  const [data, setData] = useState<T | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [data, setData] = useState<T | null>(() => (url ? cacheGet<T>(url) ?? null : null))
+  const [loading, setLoading] = useState(() => !!url && !apiCache.has(url))
   const [error, setError] = useState<string | null>(null)
   const mounted = useRef(true)
 
   const reload = useCallback(async () => {
     if (!url) return
-    setLoading(true)
     try {
       const result = await api.get<T>(url)
+      cacheSet(url, result)
       if (mounted.current) {
         setData(result)
         setError(null)
       }
     } catch (e) {
-      if (mounted.current) setError(e instanceof Error ? e.message : 'Something went wrong')
+      // with stale data already on screen a failed revalidation is quiet —
+      // the user keeps their content; only a cold load surfaces the error
+      if (mounted.current && !apiCache.has(url)) {
+        setError(e instanceof Error ? e.message : 'Something went wrong')
+      }
     } finally {
       if (mounted.current) setLoading(false)
     }
@@ -56,6 +86,16 @@ export function useApi<T>(url: string | null, deps: unknown[] = []) {
 
   useEffect(() => {
     mounted.current = true
+    if (url) {
+      const cached = cacheGet<T>(url)
+      if (cached !== undefined) {
+        // warm start — paint cached data, refresh behind it
+        setData(cached)
+        setLoading(false)
+      } else {
+        setLoading(true)
+      }
+    }
     reload()
     return () => {
       mounted.current = false

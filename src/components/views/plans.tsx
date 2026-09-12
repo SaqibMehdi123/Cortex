@@ -5,7 +5,7 @@ import { useCallback, useMemo, useState, useEffect, type FormEvent } from 'react
 import { api, todayISO } from '@/lib/client'
 import type { Plan, Task, Goal } from '@/lib/types'
 import { useApi } from '@/lib/client'
-import { planActiveOnDay, planSpan, formatSpan, hasTimePart } from '@/lib/plan-span'
+import { planSpan, formatSpan, hasTimePart } from '@/lib/plan-span'
 import { usePomodoro } from '@/lib/pomodoro'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { TimePicker } from '@/components/ui/time-picker'
 import { useToast } from '@/hooks/use-toast'
 import { useUI } from '@/lib/nav-config'
 import { cn } from '@/lib/utils'
@@ -31,8 +32,9 @@ export function PlansView() {
   const { data, loading, reload } = useApi<{ plans: PlanNode[] }>('/api/plans')
   // one page, two boards: outline (the plan tree) is the default and the
   // home of everything; kanban is an optional task-status lens.
-  // (The former separate "Day" mode was folded into the agenda card below —
-  // clicking a week-strip day no longer yanks the user out of the tree.)
+  // A day agenda card (individual tasks for the selected day) sits above
+  // the tree; plans themselves are NOT repeated there — they live in the
+  // outline below.
   const [mode, setMode] = useState<'outline' | 'kanban'>('outline')
   const [selectedDay, setSelectedDay] = useState(todayISO())
   const [addOpen, setAddOpen] = useState(false)
@@ -66,26 +68,6 @@ export function PlansView() {
   // Quick-capture tasks (and any task not attached to a plan) land here —
   // they used to be invisible on this page entirely.
   const inboxTasks = useApi<{ tasks: Task[] }>(`/api/tasks?unassigned=1&status=open`, [])
-
-  // flat list with ancestor chains — powers the day agenda + tree jumps
-  const flatPlans = useMemo(() => {
-    const out: { node: PlanNode; depth: number; ancestors: string[] }[] = []
-    const walk = (nodes: PlanNode[], depth: number, ancestors: string[]) => {
-      for (const n of nodes) {
-        out.push({ node: n, depth, ancestors })
-        walk((n.children as PlanNode[]) ?? [], depth + 1, [...ancestors, n.id])
-      }
-    }
-    walk(data?.plans ?? [], 0, [])
-    return out
-  }, [data])
-
-  // A plan is "on" a day when its span covers it: day plans appear only on
-  // their own day, week/month/quarter/year plans on every day they span.
-  const agendaPlans = useMemo(
-    () => flatPlans.filter(({ node }) => planActiveOnDay(node, selectedDay)),
-    [flatPlans, selectedDay]
-  )
 
   const allPlansFlat = useMemo(() => {
     const out: { id: string; title: string; timeframe: string }[] = []
@@ -156,16 +138,6 @@ export function PlansView() {
     reload()
     dayTasks.reload()
     inboxTasks.reload()
-  }
-
-  // jump from the day agenda to the plan in the outline (expanded, parents open)
-  function jumpToPlan(id: string, ancestors: string[]) {
-    setCollapsed((prev) => {
-      const next = new Set(prev)
-      for (const a of [...ancestors, id]) next.delete(a)
-      return next
-    })
-    setMode('outline')
   }
 
   function toggleCollapse(id: string) {
@@ -259,66 +231,30 @@ export function PlansView() {
         })}
       </div>
 
-      {/* ── Day agenda — always visible (this replaces the old "Day" mode):
-          only the plans whose span covers the selected day + tasks due then ── */}
-      {(
-        <>
-          {/* Plans on the selected day */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2 text-sm">
-                <FaCalendarDays className="h-4 w-4 text-primary" />
-                Plans on {dayLabel}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-1.5">
-              {agendaPlans.length === 0 ? (
-                <p className="py-3 text-center text-sm text-muted-foreground">
-                  No plans cover this day. Day plans show only on their own date; week, month, quarter and year plans show across their whole span — set a start (and deadline) when creating or editing a plan.
-                </p>
-              ) : (
-                agendaPlans.map(({ node, ancestors }) => (
-                  <button
-                    key={node.id}
-                    onClick={() => jumpToPlan(node.id, ancestors)}
-                    className="flex w-full items-center gap-2.5 rounded-lg border bg-background px-3 py-2 text-left transition-all hover:bg-muted/40"
-                  >
-                    <span className="w-6 text-center text-sm">{node.timeframe === 'day' ? '☀️' : node.timeframe === 'week' ? '🗓' : node.timeframe === 'month' ? '📅' : node.timeframe === 'quarter' ? '📈' : '🎯'}</span>
-                    <span className={cn('min-w-0 flex-1 truncate text-sm', node.done && 'text-muted-foreground line-through')}>{node.title}</span>
-                    <span className="hidden shrink-0 items-center gap-1 text-[10px] text-muted-foreground sm:flex">
-                      <FaClock className="h-3 w-3" />
-                      {formatSpan(node) || 'no date'}
-                    </span>
-                    <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">{(node.tasks ?? []).filter((t) => t.status === 'done').length}/{(node.tasks ?? []).length}</span>
-                    <FaChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                  </button>
-                ))
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Tasks due on the selected day */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2 text-sm">
-                <FaClock className="h-4 w-4 text-primary" />
-                Tasks for {dayLabel}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-1.5">
-              {dayTasks.loading ? (
-                <div className="space-y-2">{[1, 2].map((i) => <SkeletonCard key={i} className="h-10" />)}</div>
-              ) : (dayTasks.data?.tasks.length ?? 0) === 0 ? (
-                <p className="py-4 text-center text-sm text-muted-foreground">No tasks this day. Drag a task here from below, or add one.</p>
-              ) : (
-                dayTasks.data!.tasks.map((t) => (
-                  <TaskRow key={t.id} task={t} onToggle={toggleTask} onSnooze={snoozeTask} onEdit={openEdit} />
-                ))
-              )}
-            </CardContent>
-          </Card>
-        </>
-      )}
+      {/* ── Day agenda — individual tasks due on the selected day. Plans
+          themselves are NOT repeated here (they live in the outline below,
+          exactly once) — only standalone tasks get a day listing. ── */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <FaClock className="h-4 w-4 text-primary" />
+            Tasks for {dayLabel}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-1.5">
+          {dayTasks.loading ? (
+            <div className="space-y-2">{[1, 2].map((i) => <SkeletonCard key={i} className="h-10" />)}</div>
+          ) : (dayTasks.data?.tasks.filter((t) => !t.planId).length ?? 0) === 0 ? (
+            <p className="py-4 text-center text-sm text-muted-foreground">
+              No individual tasks due this day. Tasks under a plan live on the plan itself in the outline below.
+            </p>
+          ) : (
+            dayTasks.data!.tasks.filter((t) => !t.planId).map((t) => (
+              <TaskRow key={t.id} task={t} onToggle={toggleTask} onSnooze={snoozeTask} onEdit={openEdit} />
+            ))
+          )}
+        </CardContent>
+      </Card>
 
       {/* ── Inbox: tasks with no plan (quick-capture home) ── */}
       <Card>
@@ -689,7 +625,9 @@ function PlanSpanChip({ node }: { node: PlanNode }) {
   )
 }
 
-// shared optional due date + time fields for inline task adds
+// shared optional due date + time fields for inline task adds.
+// The time is the DUE (deadline) time — when the task should be done BY —
+// picked on a clock dial instead of the native spinny time input.
 function DueFields({ dueDate, dueTime, onDate, onTime, hint }: { dueDate: string; dueTime: string; onDate: (v: string) => void; onTime: (v: string) => void; hint?: string }) {
   return (
     <div>
@@ -701,16 +639,16 @@ function DueFields({ dueDate, dueTime, onDate, onTime, hint }: { dueDate: string
           className="h-8 text-xs"
           aria-label="Due date (optional)"
         />
-        <Input
-          type="time"
+        <TimePicker
           value={dueTime}
-          onChange={(e) => onTime(e.target.value)}
+          onChange={onTime}
           disabled={!dueDate}
           className="h-8 text-xs"
-          aria-label="Due time (optional)"
+          ariaLabel="Due time (optional)"
+          placeholder="due time"
         />
       </div>
-      {hint && <p className="mt-0.5 text-[10px] text-muted-foreground">{hint}</p>}
+      <p className="mt-0.5 text-[10px] text-muted-foreground">{hint ?? 'Optional — the time this task is DUE (its deadline), not a start time'}</p>
     </div>
   )
 }
@@ -923,15 +861,16 @@ function EditTaskDialog({ open, task, plans, onClose, onSaved }: {
             </label>
             <div className="mt-1 flex gap-2">
               <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="flex-1" aria-label="Due date" />
-              <Input
-                type="time"
+              <TimePicker
                 value={dueTime}
-                onChange={(e) => setDueTime(e.target.value)}
+                onChange={setDueTime}
                 disabled={!dueDate}
-                className="flex-1"
-                aria-label="Due time"
+                className="flex-1 h-9"
+                ariaLabel="Due time (deadline)"
+                placeholder="due time"
               />
             </div>
+            <p className="mt-1 text-[10px] text-muted-foreground">The time is when the task is DUE — its deadline, not a start time.</p>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>

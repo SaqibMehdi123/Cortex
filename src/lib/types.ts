@@ -84,6 +84,7 @@ export interface Task {
   milestoneId: string | null
   goalId: string | null
   planId: string | null
+  plan?: { id: string; title: string } | null
   goal?: GoalLite | null
   completedAt: string | null
   createdAt: string

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getSessionUser, unauthorized } from '@/lib/auth-server'
-import { planSpan } from '@/lib/plan-span'
+import { planActiveOnDay } from '@/lib/plan-span'
 
 // The signed-in user's local calendar day as UTC instants — `tzOffset` is
 // Date#getTimezoneOffset() minutes from the browser (negative east of UTC).
@@ -41,7 +41,10 @@ export async function GET(req: NextRequest) {
         db.task.findMany({
           where: { userId: user.id, dueDate: { gte: today, lte: todayEnd }, status: { not: 'done' } },
           orderBy: [{ priority: 'desc' }, { dueDate: 'asc' }],
-          include: { goal: { select: { id: true, title: true, color: true } } },
+          include: {
+            goal: { select: { id: true, title: true, color: true } },
+            plan: { select: { id: true, title: true } },
+          },
           take: 20,
         }),
         // Span-aware: a plan is "today" when its start→end span (explicit, or
@@ -70,11 +73,17 @@ export async function GET(req: NextRequest) {
         db.task.count({ where: { userId: user.id, status: 'done', completedAt: { gte: today, lte: todayEnd } } }),
       ])
 
+    // Plans are date-scoped by CALENDAR DAY LABELS, not instant overlap: plan
+    // dates are bare YYYY-MM-DD stored at UTC midnight, so an instant-window
+    // comparison leaks a "today" plan into tomorrow's early-morning local
+    // hours (e.g. until 10:00 in UTC+5). Comparing the plan's picked day
+    // against the user's LOCAL calendar day (via tzOffset) makes a day plan
+    // show on its day only, while multi-day spans cover every day between
+    // start and deadline — same rule as the plans page.
+    const shiftedForLabel = new Date(now.getTime() - (Number.isFinite(tzOffset) ? tzOffset : 0) * 60_000)
+    const localTodayLabel = `${shiftedForLabel.getUTCFullYear()}-${String(shiftedForLabel.getUTCMonth() + 1).padStart(2, '0')}-${String(shiftedForLabel.getUTCDate()).padStart(2, '0')}`
     const todayPlans = todayPlanRows
-      .filter((p) => {
-        const span = planSpan(p)
-        return span && span.start.getTime() <= todayEnd.getTime() && span.end.getTime() >= today.getTime()
-      })
+      .filter((p) => planActiveOnDay(p, localTodayLabel))
       .slice(0, 10)
 
     // deadlines: tasks + opportunity deadlines + goal deadlines in next 7 days
