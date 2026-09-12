@@ -49,7 +49,7 @@ export async function GET(req: NextRequest) {
         // show only on their date; week/month/quarter/year plans show across
         // their whole span. Undated plans can't be placed on a calendar.
         db.plan.findMany({
-          where: { userId: user.id, done: false, OR: [{ startDate: { not: null } }, { endDate: { not: null } }] },
+          where: { userId: user.id, done: false, timeframe: { not: 'template' }, OR: [{ startDate: { not: null } }, { endDate: { not: null } }] },
           orderBy: { createdAt: 'asc' },
           take: 200,
         }),

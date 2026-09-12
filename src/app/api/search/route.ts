@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
         take: 5,
       }),
       db.plan.findMany({
-        where: { userId: user.id, title: { contains: q } },
+        where: { userId: user.id, title: { contains: q }, timeframe: { not: 'template' } },
         select: { id: true, title: true, timeframe: true },
         take: 5,
       }),

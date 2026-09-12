@@ -1,6 +1,6 @@
 'use client'
 
-import { FaBullseye, FaCalendarDays, FaCheck, FaChevronDown, FaChevronRight, FaCircleCheck, FaClock, FaEllipsis, FaInbox, FaList, FaPencil, FaPlus, FaSpinner, FaStopwatch, FaTableColumns, FaTrashCan, FaWandMagicSparkles } from 'react-icons/fa6'
+import { FaBullseye, FaCalendarDays, FaCheck, FaChevronDown, FaChevronRight, FaCircleCheck, FaClock, FaClone, FaEllipsis, FaInbox, FaList, FaPencil, FaPlus, FaSpinner, FaStopwatch, FaTableColumns, FaTrashCan, FaWandMagicSparkles } from 'react-icons/fa6'
 import { useCallback, useMemo, useState, useEffect, type FormEvent } from 'react'
 import { api, todayISO } from '@/lib/client'
 import type { Plan, Task, Goal } from '@/lib/types'
@@ -29,7 +29,11 @@ export function PlansView() {
   const { toast } = useToast()
   const setCaptureOpen = useUI((s) => s.setCaptureOpen)
   const { data, loading, reload } = useApi<{ plans: PlanNode[] }>('/api/plans')
-  const [mode, setMode] = useState<'outline' | 'kanban' | 'day'>('outline')
+  // one page, two boards: outline (the plan tree) is the default and the
+  // home of everything; kanban is an optional task-status lens.
+  // (The former separate "Day" mode was folded into the agenda card below —
+  // clicking a week-strip day no longer yanks the user out of the tree.)
+  const [mode, setMode] = useState<'outline' | 'kanban'>('outline')
   const [selectedDay, setSelectedDay] = useState(todayISO())
   const [addOpen, setAddOpen] = useState(false)
   const [templatesOpen, setTemplatesOpen] = useState(false)
@@ -38,6 +42,7 @@ export function PlansView() {
   const [editingTask, setEditingTask] = useState<Task | null>(null)
   const [editOpen, setEditOpen] = useState(false)
   const [editPlan, setEditPlan] = useState<PlanNode | null>(null)
+  const [templateFor, setTemplateFor] = useState<PlanNode | null>(null)
 
   const week = useMemo(() => {
     const now = new Date()
@@ -201,9 +206,6 @@ export function PlansView() {
             <button onClick={() => setMode('kanban')} className={cn('flex h-9 items-center gap-1.5 whitespace-nowrap border-l px-3 text-xs font-medium transition-colors', mode === 'kanban' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted')} aria-label="Kanban view">
               <FaTableColumns className="h-4 w-4" /> Kanban
             </button>
-            <button onClick={() => setMode('day')} className={cn('flex h-9 items-center gap-1.5 whitespace-nowrap border-l px-3 text-xs font-medium transition-colors', mode === 'day' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted')} aria-label="Day view">
-              <FaCalendarDays className="h-4 w-4" /> Day
-            </button>
           </div>
           <Button variant="outline" className="px-2.5" onClick={() => usePomodoro.getState().open()} aria-label="Open Pomodoro timer">
             <FaStopwatch className="h-4 w-4" /> <span className="hidden sm:inline">Pomodoro</span>
@@ -227,7 +229,7 @@ export function PlansView() {
           return (
             <button
               key={iso}
-              onClick={() => { setSelectedDay(iso); setMode('day') }}
+              onClick={() => setSelectedDay(iso)}
               onDragOver={(e) => e.preventDefault()}
               onDrop={(e) => {
                 e.preventDefault()
@@ -257,9 +259,11 @@ export function PlansView() {
         })}
       </div>
 
-      {mode === 'day' && (
+      {/* ── Day agenda — always visible (this replaces the old "Day" mode):
+          only the plans whose span covers the selected day + tasks due then ── */}
+      {(
         <>
-          {/* ── Day agenda: only the plans whose span covers this day ── */}
+          {/* Plans on the selected day */}
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-sm">
@@ -293,7 +297,7 @@ export function PlansView() {
             </CardContent>
           </Card>
 
-          {/* ── Tasks due this day ── */}
+          {/* Tasks due on the selected day */}
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-sm">
@@ -365,6 +369,7 @@ export function PlansView() {
                 allPlans={allPlansFlat}
                 onEditPlan={setEditPlan}
                 onSetGoal={setGoalFor}
+                onSaveTemplate={setTemplateFor}
               />
             ))
           )}
@@ -377,7 +382,8 @@ export function PlansView() {
       <EditTaskDialog open={editOpen} task={editingTask} plans={allPlansFlat} onClose={() => { setEditOpen(false); setEditingTask(null) }} onSaved={reloadAll} />
       <PlanDialog open={addOpen} onOpenChange={setAddOpen} plan={null} allPlans={allPlansFlat} onSaved={reload} />
       <PlanDialog open={!!editPlan} onOpenChange={(v) => { if (!v) setEditPlan(null) }} plan={editPlan} allPlans={allPlansFlat} onSaved={() => { setEditPlan(null); reload() }} />
-      <TemplatesDialog open={templatesOpen} onOpenChange={setTemplatesOpen} onApplied={() => { reload(); toast({ title: 'Template applied — goal, plans & tasks created', description: 'Check Goals and Plans.' }) }} />
+      <TemplatesDialog open={templatesOpen} onOpenChange={setTemplatesOpen} onApplied={() => { reload(); toast({ title: 'Template applied — plans & tasks created', description: 'Find them in the outline above (starter templates also add a goal).' }) }} />
+      <SaveTemplateDialog node={templateFor} onClose={() => setTemplateFor(null)} onSaved={() => { setTemplateFor(null); toast({ title: 'Saved to your templates', description: 'Open Templates to apply it to any future plan.' }) }} />
       <GoalSelectDialog node={goalFor} onClose={() => setGoalFor(null)} onSaved={() => { setGoalFor(null); reload() }} />
     </div>
   )
@@ -463,8 +469,8 @@ function PlanTitleToggle({ node, onReload }: { node: PlanNode; onReload: () => v
   )
 }
 
-// menu: edit details / rename / done / destination goal
-function PlanRowMenu({ node, onReload, onSetGoal, onEditPlan }: { node: PlanNode; onReload: () => void; onSetGoal: (node: PlanNode) => void; onEditPlan: (node: PlanNode) => void }) {
+// menu: edit details / rename / done / destination goal / save as template
+function PlanRowMenu({ node, onReload, onSetGoal, onEditPlan, onSaveTemplate }: { node: PlanNode; onReload: () => void; onSetGoal: (node: PlanNode) => void; onEditPlan: (node: PlanNode) => void; onSaveTemplate: (node: PlanNode) => void }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -493,6 +499,9 @@ function PlanRowMenu({ node, onReload, onSetGoal, onEditPlan }: { node: PlanNode
         <DropdownMenuItem onClick={() => onSetGoal(node)}>
           <FaBullseye className="mr-2 h-3.5 w-3.5" /> Destination goal…
         </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onSaveTemplate(node)}>
+          <FaClone className="mr-2 h-3.5 w-3.5" /> Save as template…
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   )
@@ -500,7 +509,7 @@ function PlanRowMenu({ node, onReload, onSetGoal, onEditPlan }: { node: PlanNode
 
 // ─── Recursive plan node row ───────────────────────────────────────
 function PlanNodeRow({
-  node, depth, collapsed, toggleCollapse, onToggleTask, onSnoozeTask, onAddTask, onEditTask, onReload, allPlans, onEditPlan, onSetGoal,
+  node, depth, collapsed, toggleCollapse, onToggleTask, onSnoozeTask, onAddTask, onEditTask, onReload, allPlans, onEditPlan, onSetGoal, onSaveTemplate,
 }: {
   node: PlanNode
   depth: number
@@ -514,6 +523,7 @@ function PlanNodeRow({
   allPlans: { id: string; title: string; timeframe: string }[]
   onEditPlan: (node: PlanNode) => void
   onSetGoal: (node: PlanNode) => void
+  onSaveTemplate: (node: PlanNode) => void
 }) {
   const [adding, setAdding] = useState(false)
   const [newTask, setNewTask] = useState('')
@@ -566,7 +576,7 @@ function PlanNodeRow({
             </button>
           )}
           <span className="ml-auto text-[10px] tabular-nums text-muted-foreground">{doneCount}/{tasks.length} tasks</span>
-          <PlanRowMenu node={node} onReload={onReload} onSetGoal={onSetGoal} onEditPlan={onEditPlan} />
+          <PlanRowMenu node={node} onReload={onReload} onSetGoal={onSetGoal} onEditPlan={onEditPlan} onSaveTemplate={onSaveTemplate} />
           <button
             onClick={async () => {
               await api.del(`/api/plans/${node.id}`)
@@ -632,6 +642,7 @@ function PlanNodeRow({
                     allPlans={allPlans}
                     onEditPlan={onEditPlan}
                     onSetGoal={onSetGoal}
+                    onSaveTemplate={onSaveTemplate}
                   />
                 ))}
               </div>
@@ -1201,7 +1212,7 @@ function PlanDialog({ open, onOpenChange, plan, allPlans, onSaved }: {
             </div>
           </div>
           <p className="text-[11px] text-muted-foreground">
-            The plan shows in the Day view on every date it covers. Without an end date the timeframe decides the span (day = 1 day, week = 7 days, month / quarter / year = their calendar length).
+            The plan appears in the day agenda (under the week strip) on every date it covers. Without an end date the timeframe decides the span (day = 1 day, week = 7 days, month / quarter / year = their calendar length).
           </p>
           <div>
             <label className="text-xs text-muted-foreground">Notes (optional)</label>
@@ -1219,49 +1230,181 @@ function PlanDialog({ open, onOpenChange, plan, allPlans, onSaved }: {
   )
 }
 
-// ─── Templates dialog ──────────────────────────────────────────────
+// ─── Templates dialog — starter templates + the user's own saved ones ──
+type BuiltinTemplate = { id: string; name: string; description: string }
+type UserTemplate = { id: string; name: string; description: string; planCount: number; taskCount: number }
+
 function TemplatesDialog({ open, onOpenChange, onApplied }: { open: boolean; onOpenChange: (v: boolean) => void; onApplied: () => void }) {
-  const [templates, setTemplates] = useState<{ id: string; name: string; description: string }[]>([])
+  const [templates, setTemplates] = useState<BuiltinTemplate[] | null>(null)
+  const [userTemplates, setUserTemplates] = useState<UserTemplate[] | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
+  const { toast } = useToast()
+
+  async function fetchAll() {
+    try {
+      const d = await api.get<{ templates: BuiltinTemplate[]; userTemplates: UserTemplate[] }>('/api/plans/templates')
+      setTemplates(d.templates)
+      setUserTemplates(d.userTemplates ?? [])
+    } catch {
+      setTemplates([])
+      setUserTemplates([])
+    }
+  }
 
   useEffect(() => {
-    if (open && templates.length === 0) {
-      api.get<{ templates: { id: string; name: string; description: string }[] }>('/api/plans/templates').then((d) => setTemplates(d.templates)).catch(() => {})
+    if (open) void fetchAll()
+  }, [open])
+
+  async function apply(templateId: string) {
+    setBusyId(templateId)
+    try {
+      await api.post('/api/plans/templates', { templateId })
+      onApplied()
+      onOpenChange(false)
+    } catch {
+      toast({ title: 'Could not apply template', variant: 'destructive' })
+    } finally {
+      setBusyId(null)
     }
-  }, [open, templates.length])
+  }
+
+  async function remove(t: UserTemplate) {
+    setBusyId(t.id)
+    try {
+      await api.del(`/api/plans/templates?templateId=user:${t.id}`)
+      setUserTemplates((prev) => (prev ?? []).filter((x) => x.id !== t.id))
+      toast({ title: 'Template deleted' })
+    } catch {
+      toast({ title: 'Could not delete template', variant: 'destructive' })
+    } finally {
+      setBusyId(null)
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Plan templates</DialogTitle>
-          <DialogDescription>One click creates the goal, milestones, plans and starter tasks.</DialogDescription>
+          <DialogDescription>
+            Save any of your plans as a reusable blueprint from its ⋯ menu, then apply it here — a fresh copy of the plan, its sub-plans and its tasks, ready to customize.
+          </DialogDescription>
         </DialogHeader>
-        <div className="space-y-2">
-          {templates.length === 0 && <p className="text-sm text-muted-foreground">Loading templates…</p>}
-          {templates.map((t) => (
-            <button
-              key={t.id}
-              onClick={async () => {
-                setBusyId(t.id)
-                try {
-                  await api.post('/api/plans/templates', { templateId: t.id })
-                  onApplied()
-                  onOpenChange(false)
-                } finally {
-                  setBusyId(null)
-                }
-              }}
-              className="flex w-full items-center gap-3 rounded-xl border bg-card p-4 text-left transition-all hover:shadow-soft"
-            >
-              <FaWandMagicSparkles className="h-5 w-5 shrink-0 text-primary" />
-              <span className="min-w-0 flex-1">
-                <span className="block text-sm font-semibold">{t.name}</span>
-                <span className="block text-xs text-muted-foreground">{t.description}</span>
-              </span>
-              {busyId === t.id && <FaSpinner className="h-4 w-4 animate-spin text-primary" />}
-            </button>
-          ))}
+
+        <div className="max-h-[55vh] space-y-4 overflow-y-auto pr-1">
+          {/* user templates */}
+          <section className="space-y-2">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">My templates</h3>
+            {userTemplates === null ? (
+              <p className="py-2 text-sm text-muted-foreground">Loading…</p>
+            ) : userTemplates.length === 0 ? (
+              <p className="rounded-xl border border-dashed p-3 text-xs text-muted-foreground">
+                None yet — open any plan&apos;s <span className="font-medium">⋯ menu → Save as template…</span> to turn it into a reusable blueprint (nesting, tasks, priorities and estimates are kept; dates, statuses and goal links are not).
+              </p>
+            ) : (
+              userTemplates.map((t) => (
+                <div key={t.id} className="flex items-center gap-3 rounded-xl border bg-card p-3.5 transition-all hover:shadow-soft">
+                  <FaClone className="h-5 w-5 shrink-0 text-primary" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold">{t.name}</span>
+                    <span className="block truncate text-xs text-muted-foreground">
+                      {t.planCount} nested plan{t.planCount === 1 ? '' : 's'} · {t.taskCount} task{t.taskCount === 1 ? '' : 's'}
+                    </span>
+                  </span>
+                  <Button size="sm" variant="outline" onClick={() => apply(`user:${t.id}`)} disabled={busyId === t.id}>
+                    {busyId === `user:${t.id}` ? <FaSpinner className="h-4 w-4 animate-spin" /> : 'Apply'}
+                  </Button>
+                  <button
+                    onClick={() => remove(t)}
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-danger/10 hover:text-danger"
+                    aria-label={`Delete template ${t.name}`}
+                  >
+                    {busyId === t.id ? <FaSpinner className="h-4 w-4 animate-spin" /> : <FaTrashCan className="h-4 w-4" />}
+                  </button>
+                </div>
+              ))
+            )}
+          </section>
+
+          {/* starter templates */}
+          <section className="space-y-2">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Starter templates</h3>
+            {(templates ?? []).map((t) => (
+              <button
+                key={t.id}
+                onClick={() => apply(t.id)}
+                disabled={busyId !== null}
+                className="flex w-full items-center gap-3 rounded-xl border bg-card p-4 text-left transition-all hover:shadow-soft"
+              >
+                <FaWandMagicSparkles className="h-5 w-5 shrink-0 text-primary" />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold">{t.name}</span>
+                  <span className="block text-xs text-muted-foreground">{t.description}</span>
+                </span>
+                {busyId === t.id && <FaSpinner className="h-4 w-4 animate-spin text-primary" />}
+              </button>
+            ))}
+            {templates !== null && templates.length === 0 && (
+              <p className="text-sm text-muted-foreground">No starter templates available.</p>
+            )}
+          </section>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ─── Save-as-template dialog — blueprint a plan for future reuse ────
+function SaveTemplateDialog({ node, onClose, onSaved }: { node: PlanNode | null; onClose: () => void; onSaved: () => void }) {
+  const [name, setName] = useState('')
+  const [description, setDescription] = useState('')
+  const [busy, setBusy] = useState(false)
+  const { toast } = useToast()
+
+  useEffect(() => {
+    if (node) {
+      setName(node.title)
+      setDescription('')
+    }
+  }, [node])
+
+  async function save() {
+    if (!node || !name.trim()) return
+    setBusy(true)
+    try {
+      await api.post(`/api/plans/${node.id}/template`, { name: name.trim(), description: description.trim() || undefined })
+      onSaved()
+    } catch {
+      toast({ title: 'Could not save template', variant: 'destructive' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Dialog open={!!node} onOpenChange={(v) => { if (!v) onClose() }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><FaClone className="h-4 w-4 text-primary" /> Save as template</DialogTitle>
+          <DialogDescription>
+            Stores “{node?.title}” with its sub-plans and tasks as a reusable blueprint. Dates, done-states and goal links are left out, so every future copy starts clean.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs text-muted-foreground">Template name</label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} className="mt-1" aria-label="Template name" placeholder="e.g. Weekly deep-work plan" autoFocus />
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground">Description (optional)</label>
+            <Input value={description} onChange={(e) => setDescription(e.target.value)} className="mt-1" aria-label="Template description" placeholder="When is this blueprint useful?" />
+          </div>
+        </div>
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button onClick={save} disabled={busy || !name.trim()}>
+            {busy && <FaSpinner className="mr-1.5 h-4 w-4 animate-spin" />} Save template
+          </Button>
         </div>
       </DialogContent>
     </Dialog>

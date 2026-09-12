@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getSessionUser, unauthorized } from '@/lib/auth-server'
+import { copyPlanSubtree, summarizeTemplate, type TemplateSummary } from '@/lib/plan-template'
 
 const TEMPLATES: {
   id: string
@@ -48,12 +49,29 @@ const TEMPLATES: {
   },
 ]
 
-// GET /api/plans/templates — list available plan templates
+// GET /api/plans/templates — starter templates + the user's own saved ones
 export async function GET() {
-  return NextResponse.json({ templates: TEMPLATES })
+  try {
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
+    const roots = await db.plan.findMany({
+      where: { userId: user.id, timeframe: 'template', parentId: null },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, title: true, notes: true, createdAt: true },
+    })
+    const userTemplates: TemplateSummary[] = await Promise.all(roots.map((r) => summarizeTemplate(user.id, r)))
+
+    return NextResponse.json({ templates: TEMPLATES, userTemplates })
+  } catch (e) {
+    console.error('GET /api/plans/templates error', e)
+    return NextResponse.json({ error: 'Failed to load templates' }, { status: 500 })
+  }
 }
 
-// POST /api/plans/templates — apply a template: creates goal + milestones + plans + tasks for the signed-in user
+// POST /api/plans/templates — apply a template.
+//   { templateId: '<builtin-id>' }  → starter template (goal + plans + tasks)
+//   { templateId: 'user:<cuid>' }   → the user's saved plan blueprint (plans + tasks)
 export async function POST(req: NextRequest) {
   try {
     const user = await getSessionUser()
@@ -61,6 +79,26 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json()
     const templateId: string = body?.templateId
+
+    if (typeof templateId === 'string' && templateId.startsWith('user:')) {
+      const rootId = templateId.slice('user:'.length)
+      const root = await db.plan.findFirst({
+        where: { id: rootId, userId: user.id, timeframe: 'template', parentId: null },
+        select: { id: true },
+      })
+      if (!root) return NextResponse.json({ error: 'Unknown template' }, { status: 404 })
+      // the blueprint is the (single) child of the template root
+      const blueprint = await db.plan.findFirst({
+        where: { parentId: root.id, userId: user.id },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true },
+      })
+      if (!blueprint) return NextResponse.json({ error: 'Template is empty' }, { status: 400 })
+
+      const newRootId = await copyPlanSubtree(user.id, blueprint.id, null)
+      return NextResponse.json({ ok: true, rootPlanId: newRootId }, { status: 201 })
+    }
+
     const template = TEMPLATES.find((t) => t.id === templateId)
     if (!template) return NextResponse.json({ error: 'Unknown template' }, { status: 404 })
 
@@ -102,5 +140,30 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     console.error('POST /api/plans/templates error', e)
     return NextResponse.json({ error: 'Failed to apply template' }, { status: 500 })
+  }
+}
+
+// DELETE /api/plans/templates?templateId=user:<cuid> — remove a saved template
+export async function DELETE(req: NextRequest) {
+  try {
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
+    const templateId = req.nextUrl.searchParams.get('templateId') ?? ''
+    if (!templateId.startsWith('user:')) {
+      return NextResponse.json({ error: 'Starter templates cannot be deleted' }, { status: 400 })
+    }
+    const rootId = templateId.slice('user:'.length)
+    const root = await db.plan.findFirst({
+      where: { id: rootId, userId: user.id, timeframe: 'template', parentId: null },
+      select: { id: true },
+    })
+    if (!root) return NextResponse.json({ error: 'Unknown template' }, { status: 404 })
+
+    await db.plan.delete({ where: { id: root.id } }) // children + tasks cascade
+    return NextResponse.json({ ok: true })
+  } catch (e) {
+    console.error('DELETE /api/plans/templates error', e)
+    return NextResponse.json({ error: 'Failed to delete template' }, { status: 500 })
   }
 }

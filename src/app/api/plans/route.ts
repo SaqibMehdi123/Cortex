@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getSessionUser, unauthorized } from '@/lib/auth-server'
+import { stripTemplateRows } from '@/lib/plan-template'
 
 type PlanWithChildren = {
   id: string
@@ -89,7 +90,9 @@ export async function GET() {
       },
     })) as unknown as FlatPlan[]
 
-    return NextResponse.json({ plans: buildTree(plans) })
+    // saved templates live in this table too (timeframe='template' roots with
+    // descendants) — drop them and anything nested under them
+    return NextResponse.json({ plans: buildTree(stripTemplateRows(plans)) })
   } catch (e) {
     console.error('GET /api/plans error', e)
     return NextResponse.json({ error: 'Failed to load plans' }, { status: 500 })

@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
       db.note.findMany({ where: { userId: user.id }, orderBy: { updatedAt: 'desc' }, take: 20 }),
       db.goal.findMany({ where: { userId: user.id, status: 'active' }, include: { milestones: true }, take: 15 }),
       db.task.findMany({ where: { userId: user.id, status: { not: 'done' } }, orderBy: [{ dueDate: 'asc' }], take: 15, include: { goal: { select: { title: true } } } }),
-      db.plan.findMany({ where: { userId: user.id, done: false }, orderBy: { updatedAt: 'desc' }, take: 10 }),
+      db.plan.findMany({ where: { userId: user.id, done: false, timeframe: { not: 'template' } }, orderBy: { updatedAt: 'desc' }, take: 10 }),
       db.highlight.findMany({ where: { userId: user.id }, orderBy: { createdAt: 'desc' }, take: 15, include: { document: { select: { title: true } } } }),
       db.opportunity.findMany({ where: { userId: user.id, status: { in: ['saved', 'applied', 'interview'] } }, take: 8 }),
       db.newsArticle.findMany({ where: { userId: user.id }, orderBy: { publishedAt: 'desc' }, take: 5 }),
