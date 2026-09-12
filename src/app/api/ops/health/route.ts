@@ -246,6 +246,7 @@ async function checkR2() {
     connectionOk: check.ok,
     errorCode: check.code,
     hint: check.hint,
+    accountIdShape: check.accountId,
   }
 }
 

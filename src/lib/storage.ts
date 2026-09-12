@@ -84,19 +84,43 @@ let r3client: S3Client | null = null
 
 /**
  * Normalise whatever was pasted into R2_ACCOUNT_ID down to the bare 32-hex
- * account id. People paste the full endpoint URL (the setup doc used to
- * invite this) — `https://<id>.r2.cloudflarestorage.com` would otherwise
- * build the nonsense endpoint `https://https://…` whose parsed hostname
- * (`https`) fails DNS with ENOTFOUND. Also tolerates the host-with-scheme
- * form and jurisdiction endpoints (`<id>.eu.r2.cloudflarestorage.com`).
+ * account id. Production diagnosed ENOTFOUND because an invalid paste made
+ * the endpoint hostname unresolvable — a Cloudflare Account ID is ALWAYS
+ * exactly 32 hex chars, so any occurrence of a 32-hex run inside the pasted
+ * value IS the id (works for full endpoint URLs, quoted values, `<id>`
+ * placeholders, trailing labels/comments, BOM/zero-width paste artifacts…).
+ * Fallback: strip scheme/path/host-suffix and keep the remainder.
  */
 export function r2AccountId(): string {
   const raw = (process.env.R2_ACCOUNT_ID || '').trim()
+  const hexRun = raw.match(/[0-9a-fA-F]{32}/)
+  if (hexRun) return hexRun[0]
+  // Paste may be hard-wrapped or space-split across lines (env-editor wrap):
+  const joined = raw.replace(/\s+/g, '')
+  if (/^[0-9a-fA-F]{32}$/.test(joined)) return joined
   let v = raw
   if (/^[a-z]+:\/\//i.test(v)) v = v.slice(v.indexOf('://') + 3)
-  v = v.split('/')[0] // drop any path
+  v = v.split('/')[0]
   v = v.replace(/\.(?:eu|fedramp)?\.?r2\.cloudflarestorage\.com.*$/i, '')
   return v.trim()
+}
+
+/**
+ * Public-safe shape report for the health endpoint: classifies the pasted
+ * R2_ACCOUNT_ID without ever revealing it. Catches the failure classes DNS
+ * cannot (illegal characters, over-long labels, empty) and distinguishes
+ * "auto-extracted" from "verbatim", which changes which hint applies.
+ */
+export function r2AccountIdShape(): { len: number | null; hex32: boolean | null; illegalChars: boolean | null; extracted: boolean } {
+  const raw = (process.env.R2_ACCOUNT_ID || '').trim()
+  if (!raw) return { len: null, hex32: null, illegalChars: null, extracted: false }
+  const bare = r2AccountId()
+  return {
+    len: raw.length,
+    hex32: /^[0-9a-f]{32}$/i.test(bare),
+    illegalChars: /[^A-Za-z0-9.\-_:/%?=&\s"']/.test(raw),
+    extracted: bare !== raw,
+  }
 }
 
 function r2(): S3Client {
@@ -199,23 +223,28 @@ export type R2ConnectionResult = {
   code: string
   /** Operator-facing hint naming the env var to fix. No secrets. */
   hint: string
+  /** Shape of the pasted R2_ACCOUNT_ID (never its value). */
+  accountId: { len: number | null; hex32: boolean | null; illegalChars: boolean | null; extracted: boolean }
 }
 
 export async function r2ConnectionCheck(): Promise<R2ConnectionResult> {
+  const shape = r2AccountIdShape()
   if (!r2Configured()) {
-    return { ok: false, code: 'NOT_CONFIGURED', hint: 'one or more R2_* environment variables are missing' }
+    return { ok: false, code: 'NOT_CONFIGURED', hint: 'one or more R2_* environment variables are missing', accountId: shape }
   }
   try {
     await r2().send(new ListObjectsV2Command({ Bucket: r2Bucket(), MaxKeys: 1 }))
-    return { ok: true, code: 'OK', hint: 'credentials work against the bucket' }
+    return { ok: true, code: 'OK', hint: 'credentials work against the bucket', accountId: shape }
   } catch (e) {
     const err = e as {
       name?: string
       code?: string
       $metadata?: { httpStatusCode?: number }
+      cause?: { code?: string; name?: string }
     }
     const status = err?.$metadata?.httpStatusCode
-    const code = err?.code || err?.name || 'UNKNOWN'
+    const causeCode = err?.cause?.code || err?.cause?.name
+    const code = err?.code || causeCode || err?.name || 'UNKNOWN'
 
     if (code === 'SignatureDoesNotMatch') {
       return {
@@ -223,13 +252,16 @@ export async function r2ConnectionCheck(): Promise<R2ConnectionResult> {
         code,
         hint:
           'R2_SECRET_ACCESS_KEY is wrong — re-copy the "Secret Access Key" shown at token creation (NOT the long eyJ… "Token value"; the secret is only shown once)',
+        accountId: shape,
       }
     }
     if (code === 'InvalidAccessKeyId') {
       return {
         ok: false,
         code,
-        hint: 'R2_ACCESS_KEY_ID does not exist for this account — re-copy the S3-style "Access Key ID" from Manage R2 API Tokens',
+        hint:
+          'R2_ACCESS_KEY_ID does not exist for this account — re-copy the S3-style "Access Key ID" from Manage R2 API Tokens. (Both the Account ID and the Access Key ID are 32-hex strings — make sure they are not swapped.)',
+        accountId: shape,
       }
     }
     if (code === 'AccessDenied' || status === 403) {
@@ -237,6 +269,7 @@ export async function r2ConnectionCheck(): Promise<R2ConnectionResult> {
         ok: false,
         code,
         hint: 'token valid but denied on this bucket — the API token needs "Object Read & Write" scoped to (at least) this bucket',
+        accountId: shape,
       }
     }
     if (code === 'NoSuchBucket' || status === 404) {
@@ -244,25 +277,32 @@ export async function r2ConnectionCheck(): Promise<R2ConnectionResult> {
         ok: false,
         code,
         hint: 'R2_BUCKET does not match an existing bucket — check exact name and case (bucket ids and account ids are not bucket names)',
+        accountId: shape,
       }
     }
     if (
       code === 'NetworkingError' ||
       code === 'ENOTFOUND' ||
       code === 'EAI_AGAIN' ||
+      code === 'EAI_NONAME' ||
       code === 'ERR_INVALID_URL' ||
       code === 'InvalidEndpoint' ||
       code === 'TypeError' ||
+      code === 'FailedToOpenSocket' ||
       status === 400
     ) {
       return {
         ok: false,
         code,
-        hint:
-          'endpoint does not resolve — R2_ACCOUNT_ID must be the 32-hex Account ID (dash.cloudflare.com → R2 → Account details), not the endpoint URL and not the bucket id',
+        hint: !shape.hex32
+          ? 'R2_ACCOUNT_ID is not a 32-hex Account ID after normalising — open dash.cloudflare.com → R2 → Account details and paste the 32-character hex Account ID (not the endpoint URL, not a token)'
+          : shape.extracted
+            ? 'endpoint still unresolvable although a 32-hex id was found and extracted — the extracted id may be the Access Key ID by mistake, or the Account ID itself is wrong'
+            : 'endpoint unresolvable with a valid-format 32-hex id — verify the Account ID in dash.cloudflare.com → R2 → Account details matches, then redeploy',
+        accountId: shape,
       }
     }
-    return { ok: false, code, hint: `unexpected S3 error — verify all four R2_* values (status ${status ?? 'n/a'})` }
+    return { ok: false, code, hint: `unexpected S3 error — verify all four R2_* values (status ${status ?? 'n/a'})`, accountId: shape }
   }
 }
 

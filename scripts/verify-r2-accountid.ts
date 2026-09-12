@@ -15,6 +15,11 @@ const cases: Array<[string, string, string]> = [
   ['jurisdiction endpoint URL', 'https://a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6.eu.r2.cloudflarestorage.com', 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6'],
   ['endpoint URL with trailing slash+path', 'https://a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6.r2.cloudflarestorage.com/bucket/key', 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6'],
   ['padded whitespace', '  a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6\n', 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6'],
+  ['wrapped in double quotes', '"a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6"', 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6'],
+  ['angle brackets <id>', '<a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6>', 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6'],
+  ['internal space', 'a1b2c3d4e5f6a7b8 c9d0e1f2a3b4c5d6', 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6'],
+  ['URL paste with surrounding quotes', '"https://a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6.r2.cloudflarestorage.com"', 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6'],
+  ['trailing label like "account id"', 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6 (account id)', 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6'],
 ]
 
 let passed = 0
