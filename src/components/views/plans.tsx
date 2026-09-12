@@ -1,11 +1,12 @@
 'use client'
 
-import { FaBullseye, FaCalendarDays, FaCheck, FaChevronDown, FaChevronRight, FaCircleCheck, FaClock, FaClone, FaEllipsis, FaInbox, FaList, FaPencil, FaPlus, FaSpinner, FaStopwatch, FaTableColumns, FaTrashCan, FaWandMagicSparkles } from 'react-icons/fa6'
+import { FaBell, FaBullseye, FaCalendarDays, FaCheck, FaChevronDown, FaChevronRight, FaCircleCheck, FaClock, FaClone, FaEllipsis, FaList, FaPencil, FaPlus, FaSpinner, FaStopwatch, FaTableColumns, FaTrashCan, FaWandMagicSparkles, FaXmark } from 'react-icons/fa6'
 import { useCallback, useMemo, useState, useEffect, type FormEvent } from 'react'
 import { api, todayISO } from '@/lib/client'
-import type { Plan, Task, Goal } from '@/lib/types'
+import type { Plan, Task, Goal, Reminder } from '@/lib/types'
 import { useApi } from '@/lib/client'
 import { planSpan, formatSpan, hasTimePart } from '@/lib/plan-span'
+import { reminderActiveOn, recurrenceLabel } from '@/lib/reminder-span'
 import { usePomodoro } from '@/lib/pomodoro'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -19,6 +20,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { TimePicker } from '@/components/ui/time-picker'
 import { useToast } from '@/hooks/use-toast'
+import { ToastAction } from '@/components/ui/toast'
 import { useUI } from '@/lib/nav-config'
 import { cn } from '@/lib/utils'
 import { PriorityDot, EmptyState, SkeletonCard } from '@/components/shared'
@@ -32,9 +34,9 @@ export function PlansView() {
   const { data, loading, reload } = useApi<{ plans: PlanNode[] }>('/api/plans')
   // one page, two boards: outline (the plan tree) is the default and the
   // home of everything; kanban is an optional task-status lens.
-  // A day agenda card (individual tasks for the selected day) sits above
-  // the tree; plans themselves are NOT repeated there — they live in the
-  // outline below.
+  // Above the tree sit two day-scoped cards — the day agenda (individual
+  // tasks for the selected day + a quick-add) and reminders — plans
+  // themselves are NOT repeated there; they live in the outline below.
   const [mode, setMode] = useState<'outline' | 'kanban'>('outline')
   const [selectedDay, setSelectedDay] = useState(todayISO())
   const [addOpen, setAddOpen] = useState(false)
@@ -45,6 +47,7 @@ export function PlansView() {
   const [editOpen, setEditOpen] = useState(false)
   const [editPlan, setEditPlan] = useState<PlanNode | null>(null)
   const [templateFor, setTemplateFor] = useState<PlanNode | null>(null)
+  const [editingReminder, setEditingReminder] = useState<Reminder | null>(null)
 
   const week = useMemo(() => {
     const now = new Date()
@@ -65,9 +68,15 @@ export function PlansView() {
     `/api/tasks?date=${selectedDay}&tzOffset=${tzOffset}`,
     [selectedDay]
   )
-  // Quick-capture tasks (and any task not attached to a plan) land here —
-  // they used to be invisible on this page entirely.
-  const inboxTasks = useApi<{ tasks: Task[] }>(`/api/tasks?unassigned=1&status=open`, [])
+  // Tasks with no plan (quick-capture home). Undated ones surface in the day
+  // agenda's "Unscheduled" group on today; dated ones show on their day.
+  const unassignedTasks = useApi<{ tasks: Task[] }>(`/api/tasks?unassigned=1&status=open`, [])
+  // Reminders — filtered per selected day by the shared reminder-span rules.
+  const reminders = useApi<{ reminders: Reminder[] }>('/api/reminders', [])
+  const activeReminders = useMemo(
+    () => (reminders.data?.reminders ?? []).filter((r) => reminderActiveOn(r, selectedDay)),
+    [reminders.data, selectedDay]
+  )
 
   const allPlansFlat = useMemo(() => {
     const out: { id: string; title: string; timeframe: string }[] = []
@@ -87,7 +96,7 @@ export function PlansView() {
       await api.patch(`/api/tasks/${t.id}`, { status: next })
       reload()
       dayTasks.reload()
-      inboxTasks.reload()
+      unassignedTasks.reload()
     } catch {
       toast({ title: 'Could not update task', variant: 'destructive' })
     }
@@ -99,7 +108,7 @@ export function PlansView() {
       toast({ title: 'Snoozed to tomorrow' })
       reload()
       dayTasks.reload()
-      inboxTasks.reload()
+      unassignedTasks.reload()
     } catch {
       toast({ title: 'Could not snooze', variant: 'destructive' })
     }
@@ -110,23 +119,31 @@ export function PlansView() {
       await api.post('/api/tasks', { title, planId, dueDate: dueISO ?? (planId ? undefined : selectedDay) })
       reload()
       dayTasks.reload()
-      inboxTasks.reload()
+      unassignedTasks.reload()
     } catch {
       toast({ title: 'Could not add task', variant: 'destructive' })
     }
   }
 
-  // Inbox quick-add: no plan; date/time optional — the same shape quick
-  // capture produces when a due date is picked there.
-  async function addInboxTask(title: string, dueISO?: string) {
+  // Day-agenda quick-add: creates a STANDALONE task (no plan) — the
+  // replacement for the old inbox adds. The date defaults to the selected
+  // day; time optional.
+  async function addDayTask(title: string, dueISO?: string) {
     try {
       await api.post('/api/tasks', { title, dueDate: dueISO })
-      toast({ title: dueISO ? 'Task added to inbox — scheduled' : 'Task added to inbox' })
+      toast({ title: dueISO ? 'Task added' : 'Task added — no date set (find it under Unscheduled on today)' })
       reload()
-      inboxTasks.reload()
+      dayTasks.reload()
+      unassignedTasks.reload()
     } catch {
       toast({ title: 'Could not add task', variant: 'destructive' })
     }
+  }
+
+  function reloadAll() {
+    reload()
+    dayTasks.reload()
+    unassignedTasks.reload()
   }
 
   function openEdit(t: Task) {
@@ -134,10 +151,32 @@ export function PlansView() {
     setEditOpen(true)
   }
 
-  function reloadAll() {
-    reload()
-    dayTasks.reload()
-    inboxTasks.reload()
+  // ── reminders ──
+  async function completeReminder(r: Reminder) {
+    try {
+      await api.patch(`/api/reminders/${r.id}`, { done: true })
+      reminders.reload()
+      toast({
+        title: 'Reminder completed',
+        action: (
+          <ToastAction altText="Undo" onClick={() => { void api.patch(`/api/reminders/${r.id}`, { done: false }).then(() => reminders.reload()) }}>
+            Undo
+          </ToastAction>
+        ),
+      })
+    } catch (e) {
+      toast({ title: 'Could not update reminder', description: e instanceof Error ? e.message : undefined, variant: 'destructive' })
+    }
+  }
+
+  async function deleteReminder(r: Reminder) {
+    try {
+      await api.del(`/api/reminders/${r.id}`)
+      reminders.reload()
+      toast({ title: 'Reminder deleted' })
+    } catch (e) {
+      toast({ title: 'Could not delete reminder', description: e instanceof Error ? e.message : undefined, variant: 'destructive' })
+    }
   }
 
   function toggleCollapse(id: string) {
@@ -212,7 +251,7 @@ export function PlansView() {
                   // landed at 14:00 for UTC+5 users.
                   const due = new Date(`${iso}T09:00:00`).toISOString()
                   api.patch(`/api/tasks/${taskId}`, { dueDate: due })
-                    .then(() => { reload(); dayTasks.reload(); inboxTasks.reload(); toast({ title: `Rescheduled to ${d.toLocaleDateString('en-US', { weekday: 'short' })}` }) })
+                    .then(() => { reload(); dayTasks.reload(); unassignedTasks.reload(); toast({ title: `Rescheduled to ${d.toLocaleDateString('en-US', { weekday: 'short' })}` }) })
                     .catch(() => toast({ title: 'Reschedule failed', variant: 'destructive' }))
                 }
               }}
@@ -231,7 +270,8 @@ export function PlansView() {
         })}
       </div>
 
-      {/* ── Day agenda — individual tasks due on the selected day. Plans
+      {/* ── Day agenda — individual tasks due on the selected day, with a
+          quick-add (+ → text + date/time, no plan attached). Plans
           themselves are NOT repeated here (they live in the outline below,
           exactly once) — only standalone tasks get a day listing. ── */}
       <Card>
@@ -250,32 +290,48 @@ export function PlansView() {
             </p>
           ) : (
             dayTasks.data!.tasks.filter((t) => !t.planId).map((t) => (
-              <TaskRow key={t.id} task={t} onToggle={toggleTask} onSnooze={snoozeTask} onEdit={openEdit} />
-            ))
-          )}
-        </CardContent>
-      </Card>
-
-      {/* ── Inbox: tasks with no plan (quick-capture home) ── */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="flex items-center gap-2 text-sm">
-            <FaInbox className="h-4 w-4 text-primary" />
-            Inbox
-            <span className="ml-1 text-xs font-normal text-muted-foreground">— captured tasks without a plan. Drag one onto a day above to schedule it.</span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-1.5">
-          {inboxTasks.loading ? (
-            <div className="space-y-2">{[1, 2].map((i) => <SkeletonCard key={i} className="h-10" />)}</div>
-          ) : (inboxTasks.data?.tasks.length ?? 0) === 0 ? (
-            <p className="py-3 text-center text-sm text-muted-foreground">Nothing here — tasks captured from anywhere (⌘K → Task) show up in this inbox.</p>
-          ) : (
-            inboxTasks.data!.tasks.map((t) => (
               <TaskRow key={t.id} task={t} onToggle={toggleTask} onSnooze={snoozeTask} onEdit={openEdit} draggable />
             ))
           )}
-          <InboxQuickAdd onAdd={addInboxTask} />
+          {/* Undated standalone tasks (e.g. quick-capture without a day) —
+              visible on today's agenda so they can't silently vanish; drag
+              one onto a day above to schedule it. */}
+          {selectedDay === todayISO() && (unassignedTasks.data?.tasks.filter((t) => !t.dueDate).length ?? 0) > 0 && (
+            <div className="space-y-1.5 pt-1">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Unscheduled — no date yet</p>
+              {unassignedTasks.data!.tasks.filter((t) => !t.dueDate).map((t) => (
+                <TaskRow key={t.id} task={t} onToggle={toggleTask} onSnooze={snoozeTask} onEdit={openEdit} draggable />
+              ))}
+            </div>
+          )}
+          <DayQuickAdd selectedDay={selectedDay} onAdd={addDayTask} />
+        </CardContent>
+      </Card>
+
+      {/* ── Reminders — day-anchored nudges with optional repeats. Shown ONLY
+          on the days they cover (one day, or several via "show for N days").
+          Replaces the old inbox card. ── */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <FaBell className="h-4 w-4 text-primary" />
+            Reminders
+            <span className="ml-1 text-xs font-normal text-muted-foreground">— appear only on the days they&apos;re for</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-1.5">
+          {reminders.loading ? (
+            <div className="space-y-2">{[1, 2].map((i) => <SkeletonCard key={i} className="h-10" />)}</div>
+          ) : activeReminders.length === 0 ? (
+            <p className="py-3 text-center text-sm text-muted-foreground">
+              No reminders on this day. Add one below — e.g. pay rent on the 1st of every month.
+            </p>
+          ) : (
+            activeReminders.map((r) => (
+              <ReminderRow key={r.id} reminder={r} onDone={completeReminder} onDelete={deleteReminder} onEdit={setEditingReminder} />
+            ))
+          )}
+          <ReminderQuickAdd selectedDay={selectedDay} onSaved={reminders.reload} />
         </CardContent>
       </Card>
 
@@ -321,6 +377,7 @@ export function PlansView() {
       <TemplatesDialog open={templatesOpen} onOpenChange={setTemplatesOpen} onApplied={() => { reload(); toast({ title: 'Template applied — plans & tasks created', description: 'Find them in the outline above (starter templates also add a goal).' }) }} />
       <SaveTemplateDialog node={templateFor} onClose={() => setTemplateFor(null)} onSaved={() => { setTemplateFor(null); toast({ title: 'Saved to your templates', description: 'Open Templates to apply it to any future plan.' }) }} />
       <GoalSelectDialog node={goalFor} onClose={() => setGoalFor(null)} onSaved={() => { setGoalFor(null); reload() }} />
+      <ReminderEditDialog reminder={editingReminder} onClose={() => setEditingReminder(null)} onSaved={reminders.reload} />
     </div>
   )
 }
@@ -474,6 +531,13 @@ function PlanNodeRow({
 
   const TF_ICON: Record<string, string> = { year: '🎯', quarter: '📈', month: '📅', week: '🗓', day: '☀️' }
 
+  function closeForm() {
+    setAdding(false)
+    setNewTask('')
+    setDueDate('')
+    setDueTime('')
+  }
+
   function submitTask() {
     const t = newTask.trim()
     if (!t) return
@@ -481,10 +545,7 @@ function PlanNodeRow({
     // string would be parsed as UTC on the server and shift the clock)
     const due = dueDate ? new Date(`${dueDate}T${dueTime || '09:00'}:00`).toISOString() : undefined
     onAddTask(node.id, t, due)
-    setNewTask('')
-    setDueDate('')
-    setDueTime('')
-    setAdding(false)
+    closeForm()
   }
 
   return (
@@ -524,8 +585,13 @@ function PlanNodeRow({
           >
             <FaTrashCan className="h-3.5 w-3.5" />
           </button>
-          <button onClick={() => setAdding((v) => !v)} className="flex h-7 w-7 items-center justify-center rounded-lg text-primary hover:bg-muted" aria-label="Add task to plan">
-            <FaPlus className="h-4 w-4" />
+          <button
+            onClick={() => (adding ? closeForm() : setAdding(true))}
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-primary hover:bg-muted"
+            aria-label={adding ? 'Cancel adding a task' : 'Add task to plan'}
+            title={adding ? 'Cancel' : 'Add task'}
+          >
+            {adding ? <FaXmark className="h-4 w-4" /> : <FaPlus className="h-4 w-4" />}
           </button>
         </div>
 
@@ -537,6 +603,7 @@ function PlanNodeRow({
                 onChange={(e) => setNewTask(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') submitTask()
+                  if (e.key === 'Escape') closeForm()
                 }}
                 placeholder="Add a task to this plan…"
                 className="h-9"
@@ -544,6 +611,9 @@ function PlanNodeRow({
               />
               <Button size="sm" className="h-9" onClick={submitTask}>
                 Add
+              </Button>
+              <Button size="sm" variant="ghost" className="h-9" onClick={closeForm}>
+                Cancel
               </Button>
             </div>
             <DueFields dueDate={dueDate} dueTime={dueTime} onDate={setDueDate} onTime={setDueTime} hint="Optional — when this task is due" />
@@ -704,42 +774,313 @@ function TaskRow({ task, onToggle, onSnooze, onEdit, draggable }: { task: Task; 
   )
 }
 
-// One-line add for the inbox — creates a task with no plan; date/time optional.
-function InboxQuickAdd({ onAdd }: { onAdd: (title: string, dueISO?: string) => void }) {
+// ─── Day agenda quick-add: "+" opens a text + date/time form for a
+// standalone task (no plan); the date is preset to the selected day and the
+// whole thing is dismissible — Add, Cancel or Escape all leave cleanly. ───
+function DayQuickAdd({ selectedDay, onAdd }: { selectedDay: string; onAdd: (title: string, dueISO?: string) => void }) {
+  const [open, setOpen] = useState(false)
   const [title, setTitle] = useState('')
-  const [dueDate, setDueDate] = useState('')
+  const [dueDate, setDueDate] = useState(selectedDay)
   const [dueTime, setDueTime] = useState('')
+
+  function openForm() {
+    setDueDate(selectedDay)
+    setDueTime('')
+    setTitle('')
+    setOpen(true)
+  }
+
+  function close() {
+    setOpen(false)
+    setTitle('')
+    setDueDate(selectedDay)
+    setDueTime('')
+  }
 
   function submit(e: FormEvent) {
     e.preventDefault()
     const v = title.trim()
     if (!v) return
+    // date + time compose into a real instant in the USER's timezone
     const due = dueDate ? new Date(`${dueDate}T${dueTime || '09:00'}:00`).toISOString() : undefined
     onAdd(v, due)
-    setTitle('')
-    setDueDate('')
-    setDueTime('')
+    close()
+  }
+
+  if (!open) {
+    return (
+      <button
+        onClick={openForm}
+        className="flex w-full items-center gap-2 rounded-lg border border-dashed px-3 py-2 text-sm text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
+        aria-label="Add a task for this day"
+      >
+        <FaPlus className="h-3.5 w-3.5" /> Add a task for this day
+      </button>
+    )
   }
 
   return (
-    <form className="flex items-center gap-2 pt-1" onSubmit={submit}>
-      <FaPlus className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-      <div className="min-w-0 flex-1 space-y-2">
-        <Input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="Add a task to the inbox…"
-          aria-label="Add task to inbox"
-          className="h-9"
-        />
-        {title.trim() && <DueFields dueDate={dueDate} dueTime={dueTime} onDate={setDueDate} onTime={setDueTime} />}
-      </div>
-      {title.trim() && (
-        <Button type="submit" size="sm" className="h-9 shrink-0">
+    <form className="space-y-2 rounded-lg border bg-muted/20 p-2.5" onSubmit={submit}>
+      <Input
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') submit(e as unknown as FormEvent)
+          if (e.key === 'Escape') { e.preventDefault(); close() }
+        }}
+        placeholder="What needs doing?"
+        aria-label="New task title"
+        className="h-9"
+        autoFocus
+      />
+      <DueFields dueDate={dueDate} dueTime={dueTime} onDate={setDueDate} onTime={setDueTime} hint={`Date is preset to the selected day — the time is when it's DUE (deadline)`} />
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="ghost" size="sm" className="h-8" onClick={close}>
+          Cancel
+        </Button>
+        <Button type="submit" size="sm" className="h-8" disabled={!title.trim()}>
           Add
         </Button>
-      )}
+      </div>
     </form>
+  )
+}
+
+// ─── Reminder row: complete (current occurrence), edit, delete ──────
+function ReminderRow({ reminder, onDone, onDelete, onEdit }: { reminder: Reminder; onDone: (r: Reminder) => void; onDelete: (r: Reminder) => void; onEdit: (r: Reminder) => void }) {
+  return (
+    <div className="group flex items-center gap-2.5 rounded-lg border bg-background px-3 py-2 transition-all hover:bg-muted/40">
+      <Checkbox checked={false} onCheckedChange={() => onDone(reminder)} aria-label={`Done with ${reminder.title}`} />
+      <FaBell className="h-3.5 w-3.5 shrink-0 text-warning" />
+      <span className="min-w-0 flex-1 truncate text-sm">{reminder.title}</span>
+      <span className="hidden shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground sm:inline">
+        {recurrenceLabel(reminder.recurrence, reminder.startDate)}
+      </span>
+      {reminder.showDays > 1 && reminder.recurrence !== 'daily' && (
+        <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground" title="How many consecutive days this reminder appears, starting on its day">
+          shows {reminder.showDays}d
+        </span>
+      )}
+      <button
+        onClick={() => onEdit(reminder)}
+        className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground opacity-100 transition-opacity hover:bg-muted sm:opacity-0 sm:group-hover:opacity-100"
+        aria-label={`Edit ${reminder.title}`}
+        title="Edit reminder"
+      >
+        <FaPencil className="h-3.5 w-3.5" />
+      </button>
+      <button
+        onClick={() => onDelete(reminder)}
+        className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground opacity-100 transition-opacity hover:bg-muted hover:text-danger sm:opacity-0 sm:group-hover:opacity-100"
+        aria-label={`Delete ${reminder.title}`}
+        title="Delete reminder"
+      >
+        <FaTrashCan className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  )
+}
+
+// ─── Reminder quick-add: title + first day + cadence + how many days it
+// shows — fully dismissible like the task quick-adds. ─────────────────
+function ReminderQuickAdd({ selectedDay, onSaved }: { selectedDay: string; onSaved: () => void }) {
+  const [open, setOpen] = useState(false)
+  const [title, setTitle] = useState('')
+  const [date, setDate] = useState(selectedDay)
+  const [recurrence, setRecurrence] = useState('once')
+  const [showDays, setShowDays] = useState(1)
+  const [busy, setBusy] = useState(false)
+  const { toast } = useToast()
+
+  function openForm() {
+    setDate(selectedDay)
+    setRecurrence('once')
+    setShowDays(1)
+    setTitle('')
+    setOpen(true)
+  }
+
+  function close() {
+    setOpen(false)
+    setTitle('')
+  }
+
+  async function submit(e: FormEvent) {
+    e.preventDefault()
+    const v = title.trim()
+    if (!v || busy) return
+    setBusy(true)
+    try {
+      await api.post('/api/reminders', { title: v, startDate: date || selectedDay, recurrence, showDays })
+      toast({ title: 'Reminder added', description: 'It will appear only on the days it covers.' })
+      onSaved()
+      close()
+    } catch (err) {
+      toast({ title: 'Could not add reminder', description: err instanceof Error ? err.message : undefined, variant: 'destructive' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (!open) {
+    return (
+      <button
+        onClick={openForm}
+        className="flex w-full items-center gap-2 rounded-lg border border-dashed px-3 py-2 text-sm text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
+        aria-label="Add a reminder"
+      >
+        <FaBell className="h-3.5 w-3.5" /> Add a reminder
+      </button>
+    )
+  }
+
+  return (
+    <form className="space-y-2 rounded-lg border bg-muted/20 p-2.5" onSubmit={submit}>
+      <Input
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); close() } }}
+        placeholder="e.g. Pay tuition installment"
+        aria-label="Reminder title"
+        className="h-9"
+        autoFocus
+      />
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="text-[10px] text-muted-foreground">First day</label>
+          <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-8 text-xs" aria-label="First day" />
+        </div>
+        <div>
+          <label className="text-[10px] text-muted-foreground">Repeats</label>
+          <Select value={recurrence} onValueChange={setRecurrence}>
+            <SelectTrigger className="mt-0.5 h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="once">Once</SelectItem>
+              <SelectItem value="daily">Every day</SelectItem>
+              <SelectItem value="weekly">Every week</SelectItem>
+              <SelectItem value="monthly">Every month</SelectItem>
+              <SelectItem value="yearly">Every year</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      {recurrence !== 'daily' && (
+        <div>
+          <label className="text-[10px] text-muted-foreground">Show for N day(s) — consecutive days it appears, starting on its day</label>
+          <Input
+            type="number"
+            min={1}
+            max={30}
+            value={showDays}
+            onChange={(e) => setShowDays(Math.max(1, Math.min(30, Number.parseInt(e.target.value || '1', 10) || 1)))}
+            className="h-8 w-24 text-xs"
+            aria-label="Days to show"
+          />
+        </div>
+      )}
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="ghost" size="sm" className="h-8" onClick={close}>
+          Cancel
+        </Button>
+        <Button type="submit" size="sm" className="h-8" disabled={busy || !title.trim()}>
+          {busy && <FaSpinner className="mr-1.5 h-3.5 w-3.5 animate-spin" />} Add
+        </Button>
+      </div>
+    </form>
+  )
+}
+
+// ─── Reminder edit dialog — title, first day, cadence, show-days ────
+function ReminderEditDialog({ reminder, onClose, onSaved }: { reminder: Reminder | null; onClose: () => void; onSaved: () => void }) {
+  const [title, setTitle] = useState('')
+  const [date, setDate] = useState('')
+  const [recurrence, setRecurrence] = useState('once')
+  const [showDays, setShowDays] = useState(1)
+  const [busy, setBusy] = useState(false)
+  const { toast } = useToast()
+
+  useEffect(() => {
+    if (!reminder) return
+    setTitle(reminder.title)
+    setDate(planDateInput(reminder.startDate))
+    setRecurrence(reminder.recurrence)
+    setShowDays(reminder.showDays)
+  }, [reminder])
+
+  async function save() {
+    if (!reminder || !title.trim() || busy) return
+    setBusy(true)
+    try {
+      await api.patch(`/api/reminders/${reminder.id}`, {
+        title: title.trim(),
+        startDate: date || undefined,
+        recurrence,
+        showDays,
+      })
+      toast({ title: 'Reminder updated' })
+      onSaved()
+      onClose()
+    } catch (err) {
+      toast({ title: 'Could not update reminder', description: err instanceof Error ? err.message : undefined, variant: 'destructive' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Dialog open={!!reminder} onOpenChange={(v) => { if (!v) onClose() }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><FaBell className="h-4 w-4 text-primary" /> Edit reminder</DialogTitle>
+          <DialogDescription>
+            The reminder appears on the days it covers — its first day, then on the cadence you pick, for as many days as you set.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <Input value={title} onChange={(e) => setTitle(e.target.value)} aria-label="Reminder title" placeholder="Reminder title" />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-muted-foreground">First day</label>
+              <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="mt-1" aria-label="First day" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Repeats</label>
+              <Select value={recurrence} onValueChange={setRecurrence}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="once">Once</SelectItem>
+                  <SelectItem value="daily">Every day</SelectItem>
+                  <SelectItem value="weekly">Every week</SelectItem>
+                  <SelectItem value="monthly">Every month</SelectItem>
+                  <SelectItem value="yearly">Every year</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          {recurrence !== 'daily' && (
+            <div>
+              <label className="text-xs text-muted-foreground">Show for N day(s)</label>
+              <Input
+                type="number"
+                min={1}
+                max={30}
+                value={showDays}
+                onChange={(e) => setShowDays(Math.max(1, Math.min(30, Number.parseInt(e.target.value || '1', 10) || 1)))}
+                className="mt-1 w-28"
+                aria-label="Days to show"
+              />
+              <p className="mt-1 text-[10px] text-muted-foreground">Consecutive days each occurrence stays visible — e.g. 3 makes a monthly reminder show on the 1st, 2nd and 3rd.</p>
+            </div>
+          )}
+        </div>
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button onClick={save} disabled={busy || !title.trim()}>
+            {busy && <FaSpinner className="mr-1.5 h-4 w-4 animate-spin" />} Save
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 

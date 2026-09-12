@@ -177,6 +177,21 @@ model Plan {
   updatedAt DateTime  @updatedAt
 }
 
+model Reminder {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title      String
+  recurrence String    @default("once") // once | daily | weekly | monthly | yearly
+  startDate  DateTime // anchor day — UTC midnight of the picked calendar day
+  showDays   Int       @default(1) // each occurrence stays visible for N consecutive days
+  lastDoneAt DateTime? // completion marker — hides the current occurrence only (recurring-safe)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([userId, startDate])
+}
+
 // ─── AI News Radar ─────────────────────────────────────────────────
 
 model NewsArticle {
@@ -408,6 +423,7 @@ model User {
   milestones        Milestone[]
   tasks             Task[]
   plans             Plan[]
+  reminders         Reminder[]
   newsArticles      NewsArticle[]
   customSources     CustomSource[]
   papers            Paper[]

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getSessionUser, unauthorized } from '@/lib/auth-server'
 import { planActiveOnDay } from '@/lib/plan-span'
+import { reminderActiveOn } from '@/lib/reminder-span'
 
 // The signed-in user's local calendar day as UTC instants — `tzOffset` is
 // Date#getTimezoneOffset() minutes from the browser (negative east of UTC).
@@ -85,6 +86,21 @@ export async function GET(req: NextRequest) {
     const todayPlans = todayPlanRows
       .filter((p) => planActiveOnDay(p, localTodayLabel))
       .slice(0, 10)
+
+    // reminders active on the user's current day. The table is created by the
+    // build-time schema push — until it exists (P2021) the dashboard must not
+    // break, so reminders just stay empty.
+    let todayReminders: Awaited<ReturnType<typeof db.reminder.findMany>> = []
+    try {
+      const rows = await db.reminder.findMany({
+        where: { userId: user.id },
+        orderBy: { startDate: 'asc' },
+        take: 200,
+      })
+      todayReminders = rows.filter((r) => reminderActiveOn(r, localTodayLabel)).slice(0, 5)
+    } catch {
+      // table not migrated yet — reminders stay empty
+    }
 
     // deadlines: tasks + opportunity deadlines + goal deadlines in next 7 days
     const upcomingTasks = await db.task.findMany({
@@ -208,6 +224,7 @@ export async function GET(req: NextRequest) {
       greetingName: firstName ?? setting?.name ?? 'there',
       todayTasks,
       todayPlans,
+      todayReminders,
       goals: goalsWithProgress,
       newsDigest,
       deadlines: deadlines.slice(0, 8),

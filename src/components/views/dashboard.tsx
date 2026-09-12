@@ -1,11 +1,12 @@
 'use client'
 
-import { FaBolt, FaBookOpen, FaBullseye, FaCalendarDay, FaChevronRight, FaClock, FaCloudSun, FaFire, FaLayerGroup, FaMoon, FaNewspaper, FaSpinner, FaStopwatch, FaSun, FaTriangleExclamation } from 'react-icons/fa6'
+import { FaBolt, FaBell, FaBookOpen, FaBullseye, FaCalendarDay, FaChevronRight, FaClock, FaCloudSun, FaFire, FaLayerGroup, FaMoon, FaNewspaper, FaSpinner, FaStopwatch, FaSun, FaTriangleExclamation } from 'react-icons/fa6'
 import { useMemo, useState } from 'react'
 import { api, todayISO, fmtDate } from '@/lib/client'
 import { useUI } from '@/lib/nav-config'
-import type { DashboardData, Task } from '@/lib/types'
+import type { DashboardData, Task, Reminder } from '@/lib/types'
 import { useApi } from '@/lib/client'
+import { recurrenceLabel } from '@/lib/reminder-span'
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { ProgressRing, SwipeTaskRow, PriorityDot, EmptyState, SkeletonCard, colorHex } from '@/components/shared'
@@ -144,6 +145,17 @@ export function DashboardView() {
     }
   }
 
+  // a reminder checked off here hides its CURRENT occurrence only — a monthly
+  // reminder done today still comes back next month
+  async function dismissReminder(r: Reminder) {
+    try {
+      await api.patch(`/api/reminders/${r.id}`, { done: true })
+      if (data) setData({ ...data, todayReminders: (data.todayReminders ?? []).filter((x) => x.id !== r.id) })
+    } catch {
+      toast({ title: 'Could not dismiss reminder', variant: 'destructive' })
+    }
+  }
+
   if (loading || !data) {
     return (
       <div className="space-y-4">
@@ -239,10 +251,32 @@ export function DashboardView() {
             </CardAction>
           </CardHeader>
           <CardContent className="space-y-2">
-            {data.todayTasks.length === 0 && data.todayPlans.length === 0 ? (
+            {data.todayTasks.length === 0 && data.todayPlans.length === 0 && (data.todayReminders?.length ?? 0) === 0 ? (
               <p className="py-6 text-center text-sm text-muted-foreground">Nothing scheduled today. Enjoy the calm — or plan something.</p>
             ) : (
               <>
+                {/* reminders active today — dismissible (current occurrence only) */}
+                {(data.todayReminders?.length ?? 0) > 0 && (
+                  <div className="space-y-1.5">
+                    <p className="flex items-center gap-1.5 pt-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      <FaBell className="h-3 w-3" /> Reminders for today
+                    </p>
+                    {data.todayReminders!.map((r) => (
+                      <div key={r.id} className="flex items-center gap-3 rounded-lg border border-warning/30 bg-warning/5 px-3 py-2.5">
+                        <Checkbox checked={false} onCheckedChange={() => dismissReminder(r)} aria-label={`Done with ${r.title}`} className="mt-0.5" />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium">{r.title}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {recurrenceLabel(r.recurrence, r.startDate)}
+                            {r.showDays > 1 && r.recurrence !== 'daily' ? ` · shows for ${r.showDays} day${r.showDays === 1 ? '' : 's'}` : ''}
+                          </p>
+                        </div>
+                        <FaBell className="h-4 w-4 shrink-0 text-warning" />
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 {/* plans active today — each with its own tasks nested beneath it */}
                 {timeline.shownPlans.map((section) => (
                   <div key={section.id} className="space-y-1.5">

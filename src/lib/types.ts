@@ -138,6 +138,21 @@ export interface Plan {
   tasks: Task[]
 }
 
+// A day-anchored nudge ("pay rent on the 1st of every month, visible 3 days").
+// Visibility per day is computed by src/lib/reminder-span.ts — recurrence +
+// showDays decide which days it appears on; lastDoneAt hides the CURRENT
+// occurrence only (recurring-safe completion).
+export interface Reminder {
+  id: string
+  title: string
+  recurrence: string // once | daily | weekly | monthly | yearly
+  startDate: string // UTC midnight instant of the anchor calendar day
+  showDays: number
+  lastDoneAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
 export interface NewsArticle {
   id: string
   title: string
@@ -325,6 +340,7 @@ export interface DashboardData {
   greetingName: string
   todayTasks: Task[]
   todayPlans: Plan[]
+  todayReminders?: Reminder[]
   goals: {
     id: string
     title: string
