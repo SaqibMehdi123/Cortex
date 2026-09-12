@@ -33,7 +33,14 @@ You now see a JSON/summary with:
 |---|---|
 | Access Key ID | `R2_ACCESS_KEY_ID` |
 | Secret Access Key | `R2_SECRET_ACCESS_KEY` |
-| Endpoint / Account ID (32-hex string in the endpoint URL) | `R2_ACCOUNT_ID` |
+| Account ID (see below) | `R2_ACCOUNT_ID` |
+
+For `R2_ACCOUNT_ID`: open **dash.cloudflare.com → R2 Object Storage → right
+sidebar “Account details”** and copy the 32-character hex **Account ID** —
+for example `a1b2c3d4…` (32 chars, only `0-9a-f`). Do **not** paste the whole
+`https://….r2.cloudflarestorage.com` endpoint string, the bucket name, or the
+API token. (The app auto-corrects a pasted endpoint URL, but the bare id is
+cleanest.)
 
 ## Step 3 — Add the CORS rule (required, 2 minutes)
 
@@ -81,11 +88,23 @@ R2_BUCKET            = cortex-pdfs
 "r2": {
   "configured": true,
   "connectionOk": true,
-  "note": "ok — credentials work against the bucket"
+  "errorCode": "OK",
+  "hint": "credentials work against the bucket"
 }
 ```
 
-3. In the app, import any PDF. It now uploads straight from your browser to
+4. If `connectionOk` is `false`, the `errorCode` tells you exactly which value
+   is wrong — fix that one variable and redeploy:
+
+| `errorCode` | Wrong variable | Fix |
+|---|---|---|
+| `ENOTFOUND` / `InvalidEndpoint` | `R2_ACCOUNT_ID` | paste ONLY the 32-hex Account ID (not the endpoint URL) |
+| `SignatureDoesNotMatch` | `R2_SECRET_ACCESS_KEY` | re-copy the Secret Access Key shown once at token creation (not the eyJ… “Token value”) |
+| `InvalidAccessKeyId` | `R2_ACCESS_KEY_ID` | re-copy the S3-style Access Key ID |
+| `AccessDenied` | (token scope) | re-create the API token with “Object Read & Write” scoped to this bucket |
+| `NoSuchBucket` | `R2_BUCKET` | exact bucket name, case-sensitive (e.g. `cortex-pdfs`) |
+
+5. In the app, import any PDF. It now uploads straight from your browser to
    R2 (single request, any size up to 200 MB, real progress bar — the
    vercel.com upload gateway is no longer involved at all).
 

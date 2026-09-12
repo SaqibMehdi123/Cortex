@@ -82,12 +82,29 @@ export function parseStorageRef(ref: string): StorageRef {
 
 let r3client: S3Client | null = null
 
+/**
+ * Normalise whatever was pasted into R2_ACCOUNT_ID down to the bare 32-hex
+ * account id. People paste the full endpoint URL (the setup doc used to
+ * invite this) — `https://<id>.r2.cloudflarestorage.com` would otherwise
+ * build the nonsense endpoint `https://https://…` whose parsed hostname
+ * (`https`) fails DNS with ENOTFOUND. Also tolerates the host-with-scheme
+ * form and jurisdiction endpoints (`<id>.eu.r2.cloudflarestorage.com`).
+ */
+export function r2AccountId(): string {
+  const raw = (process.env.R2_ACCOUNT_ID || '').trim()
+  let v = raw
+  if (/^[a-z]+:\/\//i.test(v)) v = v.slice(v.indexOf('://') + 3)
+  v = v.split('/')[0] // drop any path
+  v = v.replace(/\.(?:eu|fedramp)?\.?r2\.cloudflarestorage\.com.*$/i, '')
+  return v.trim()
+}
+
 function r2(): S3Client {
   if (!r2Configured()) throw new Error('R2 is not configured (missing R2_* environment variables)')
   if (!r3client) {
     r3client = new S3Client({
       region: 'auto',
-      endpoint: `https://${process.env.R2_ACCOUNT_ID!.trim()}.r2.cloudflarestorage.com`,
+      endpoint: `https://${r2AccountId()}.r2.cloudflarestorage.com`,
       credentials: {
         accessKeyId: process.env.R2_ACCESS_KEY_ID!.trim(),
         secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!.trim(),
