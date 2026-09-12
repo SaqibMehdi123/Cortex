@@ -11,6 +11,112 @@
 // document is always recorded, and the viewer still renders the original PDF.
 
 export const EXTRACT_LIMIT = 100 * 1024 * 1024
+
+// ── pdf.js node globals ────────────────────────────────────────────────────
+// pdf-parse bundles pdfjs-dist 5.x, which expects a handful of browser
+// globals. It normally gets them from its native @napi-rs/canvas dependency —
+// but that binary does not survive Vercel's serverless module tracing, so in
+// production the module fails to even LOAD: "ReferenceError: DOMMatrix is not
+// defined" (verified live via /api/ops/url-import-probe). Text extraction is
+// pure JS — canvas is only needed for rendering, which we never do server-side
+// — so minimal guarded stubs are enough. They only fill what's missing and
+// never override real implementations (browsers, full Node installs).
+type PdfJsGlobal = Record<string, unknown>
+
+class StubDOMMatrix {
+  a = 1
+  b = 0
+  c = 0
+  d = 1
+  e = 0
+  f = 0
+  constructor(init?: number[] | string) {
+    if (Array.isArray(init) && init.length >= 6) {
+      [this.a, this.b, this.c, this.d, this.e, this.f] = init as number[]
+    }
+  }
+  get is2D() {
+    return true
+  }
+  get isIdentity() {
+    return this.a === 1 && this.b === 0 && this.c === 0 && this.d === 1 && this.e === 0 && this.f === 0
+  }
+  multiply() { return this }
+  multiplySelf() { return this }
+  preMultiplySelf() { return this }
+  translate() { return this }
+  translateSelf() { return this }
+  scale() { return this }
+  scaleSelf() { return this }
+  scaleNonUniform() { return this }
+  rotate() { return this }
+  rotateSelf() { return this }
+  rotateFromVector() { return this }
+  skewX() { return this }
+  skewY() { return this }
+  invertSelf() { return this }
+  inverse() { return this }
+  flipX() { return this }
+  flipY() { return this }
+  setMatrixValue() { return this }
+  transformPoint(p?: { x?: number; y?: number; z?: number }) {
+    return { x: p?.x ?? 0, y: p?.y ?? 0, z: p?.z ?? 0, w: 1 }
+  }
+  toFloat32Array() {
+    return new Float32Array([this.a, this.b, this.c, this.d, this.e, this.f])
+  }
+  toFloat64Array() {
+    return new Float64Array([this.a, this.b, this.c, this.d, this.e, this.f])
+  }
+  static fromFloat32Array() {
+    return new StubDOMMatrix()
+  }
+  static fromFloat64Array() {
+    return new StubDOMMatrix()
+  }
+  static fromMatrix(m?: { a?: number; b?: number; c?: number; d?: number; e?: number; f?: number }) {
+    return new StubDOMMatrix([m?.a ?? 1, m?.b ?? 0, m?.c ?? 0, m?.d ?? 1, m?.e ?? 0, m?.f ?? 0])
+  }
+}
+
+class StubPath2D {
+  constructor(_init?: unknown) {}
+  addPath() {}
+  closePath() {}
+  moveTo() {}
+  lineTo() {}
+  bezierCurveTo() {}
+  quadraticCurveTo() {}
+  arc() {}
+  arcTo() {}
+  ellipse() {}
+  rect() {}
+}
+
+class StubImageData {
+  width: number
+  height: number
+  data: Uint8ClampedArray
+  colorSpace = 'srgb'
+  constructor(init: number | Uint8ClampedArray, height?: number, _settings?: { colorSpace?: string }) {
+    if (typeof init === 'number') {
+      this.width = init
+      this.height = height ?? 0
+      this.data = new Uint8ClampedArray(this.width * this.height * 4)
+    } else {
+      this.data = init
+      this.width = init.length / 4
+      this.height = height ?? this.width
+    }
+  }
+}
+
+export function ensurePdfJsNodeGlobals(): void {
+  const g = globalThis as unknown as PdfJsGlobal
+  if (!g.DOMMatrix) g.DOMMatrix = StubDOMMatrix
+  if (!g.Path2D) g.Path2D = StubPath2D
+  if (!g.ImageData) g.ImageData = StubImageData
+}
 // Above this size, PDFs are stored + recorded immediately and their text
 // extraction is deferred to /api/documents/[id]/extract — parsing inline
 // (URL import, upload relay) risks the function's memory/time window and
@@ -68,6 +174,9 @@ export async function extractPdfText(
   try {
     // pdf-parse v2 is ESM-only and ships pdf.js — dynamic import keeps the
     // Next.js bundler away from it (also declared in serverExternalPackages).
+    // The globals shim must land BEFORE the import: without it the module
+    // fails to load on Vercel (DOMMatrix is not defined).
+    ensurePdfJsNodeGlobals()
     const { PDFParse } = await import('pdf-parse')
     const parser = new PDFParse({ data })
 

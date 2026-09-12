@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { safeFetch } from '@/lib/safe-fetch'
 import { putBuffer, deleteByRef, storageMode } from '@/lib/storage'
+import { ensurePdfJsNodeGlobals } from '@/lib/pdf-extract'
 
 // GET /api/ops/url-import-probe — end-to-end check of the exact pipeline the
 // Library "Import from URL" runs, executed in the LIVE runtime (Vercel
@@ -77,6 +78,7 @@ export async function GET() {
     // 3 ── pdf-parse loads in THIS runtime (dynamic import, external package)
     const s3 = Date.now()
     try {
+      ensurePdfJsNodeGlobals()
       const mod = await import('pdf-parse')
       const loaded = typeof mod.PDFParse === 'function'
       t('import-pdf-parse', s3, { loaded })
@@ -93,6 +95,7 @@ export async function GET() {
     let chars = 0
     let pages = 0
     try {
+      ensurePdfJsNodeGlobals()
       const { PDFParse } = await import('pdf-parse')
       const parser = new PDFParse({ data: new Uint8Array(buffer) })
       try {
