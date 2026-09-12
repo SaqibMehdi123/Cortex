@@ -1,6 +1,6 @@
 'use client'
 
-import { FaAt, FaCalendarDays, FaCalendarPlus, FaChrome, FaCopy, FaDesktop, FaDownload, FaEnvelope, FaFileCode, FaFileLines, FaInbox, FaInfo, FaKey, FaMoon, FaPalette, FaRightFromBracket, FaRotate, FaShieldHalved, FaSpinner, FaSun, FaUser } from 'react-icons/fa6'
+import { FaAt, FaBell, FaCalendarPlus, FaChrome, FaCopy, FaDesktop, FaDownload, FaEnvelope, FaFileCode, FaFileLines, FaInbox, FaInfo, FaKey, FaMoon, FaPalette, FaRightFromBracket, FaRotate, FaShieldHalved, FaSpinner, FaSun, FaUser } from 'react-icons/fa6'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { api } from '@/lib/client'
@@ -49,7 +49,7 @@ export function SettingsView() {
       <ProfileCard data={data?.setting} save={save} />
       <AppearanceCard mounted={mounted} theme={theme ?? 'system'} setTheme={setTheme} save={save} />
       <GoogleCard />
-      <DigestCard data={data?.setting} save={save} />
+      <DigestCard email={me?.user?.email} />
 
       <Card>
         <CardHeader>
@@ -184,28 +184,26 @@ function AppearanceCard({
   )
 }
 
-function DigestCard({ data, save }: { data?: SettingsData; save: (patch: Record<string, string>) => Promise<void> }) {
+function DigestCard({ email }: { email?: string }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-sm"><FaCalendarDays className="h-4 w-4 text-primary" /> Daily digest</CardTitle>
-        <CardDescription>When your briefing (plan + news digest + deadlines) should be prepared each day.</CardDescription>
+        <CardTitle className="flex items-center gap-2 text-sm"><FaBell className="h-4 w-4 text-primary" /> Morning notification</CardTitle>
+        <CardDescription>Your deadlines and reminders, in your inbox before the day starts.</CardDescription>
       </CardHeader>
-      <CardContent>
-        <form
-          className="flex items-end gap-2"
-          onSubmit={(e) => {
-            e.preventDefault()
-            const form = new FormData(e.currentTarget)
-            save({ digestTime: String(form.get('digestTime') ?? '08:00') })
-          }}
-        >
-          <div className="w-36">
-            <Label htmlFor="digest">Digest time</Label>
-            <Input id="digest" name="digestTime" type="time" defaultValue={data?.digestTime ?? '08:00'} className="mt-1" />
-          </div>
-          <Button type="submit">Save</Button>
-        </form>
+      <CardContent className="space-y-2 text-sm">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-muted-foreground">Delivery time</span>
+          <span className="font-medium">Every morning · 09:00 (Asia/Karachi)</span>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <span className="shrink-0 text-muted-foreground">Sent to</span>
+          <span className="truncate font-medium" title={email}>{email ?? 'your account email'}</span>
+        </div>
+        <p className="border-t pt-2 text-xs text-muted-foreground">
+          Includes tasks due today, overdue work, today&apos;s reminders and deadlines coming up this week.
+          Emails are only sent when something is actually on your agenda — no empty pings.
+        </p>
       </CardContent>
     </Card>
   )

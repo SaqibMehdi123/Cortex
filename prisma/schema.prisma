@@ -464,7 +464,8 @@ model Setting {
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   name        String   @default("there")
   theme       String   @default("system") // light | dark | system
-  digestTime  String   @default("08:00") // daily digest delivery time
+  digestTime  String   @default("09:00") // daily morning briefing delivery time
+  tzOffset    Int? // browser Date#getTimezoneOffset() minutes (negative east of UTC) — learned from dashboard visits, lets the morning cron build day windows on the USER's calendar
   googleAuth  String? // JSON {access_token, refresh_token, expiry_date, scope}
   googleEmail String?
   updatedAt   DateTime @updatedAt

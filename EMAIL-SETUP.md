@@ -143,3 +143,64 @@ tail -f dev.log | grep -A4 "DEV EMAIL\|send failed"
 # offline wire-format test of the mailer (mock servers, no real emails)
 bun scripts/sendgrid_provider_test.mjs
 ```
+
+---
+
+## Morning notification — deadlines + reminders at 09:00
+
+Every morning Cortex emails each verified account its agenda, so the day
+starts with one clean pass over everything time-bound:
+
+- **Due today** — open tasks whose due date falls on the user's calendar day
+  (with the clock time when one is set, and the plan they belong to)
+- **Overdue** — open tasks that slipped past their date
+- **Reminders for today** — reminders whose recurrence + visibility window
+  (the same rules the plans page uses) put them on today
+- **On the horizon** — tasks due within 3 days, plus application and goal
+  deadlines within a week
+
+Accounts with nothing on the agenda get **no email** — no empty pings.
+
+### Schedule & security
+
+`vercel.json` registers one Vercel cron:
+
+```json
+{ "crons": [{ "path": "/api/cron/morning", "schedule": "0 4 * * *" }] }
+```
+
+`0 4 * * *` fires at 04:00 UTC — **09:00 in Asia/Karachi**, the owner's
+timezone. To move the delivery time, change that schedule (minute hour * * *)
+keeping in mind Vercel evaluates it in UTC.
+
+Set `CRON_SECRET` in Vercel → Settings → Environment Variables (generate with
+`openssl rand -hex 32`). Vercel then signs every cron invocation with
+`Authorization: Bearer $CRON_SECRET`, and the route rejects everyone else.
+Without the secret the route falls back to the scheduler's `x-vercel-cron`
+header, which is documented as spoofable — fine for a personal deployment,
+but set the secret when you can.
+
+### Timezones without asking the user
+
+Serverless functions run on UTC, so "which day is it for this user?" needs
+help. The dashboard route already receives the browser's
+`Date#getTimezoneOffset()` with every visit; it stores it in
+`Setting.tzOffset`, and the cron reconstructs each user's local calendar from
+that. In practice the offset is learned on the user's first dashboard visit
+after this feature ships.
+
+### Testing by hand
+
+```bash
+# who would get what — builds everything, sends nothing
+curl "https://cortex-sync.vercel.app/api/cron/morning?key=$CRON_SECRET&dryRun=1"
+
+# real run, restricted to one account
+curl "https://cortex-sync.vercel.app/api/cron/morning?key=$CRON_SECRET&user=you@example.com"
+
+# full run (what the cron does at 09:00)
+curl "https://cortex-sync.vercel.app/api/cron/morning?key=$CRON_SECRET"
+```
+
+Each response lists per-account counts and the exact rows that would appear
+in the email, plus a `sent / skipped / failed` summary on real runs.

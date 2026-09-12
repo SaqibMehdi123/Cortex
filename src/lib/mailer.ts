@@ -235,20 +235,13 @@ const senders: Record<MailProviderId, (to: string, from: string, subject: string
   brevo: sendViaBrevo,
 }
 
-export async function sendCodeEmail(
-  to: string,
-  name: string,
-  code: string,
-  kind: 'verify' | 'reset'
-): Promise<SendCodeResult> {
-  const subject = kind === 'verify' ? 'Your Cortex verification code' : 'Your Cortex password reset code'
-  const html = codeEmailHtml(name, code, kind)
-
+/**
+ * Provider fallback loop shared by every outgoing mail — the first configured
+ * provider sends, and the next configured one takes over on failure.
+ */
+async function deliver(to: string, subject: string, html: string): Promise<SendCodeResult> {
   const providers = configuredProviders()
-  if (providers.length === 0) {
-    logDevBanner(to, subject, code)
-    return { delivered: false, reason: 'not_configured' }
-  }
+  if (providers.length === 0) return { delivered: false, reason: 'not_configured' }
 
   const from = mailFrom()
   for (const p of providers) {
@@ -260,4 +253,26 @@ export async function sendCodeEmail(
     }
   }
   return { delivered: false, reason: 'send_failed' }
+}
+
+export async function sendCodeEmail(
+  to: string,
+  name: string,
+  code: string,
+  kind: 'verify' | 'reset'
+): Promise<SendCodeResult> {
+  const subject = kind === 'verify' ? 'Your Cortex verification code' : 'Your Cortex password reset code'
+  const html = codeEmailHtml(name, code, kind)
+
+  const result = await deliver(to, subject, html)
+  if (result.reason === 'not_configured') logDevBanner(to, subject, code)
+  return result
+}
+
+/**
+ * Generic outgoing email (morning briefing, …) through the same provider
+ * chain as the auth codes. No dev banner — callers decide how to log.
+ */
+export async function sendEmail(to: string, subject: string, html: string): Promise<SendCodeResult> {
+  return deliver(to, subject, html)
 }

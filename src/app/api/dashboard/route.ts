@@ -37,6 +37,19 @@ export async function GET(req: NextRequest) {
 
     const setting = await db.setting.findUnique({ where: { userId: user.id } })
 
+    // Learn the user's timezone from the browser (Date#getTimezoneOffset, as
+    // sent on every dashboard visit) so the 9 AM cron can build day windows on
+    // the USER's calendar instead of the server's UTC clock. Write only when
+    // it actually changed — this route runs constantly.
+    const safeTz = Number.isFinite(tzOffset) ? tzOffset : null
+    if (safeTz !== null && setting && setting.tzOffset !== safeTz) {
+      try {
+        await db.setting.update({ where: { userId: user.id }, data: { tzOffset: safeTz } })
+      } catch {
+        // column not pushed yet — the next deploy heals it; dashboard continues
+      }
+    }
+
     const [todayTasks, todayPlanRows, goals, newsDigest, documents, flashcardsDue, focusSessionsToday, readingToday, opportunities, doneTodayCount] =
       await Promise.all([
         db.task.findMany({
