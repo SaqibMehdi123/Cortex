@@ -1231,7 +1231,7 @@ function EditTaskDialog({ open, task, plans, onClose, onSaved }: {
               <Select value={planId} onValueChange={setPlanId}>
                 <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">— inbox (no plan) —</SelectItem>
+                  <SelectItem value="none">— no plan (standalone) —</SelectItem>
                   {plans.map((p) => (
                     <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>
                   ))}
