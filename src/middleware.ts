@@ -23,6 +23,10 @@ const PUBLIC_APIS = [
   '/api/ops/health',
   // operator diagnostic — fixed public URL, no user input, rate-limited
   '/api/ops/url-import-probe',
+  // the 9 AM scheduler has no session cookie — it authenticates itself with
+  // CRON_SECRET inside the route (src/app/api/cron/morning), so the session
+  // gate must not intercept it
+  '/api/cron/morning',
 ]
 
 export async function middleware(req: NextRequest) {
