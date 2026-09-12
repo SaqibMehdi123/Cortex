@@ -1,144 +1,191 @@
 'use client'
 
-import { FaPause, FaPlay, FaStopwatch, FaXmark } from 'react-icons/fa6'
-import { useCallback, useEffect, useRef, useState } from 'react'
+// ─── Pomodoro host: ticker + dialog + floating pill ─────────────────
+//
+// Mounted once in app/page.tsx. Owns the single 1-second interval that
+// drives the pomodoro store, bridges the legacy `focusTask` channel
+// (dashboard / plans task rows set it) into the engine, and renders:
+//   • the full pomodoro dialog (ring, phases, round dots, presets)
+//   • a floating pill so the countdown stays visible on every section
+
+import { FaPause, FaPlay, FaStopwatch, FaForwardStep, FaXmark, FaBullseye } from 'react-icons/fa6'
+import { useEffect, useRef } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { useUI } from '@/lib/nav-config'
-import { api } from '@/lib/client'
+import { usePomodoro, mmss, WORK_PRESETS, ROUNDS_BEFORE_LONG, SHORT_BREAK_MIN, LONG_BREAK_MIN } from '@/lib/pomodoro'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
 
-const WORK_MIN = 25
-const BREAK_MIN = 5
-
 export function FocusTimer() {
+  const { toast } = useToast()
   const focusTask = useUI((s) => s.focusTask)
   const setFocusTask = useUI((s) => s.setFocusTask)
-  const { toast } = useToast()
-  const [mode, setMode] = useState<'work' | 'break'>('work')
-  const [secondsLeft, setSecondsLeft] = useState(WORK_MIN * 60)
-  const [running, setRunning] = useState(false)
-  const [elapsedWork, setElapsedWork] = useState(0)
-  const startedAt = useRef<number>(Date.now())
-  const tickRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  const total = mode === 'work' ? WORK_MIN * 60 : BREAK_MIN * 60
+  const phase = usePomodoro((s) => s.phase)
+  const secondsLeft = usePomodoro((s) => s.secondsLeft)
+  const running = usePomodoro((s) => s.running)
+  const dialogOpen = usePomodoro((s) => s.dialogOpen)
+  const completed = usePomodoro((s) => s.completed)
+  const phaseElapsed = usePomodoro((s) => s.phaseElapsed)
+  const taskLink = usePomodoro((s) => s.taskLink)
+  const workMin = usePomodoro((s) => s.workMin)
 
+  // single 1-second driver for the whole engine
   useEffect(() => {
-    if (focusTask) {
-      setMode('work')
-      setSecondsLeft(WORK_MIN * 60)
-      setRunning(true)
-      setElapsedWork(0)
-      startedAt.current = Date.now()
-    }
-  }, [focusTask])
+    const t = setInterval(() => usePomodoro.getState().tick(), 1000)
+    return () => clearInterval(t)
+  }, [])
 
-  const finishSession = useCallback(async () => {
-    const minutes = Math.max(1, Math.round(elapsedWork / 60))
-    try {
-      await api.post('/api/focus', {
-        taskId: focusTask?.id,
-        goalId: focusTask?.goalId ?? null,
-        minutes,
-        startedAt: new Date(startedAt.current).toISOString(),
-      })
-      toast({ title: `Focus session logged: ${minutes}m`, description: 'It counts toward your goal velocity.' })
-    } catch {
-      toast({ title: 'Could not log focus session', variant: 'destructive' })
-    }
-  }, [elapsedWork, focusTask, toast])
-
+  // legacy channel: dashboard / task rows request focus on a task
   useEffect(() => {
-    if (!running) return
-    tickRef.current = setInterval(() => {
-      setSecondsLeft((s) => {
-        if (s <= 1) {
-          if (mode === 'work') {
-            setElapsedWork((e) => e + total)
-            void finishSession()
-            setMode('break')
-            return BREAK_MIN * 60
-          }
-          setMode('work')
-          return WORK_MIN * 60
-        }
-        return s - 1
-      })
-    }, 1000)
-    return () => {
-      if (tickRef.current) clearInterval(tickRef.current)
-    }
-  }, [running, mode, total, finishSession])
+    if (!focusTask) return
+    usePomodoro.getState().start(focusTask)
+    setFocusTask(null)
+  }, [focusTask, setFocusTask])
 
-  const pct = 1 - secondsLeft / total
-  const mm = String(Math.floor(secondsLeft / 60)).padStart(2, '0')
-  const ss = String(secondsLeft % 60).padStart(2, '0')
+  // in-app feedback on phase transitions
+  const prev = useRef({ completed, phase })
+  useEffect(() => {
+    const p = prev.current
+    if (completed > p.completed) toast({ title: `Pomodoro ${completed} done — ${completed % ROUNDS_BEFORE_LONG === 0 ? `long break (${LONG_BREAK_MIN}m)` : `${SHORT_BREAK_MIN}m break`}`, description: taskLink ? `Logged against “${taskLink.title}”.` : 'Session logged.' })
+    else if (p.phase !== 'work' && phase === 'work' && running) toast({ title: 'Break over — back to focus' })
+    prev.current = { completed, phase }
+  }, [completed, phase, running, taskLink, toast])
+
+  // live countdown in the tab title while running
+  const baseTitle = useRef<string | null>(null)
+  useEffect(() => {
+    if (baseTitle.current === null) baseTitle.current = document.title
+    if (!running) {
+      document.title = baseTitle.current
+      return
+    }
+    document.title = `${mmss(secondsLeft)} · ${phase === 'work' ? 'Focus' : 'Break'}`
+  }, [running, secondsLeft, phase])
+
+  const isWork = phase === 'work'
+  const total = isWork ? workMin * 60 : (phase === 'short' ? SHORT_BREAK_MIN : LONG_BREAK_MIN) * 60
+  const idle = !running && phaseElapsed === 0 && completed === 0
+  const pillVisible = (running || phaseElapsed > 0 || completed > 0) && !dialogOpen
+  const pct = total > 0 ? 1 - secondsLeft / total : 0
   const R = 54
   const C = 2 * Math.PI * R
 
   return (
-    <Dialog open={!!focusTask} onOpenChange={(open) => {
-      if (!open) {
-        if (elapsedWork > 60) void finishSession()
-        setRunning(false)
-        setElapsedWork(0)
-        setFocusTask(null)
-      }
-    }}>
-      <DialogContent className="sm:max-w-sm">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <FaStopwatch className="h-4 w-4 text-primary" /> Focus mode
-          </DialogTitle>
-          <DialogDescription className="line-clamp-2">{focusTask?.title ?? 'Pomodoro session'}</DialogDescription>
-        </DialogHeader>
+    <>
+      <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) usePomodoro.getState().close() }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FaStopwatch className="h-4 w-4 text-primary" /> Pomodoro
+            </DialogTitle>
+            <DialogDescription className="line-clamp-2">
+              {taskLink ? taskLink.title : 'Focus session — no task linked'}
+            </DialogDescription>
+          </DialogHeader>
 
-        <div className="flex flex-col items-center gap-4 py-2">
-          <div className="relative h-32 w-32">
-            <svg width={128} height={128} className="-rotate-90">
-              <circle cx={64} cy={64} r={R} fill="none" stroke="var(--muted)" strokeWidth={8} />
-              <circle
-                cx={64}
-                cy={64}
-                r={R}
-                fill="none"
-                stroke={mode === 'work' ? 'var(--primary)' : 'var(--success)'}
-                strokeWidth={8}
-                strokeLinecap="round"
-                strokeDasharray={C}
-                strokeDashoffset={C - pct * C}
-                style={{ transition: 'stroke-dashoffset 1s linear' }}
-              />
-            </svg>
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-2xl font-bold tabular-nums">{mm}:{ss}</span>
-              <span className={cn('text-[10px] font-semibold uppercase tracking-widest', mode === 'work' ? 'text-primary' : 'text-success')}>
-                {mode === 'work' ? 'focus' : 'break'}
-              </span>
+          <div className="flex flex-col items-center gap-4 py-1">
+            {/* phase dots — one group of 4 per long-break cycle */}
+            <div className="flex items-center gap-1.5" aria-label={`${completed % ROUNDS_BEFORE_LONG || (completed ? ROUNDS_BEFORE_LONG : 0)} of ${ROUNDS_BEFORE_LONG} work blocks in this cycle`}>
+              {Array.from({ length: ROUNDS_BEFORE_LONG }).map((_, i) => {
+                const doneInCycle = completed === 0 ? 0 : ((completed - 1) % ROUNDS_BEFORE_LONG) + 1
+                const active = !isWork && i === doneInCycle
+                return (
+                  <span
+                    key={i}
+                    className={cn(
+                      'h-2 w-2 rounded-full transition-colors',
+                      i < doneInCycle ? 'bg-primary' : active ? 'bg-success animate-pulse' : 'bg-muted-foreground/25'
+                    )}
+                  />
+                )
+              })}
             </div>
-          </div>
 
-          <div className="flex gap-2">
-            <Button onClick={() => setRunning((r) => !r)} className="min-w-[100px]">
-              {running ? <><FaPause className="mr-1.5 h-4 w-4" /> Pause</> : <><FaPlay className="mr-1.5 h-4 w-4" /> Resume</>}
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => {
-                if (elapsedWork > 60) void finishSession()
-                setRunning(false)
-                setElapsedWork(0)
-                setFocusTask(null)
-              }}
-            >
-              <FaXmark className="mr-1.5 h-4 w-4" /> End
-            </Button>
+            <div className="relative h-32 w-32">
+              <svg width={128} height={128} className="-rotate-90" aria-hidden>
+                <circle cx={64} cy={64} r={R} fill="none" stroke="var(--muted)" strokeWidth={8} />
+                <circle
+                  cx={64}
+                  cy={64}
+                  r={R}
+                  fill="none"
+                  stroke={isWork ? 'var(--primary)' : 'var(--success)'}
+                  strokeWidth={8}
+                  strokeLinecap="round"
+                  strokeDasharray={C}
+                  strokeDashoffset={C - pct * C}
+                  style={{ transition: 'stroke-dashoffset 1s linear' }}
+                />
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <span className="text-2xl font-bold tabular-nums">{mmss(secondsLeft)}</span>
+                <span className={cn('text-[10px] font-semibold uppercase tracking-widest', isWork ? 'text-primary' : 'text-success')}>
+                  {isWork ? 'focus' : phase === 'short' ? 'short break' : 'long break'}
+                </span>
+              </div>
+            </div>
+
+            {/* work-length presets — only before the first block starts */}
+            {idle && (
+              <div className="flex items-center gap-1.5" role="group" aria-label="Work block length">
+                {WORK_PRESETS.map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => usePomodoro.getState().setWorkMin(m)}
+                    className={cn(
+                      'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                      workMin === m ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted'
+                    )}
+                    aria-pressed={workMin === m}
+                  >
+                    {m} min
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              {idle ? (
+                <Button onClick={() => usePomodoro.getState().start()} className="min-w-[104px]">
+                  <FaPlay className="mr-1.5 h-4 w-4" /> Start
+                </Button>
+              ) : (
+                <Button onClick={() => usePomodoro.getState().toggle()} className="min-w-[104px]">
+                  {running ? <><FaPause className="mr-1.5 h-4 w-4" /> Pause</> : <><FaPlay className="mr-1.5 h-4 w-4" /> Resume</>}
+                </Button>
+              )}
+              {!idle && (
+                <Button variant="outline" onClick={() => usePomodoro.getState().skip()} aria-label="Skip to next phase">
+                  <FaForwardStep className="h-4 w-4" />
+                </Button>
+              )}
+              <Button variant="outline" onClick={() => usePomodoro.getState().stop()}>
+                <FaXmark className="mr-1.5 h-4 w-4" /> End
+              </Button>
+            </div>
+            <p className="text-center text-xs text-muted-foreground">
+              {workMin}m focus → {SHORT_BREAK_MIN}m break, long break every {ROUNDS_BEFORE_LONG} rounds.
+              {completed > 0 && <> {completed} block{completed > 1 ? 's' : ''} done{phaseElapsed > 0 && !isWork ? '' : ''}.</>}
+            </p>
           </div>
-          <p className="text-xs text-muted-foreground">25 min focus → 5 min break. Logged to the linked task & goal.</p>
-        </div>
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+
+      {/* floating pill — countdown survives navigation & closed dialog */}
+      {pillVisible && (
+        <button
+          onClick={() => usePomodoro.getState().open()}
+          className="fixed bottom-16 right-3 z-40 flex items-center gap-2 rounded-full border bg-card/95 py-2 pl-3 pr-4 shadow-soft backdrop-blur transition-transform hover:scale-[1.03] sm:bottom-5 sm:right-5"
+          aria-label={`Pomodoro ${mmss(secondsLeft)} — open timer`}
+        >
+          <span className={cn('h-2 w-2 shrink-0 rounded-full', isWork ? 'bg-primary' : 'bg-success', !running && 'animate-pulse')} />
+          <span className="text-sm font-semibold tabular-nums">{mmss(secondsLeft)}</span>
+          <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{isWork ? 'focus' : 'break'}</span>
+          {taskLink && <FaBullseye className="h-3 w-3 text-muted-foreground" aria-label="linked to a task" />}
+        </button>
+      )}
+    </>
   )
 }

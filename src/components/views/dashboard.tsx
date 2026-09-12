@@ -31,7 +31,10 @@ export function DashboardView() {
   const setCopilotOpen = useUI((s) => s.setCopilotOpen)
   const setFocusTask = useUI((s) => s.setFocusTask)
   const { toast } = useToast()
-  const { data, loading, setData, reload } = useApi<DashboardData>('/api/dashboard')
+  // tzOffset keeps every "today" window on the USER's calendar (the serverless
+  // runtime runs on UTC — without it early-morning items shift days)
+  const tzOffset = new Date().getTimezoneOffset()
+  const { data, loading, setData, reload } = useApi<DashboardData>(`/api/dashboard?tzOffset=${tzOffset}`)
   const [completingIds, setCompletingIds] = useState<Set<string>>(new Set())
 
   // First visit / stale feed: quietly pull news in the background so the digest

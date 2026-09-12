@@ -1,43 +1,57 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getSessionUser, unauthorized } from '@/lib/auth-server'
+import { planSpan } from '@/lib/plan-span'
 
-function startOfToday() {
-  const d = new Date()
-  d.setHours(0, 0, 0, 0)
-  return d
-}
-function endOfToday() {
-  const d = new Date()
-  d.setHours(23, 59, 59, 999)
-  return d
+// The signed-in user's local calendar day as UTC instants — `tzOffset` is
+// Date#getTimezoneOffset() minutes from the browser (negative east of UTC).
+// Without it a PKT user's 00:00–05:00 items land on the wrong server day,
+// because the serverless runtime always runs on UTC.
+function userDayWindow(offsetMin: number, now: Date): { start: Date; end: Date } {
+  const safeOffset = Number.isFinite(offsetMin) ? offsetMin : 0
+  const shifted = new Date(now.getTime() - safeOffset * 60_000)
+  const y = shifted.getUTCFullYear()
+  const m = shifted.getUTCMonth()
+  const d = shifted.getUTCDate()
+  const start = new Date(Date.UTC(y, m, d) + safeOffset * 60_000)
+  return { start, end: new Date(start.getTime() + 86_400_000 - 1) }
 }
 
-// GET /api/dashboard — everything the "Today" screen needs for the signed-in
-// user, including the Copilot briefing. Every query is scoped to the account.
-export async function GET() {
+// GET /api/dashboard?tzOffset= — everything the "Today" screen needs for the
+// signed-in user, including the Copilot briefing. Every query is scoped to
+// the account; `tzOffset` keeps day windows on the USER's calendar.
+export async function GET(req: NextRequest) {
   try {
     const user = await getSessionUser()
     if (!user) return unauthorized()
 
+    const { searchParams } = new URL(req.url)
+    const tzOffset = Number.parseInt(searchParams.get('tzOffset') || '', 10)
+
     const now = new Date()
-    const today = startOfToday()
+    const userDay = userDayWindow(tzOffset, now)
+    const today = userDay.start
+    const todayEnd = userDay.end
     const in7 = new Date(now.getTime() + 7 * 86_400_000)
 
     const setting = await db.setting.findUnique({ where: { userId: user.id } })
 
-    const [todayTasks, todayPlans, goals, newsDigest, documents, flashcardsDue, focusSessionsToday, readingToday, opportunities, doneTodayCount] =
+    const [todayTasks, todayPlanRows, goals, newsDigest, documents, flashcardsDue, focusSessionsToday, readingToday, opportunities, doneTodayCount] =
       await Promise.all([
         db.task.findMany({
-          where: { userId: user.id, dueDate: { gte: today, lte: endOfToday() }, status: { not: 'done' } },
+          where: { userId: user.id, dueDate: { gte: today, lte: todayEnd }, status: { not: 'done' } },
           orderBy: [{ priority: 'desc' }, { dueDate: 'asc' }],
           include: { goal: { select: { id: true, title: true, color: true } } },
           take: 20,
         }),
+        // Span-aware: a plan is "today" when its start→end span (explicit, or
+        // derived from its timeframe) covers the user's current day. Day plans
+        // show only on their date; week/month/quarter/year plans show across
+        // their whole span. Undated plans can't be placed on a calendar.
         db.plan.findMany({
-          where: { userId: user.id, timeframe: 'day', done: false, startDate: { gte: today, lte: endOfToday() } },
+          where: { userId: user.id, done: false, OR: [{ startDate: { not: null } }, { endDate: { not: null } }] },
           orderBy: { createdAt: 'asc' },
-          take: 10,
+          take: 200,
         }),
         db.goal.findMany({
           where: { userId: user.id, status: 'active' },
@@ -53,12 +67,19 @@ export async function GET() {
           orderBy: { deadline: 'asc' },
           take: 6,
         }),
-        db.task.count({ where: { userId: user.id, status: 'done', completedAt: { gte: today, lte: endOfToday() } } }),
+        db.task.count({ where: { userId: user.id, status: 'done', completedAt: { gte: today, lte: todayEnd } } }),
       ])
+
+    const todayPlans = todayPlanRows
+      .filter((p) => {
+        const span = planSpan(p)
+        return span && span.start.getTime() <= todayEnd.getTime() && span.end.getTime() >= today.getTime()
+      })
+      .slice(0, 10)
 
     // deadlines: tasks + opportunity deadlines + goal deadlines in next 7 days
     const upcomingTasks = await db.task.findMany({
-      where: { userId: user.id, status: { not: 'done' }, dueDate: { gte: endOfToday(), lte: in7 } },
+      where: { userId: user.id, status: { not: 'done' }, dueDate: { gte: todayEnd, lte: in7 } },
       orderBy: { dueDate: 'asc' },
       take: 8,
     })
@@ -143,7 +164,7 @@ export async function GET() {
     })
     const nextBestTask =
       allOpen.find((t) => t.priority === 'high') ??
-      allOpen.find((t) => t.dueDate && new Date(t.dueDate) <= endOfToday()) ??
+      allOpen.find((t) => t.dueDate && new Date(t.dueDate) <= todayEnd) ??
       allOpen[0] ??
       null
 

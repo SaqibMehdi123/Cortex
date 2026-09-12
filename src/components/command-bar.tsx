@@ -1,11 +1,12 @@
 'use client'
 
-import { FaBookOpen, FaBriefcase, FaBullseye, FaCalendarWeek, FaDownload, FaFileLines, FaLink, FaListCheck, FaMicrophone, FaMoon, FaNewspaper, FaPlus, FaRotate, FaSun } from 'react-icons/fa6'
+import { FaBookOpen, FaBriefcase, FaBullseye, FaCalendarWeek, FaDownload, FaFileLines, FaLink, FaListCheck, FaMicrophone, FaMoon, FaNewspaper, FaPlus, FaRotate, FaStopwatch, FaSun } from 'react-icons/fa6'
 import { useEffect, useState, useCallback } from 'react'
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem, CommandSeparator } from '@/components/ui/command'
 import { useUI, NAV_ITEMS, type ViewKey } from '@/lib/nav-config'
 import { api } from '@/lib/client'
+import { usePomodoro } from '@/lib/pomodoro'
 import type { SearchResults } from '@/lib/types'
 import { useTheme } from 'next-themes'
 
@@ -67,6 +68,9 @@ export function CommandBar() {
               </CommandItem>
               <CommandItem onSelect={() => { setCommandOpen(false); setCaptureOpen(true, 'voice') }}>
                 <FaMicrophone /> Voice memo
+              </CommandItem>
+              <CommandItem onSelect={() => { setCommandOpen(false); usePomodoro.getState().open() }}>
+                <FaStopwatch /> Start a pomodoro
               </CommandItem>
               <CommandItem onSelect={() => { setCommandOpen(false); setCaptureOpen(true, 'url') }}>
                 <FaLink /> Save URL to read later

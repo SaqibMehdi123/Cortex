@@ -1,10 +1,12 @@
 'use client'
 
-import { FaBullseye, FaCalendarDays, FaCheck, FaChevronDown, FaChevronRight, FaCircleCheck, FaClock, FaEllipsis, FaInbox, FaList, FaPencil, FaPlus, FaSpinner, FaTableColumns, FaTrashCan, FaWandMagicSparkles } from 'react-icons/fa6'
-import { useCallback, useMemo, useState, useEffect } from 'react'
+import { FaBullseye, FaCalendarDays, FaCheck, FaChevronDown, FaChevronRight, FaCircleCheck, FaClock, FaEllipsis, FaInbox, FaList, FaPencil, FaPlus, FaSpinner, FaStopwatch, FaTableColumns, FaTrashCan, FaWandMagicSparkles } from 'react-icons/fa6'
+import { useCallback, useMemo, useState, useEffect, type FormEvent } from 'react'
 import { api, todayISO } from '@/lib/client'
 import type { Plan, Task, Goal } from '@/lib/types'
 import { useApi } from '@/lib/client'
+import { planActiveOnDay, planSpan, formatSpan, hasTimePart } from '@/lib/plan-span'
+import { usePomodoro } from '@/lib/pomodoro'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -14,6 +16,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/hooks/use-toast'
 import { useUI } from '@/lib/nav-config'
 import { cn } from '@/lib/utils'
@@ -32,6 +35,9 @@ export function PlansView() {
   const [templatesOpen, setTemplatesOpen] = useState(false)
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const [goalFor, setGoalFor] = useState<PlanNode | null>(null)
+  const [editingTask, setEditingTask] = useState<Task | null>(null)
+  const [editOpen, setEditOpen] = useState(false)
+  const [editPlan, setEditPlan] = useState<PlanNode | null>(null)
 
   const week = useMemo(() => {
     const now = new Date()
@@ -55,6 +61,38 @@ export function PlansView() {
   // Quick-capture tasks (and any task not attached to a plan) land here —
   // they used to be invisible on this page entirely.
   const inboxTasks = useApi<{ tasks: Task[] }>(`/api/tasks?unassigned=1&status=open`, [])
+
+  // flat list with ancestor chains — powers the day agenda + tree jumps
+  const flatPlans = useMemo(() => {
+    const out: { node: PlanNode; depth: number; ancestors: string[] }[] = []
+    const walk = (nodes: PlanNode[], depth: number, ancestors: string[]) => {
+      for (const n of nodes) {
+        out.push({ node: n, depth, ancestors })
+        walk((n.children as PlanNode[]) ?? [], depth + 1, [...ancestors, n.id])
+      }
+    }
+    walk(data?.plans ?? [], 0, [])
+    return out
+  }, [data])
+
+  // A plan is "on" a day when its span covers it: day plans appear only on
+  // their own day, week/month/quarter/year plans on every day they span.
+  const agendaPlans = useMemo(
+    () => flatPlans.filter(({ node }) => planActiveOnDay(node, selectedDay)),
+    [flatPlans, selectedDay]
+  )
+
+  const allPlansFlat = useMemo(() => {
+    const out: { id: string; title: string; timeframe: string }[] = []
+    const walk = (nodes: PlanNode[]) => {
+      for (const n of nodes) {
+        out.push({ id: n.id, title: `${n.timeframe === 'day' ? '☀' : n.timeframe === 'week' ? '🗓' : n.timeframe === 'month' ? '📅' : n.timeframe === 'quarter' ? '📈' : '🎯'} ${n.title}`, timeframe: n.timeframe })
+        walk((n.children as PlanNode[]) ?? [])
+      }
+    }
+    walk(data?.plans ?? [])
+    return out
+  }, [data])
 
   async function toggleTask(t: Task) {
     const next = t.status === 'done' ? 'todo' : 'done'
@@ -80,9 +118,9 @@ export function PlansView() {
     }
   }
 
-  async function addTaskToPlan(planId: string | null, title: string) {
+  async function addTaskToPlan(planId: string | null, title: string, dueISO?: string) {
     try {
-      await api.post('/api/tasks', { title, planId, dueDate: planId ? undefined : selectedDay })
+      await api.post('/api/tasks', { title, planId, dueDate: dueISO ?? (planId ? undefined : selectedDay) })
       reload()
       dayTasks.reload()
       inboxTasks.reload()
@@ -91,16 +129,38 @@ export function PlansView() {
     }
   }
 
-  // Inbox quick-add: no plan, no date — exactly what quick capture creates.
-  async function addInboxTask(title: string) {
+  // Inbox quick-add: no plan; date/time optional — the same shape quick
+  // capture produces when a due date is picked there.
+  async function addInboxTask(title: string, dueISO?: string) {
     try {
-      await api.post('/api/tasks', { title })
-      toast({ title: 'Task added to inbox' })
+      await api.post('/api/tasks', { title, dueDate: dueISO })
+      toast({ title: dueISO ? 'Task added to inbox — scheduled' : 'Task added to inbox' })
       reload()
       inboxTasks.reload()
     } catch {
       toast({ title: 'Could not add task', variant: 'destructive' })
     }
+  }
+
+  function openEdit(t: Task) {
+    setEditingTask(t)
+    setEditOpen(true)
+  }
+
+  function reloadAll() {
+    reload()
+    dayTasks.reload()
+    inboxTasks.reload()
+  }
+
+  // jump from the day agenda to the plan in the outline (expanded, parents open)
+  function jumpToPlan(id: string, ancestors: string[]) {
+    setCollapsed((prev) => {
+      const next = new Set(prev)
+      for (const a of [...ancestors, id]) next.delete(a)
+      return next
+    })
+    setMode('outline')
   }
 
   function toggleCollapse(id: string) {
@@ -112,18 +172,6 @@ export function PlansView() {
     })
   }
 
-  const allPlansFlat = useMemo(() => {
-    const out: { id: string; title: string; timeframe: string }[] = []
-    const walk = (nodes: PlanNode[]) => {
-      for (const n of nodes) {
-        out.push({ id: n.id, title: `${n.timeframe === 'day' ? '☀' : n.timeframe === 'week' ? '🗓' : n.timeframe === 'month' ? '📅' : n.timeframe === 'quarter' ? '📈' : '🎯'} ${n.title}`, timeframe: n.timeframe })
-        walk((n.children as PlanNode[]) ?? [])
-      }
-    }
-    walk(data?.plans ?? [])
-    return out
-  }, [data])
-
   if (loading || !data) {
     return (
       <div className="space-y-4 pb-8">
@@ -133,15 +181,17 @@ export function PlansView() {
     )
   }
 
+  const dayLabel = new Date(`${selectedDay}T12:00:00`).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
+
   return (
     <div className="anim-fade-up space-y-4 pb-8">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Plans</h1>
-          <p className="text-sm text-muted-foreground">Year → Quarter → Month → Week → Day, with milestones and tasks.</p>
+          <p className="text-sm text-muted-foreground">Year → Quarter → Month → Week → Day, with deadlines, tasks and focus.</p>
         </div>
-        {/* full-width row on mobile; labels collapse to icons — three labeled
+        {/* full-width row on mobile; labels collapse to icons — four labeled
             controls + the view toggle can't fit a 390px viewport in one line */}
         <div className="flex w-full items-center gap-2 sm:w-auto">
           <div className="flex overflow-hidden rounded-lg border">
@@ -151,7 +201,13 @@ export function PlansView() {
             <button onClick={() => setMode('kanban')} className={cn('flex h-9 items-center gap-1.5 whitespace-nowrap border-l px-3 text-xs font-medium transition-colors', mode === 'kanban' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted')} aria-label="Kanban view">
               <FaTableColumns className="h-4 w-4" /> Kanban
             </button>
+            <button onClick={() => setMode('day')} className={cn('flex h-9 items-center gap-1.5 whitespace-nowrap border-l px-3 text-xs font-medium transition-colors', mode === 'day' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted')} aria-label="Day view">
+              <FaCalendarDays className="h-4 w-4" /> Day
+            </button>
           </div>
+          <Button variant="outline" className="px-2.5" onClick={() => usePomodoro.getState().open()} aria-label="Open Pomodoro timer">
+            <FaStopwatch className="h-4 w-4" /> <span className="hidden sm:inline">Pomodoro</span>
+          </Button>
           <Button variant="outline" className="px-2.5" onClick={() => setTemplatesOpen(true)} aria-label="Browse plan templates">
             <FaWandMagicSparkles className="h-4 w-4" /> <span className="hidden sm:inline">Templates</span>
           </Button>
@@ -202,25 +258,62 @@ export function PlansView() {
       </div>
 
       {mode === 'day' && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-sm">
-              <FaCalendarDays className="h-4 w-4 text-primary" />
-              Tasks for {new Date(`${selectedDay}T12:00:00`).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-1.5">
-            {dayTasks.loading ? (
-              <div className="space-y-2">{[1, 2].map((i) => <SkeletonCard key={i} className="h-10" />)}</div>
-            ) : (dayTasks.data?.tasks.length ?? 0) === 0 ? (
-              <p className="py-4 text-center text-sm text-muted-foreground">No tasks this day. Drag a task here from below, or add one.</p>
-            ) : (
-              dayTasks.data!.tasks.map((t) => (
-                <TaskRow key={t.id} task={t} onToggle={toggleTask} onSnooze={snoozeTask} />
-              ))
-            )}
-          </CardContent>
-        </Card>
+        <>
+          {/* ── Day agenda: only the plans whose span covers this day ── */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-sm">
+                <FaCalendarDays className="h-4 w-4 text-primary" />
+                Plans on {dayLabel}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-1.5">
+              {agendaPlans.length === 0 ? (
+                <p className="py-3 text-center text-sm text-muted-foreground">
+                  No plans cover this day. Day plans show only on their own date; week, month, quarter and year plans show across their whole span — set a start (and deadline) when creating or editing a plan.
+                </p>
+              ) : (
+                agendaPlans.map(({ node, ancestors }) => (
+                  <button
+                    key={node.id}
+                    onClick={() => jumpToPlan(node.id, ancestors)}
+                    className="flex w-full items-center gap-2.5 rounded-lg border bg-background px-3 py-2 text-left transition-all hover:bg-muted/40"
+                  >
+                    <span className="w-6 text-center text-sm">{node.timeframe === 'day' ? '☀️' : node.timeframe === 'week' ? '🗓' : node.timeframe === 'month' ? '📅' : node.timeframe === 'quarter' ? '📈' : '🎯'}</span>
+                    <span className={cn('min-w-0 flex-1 truncate text-sm', node.done && 'text-muted-foreground line-through')}>{node.title}</span>
+                    <span className="hidden shrink-0 items-center gap-1 text-[10px] text-muted-foreground sm:flex">
+                      <FaClock className="h-3 w-3" />
+                      {formatSpan(node) || 'no date'}
+                    </span>
+                    <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">{(node.tasks ?? []).filter((t) => t.status === 'done').length}/{(node.tasks ?? []).length}</span>
+                    <FaChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  </button>
+                ))
+              )}
+            </CardContent>
+          </Card>
+
+          {/* ── Tasks due this day ── */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-sm">
+                <FaClock className="h-4 w-4 text-primary" />
+                Tasks for {dayLabel}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-1.5">
+              {dayTasks.loading ? (
+                <div className="space-y-2">{[1, 2].map((i) => <SkeletonCard key={i} className="h-10" />)}</div>
+              ) : (dayTasks.data?.tasks.length ?? 0) === 0 ? (
+                <p className="py-4 text-center text-sm text-muted-foreground">No tasks this day. Drag a task here from below, or add one.</p>
+              ) : (
+                dayTasks.data!.tasks.map((t) => (
+                  <TaskRow key={t.id} task={t} onToggle={toggleTask} onSnooze={snoozeTask} onEdit={openEdit} />
+                ))
+              )}
+            </CardContent>
+          </Card>
+        </>
       )}
 
       {/* ── Inbox: tasks with no plan (quick-capture home) ── */}
@@ -239,15 +332,15 @@ export function PlansView() {
             <p className="py-3 text-center text-sm text-muted-foreground">Nothing here — tasks captured from anywhere (⌘K → Task) show up in this inbox.</p>
           ) : (
             inboxTasks.data!.tasks.map((t) => (
-              <TaskRow key={t.id} task={t} onToggle={toggleTask} onSnooze={snoozeTask} draggable />
+              <TaskRow key={t.id} task={t} onToggle={toggleTask} onSnooze={snoozeTask} onEdit={openEdit} draggable />
             ))
           )}
           <InboxQuickAdd onAdd={addInboxTask} />
         </CardContent>
       </Card>
 
-      {/* ── Outline mode ── */}
-      {mode === 'outline' || mode === 'day' ? (
+      {/* ── Outline mode (management view of every plan) ── */}
+      {mode === 'outline' ? (
         <div className="space-y-2">
           {data.plans.length === 0 ? (
             <EmptyState
@@ -267,9 +360,10 @@ export function PlansView() {
                 onToggleTask={toggleTask}
                 onSnoozeTask={snoozeTask}
                 onAddTask={addTaskToPlan}
+                onEditTask={openEdit}
                 onReload={reload}
                 allPlans={allPlansFlat}
-                mode={mode}
+                onEditPlan={setEditPlan}
                 onSetGoal={setGoalFor}
               />
             ))
@@ -278,9 +372,11 @@ export function PlansView() {
       ) : null}
 
       {/* ── Kanban mode ── */}
-      {mode === 'kanban' && <KanbanBoard plans={data.plans} onToggle={toggleTask} onReload={reload} />}
+      {mode === 'kanban' && <KanbanBoard plans={data.plans} onToggle={toggleTask} onEditTask={openEdit} onReload={reload} />}
 
-      <AddPlanDialog open={addOpen} onOpenChange={setAddOpen} allPlans={allPlansFlat} onCreated={() => reload()} />
+      <EditTaskDialog open={editOpen} task={editingTask} plans={allPlansFlat} onClose={() => { setEditOpen(false); setEditingTask(null) }} onSaved={reloadAll} />
+      <PlanDialog open={addOpen} onOpenChange={setAddOpen} plan={null} allPlans={allPlansFlat} onSaved={reload} />
+      <PlanDialog open={!!editPlan} onOpenChange={(v) => { if (!v) setEditPlan(null) }} plan={editPlan} allPlans={allPlansFlat} onSaved={() => { setEditPlan(null); reload() }} />
       <TemplatesDialog open={templatesOpen} onOpenChange={setTemplatesOpen} onApplied={() => { reload(); toast({ title: 'Template applied — goal, plans & tasks created', description: 'Check Goals and Plans.' }) }} />
       <GoalSelectDialog node={goalFor} onClose={() => setGoalFor(null)} onSaved={() => { setGoalFor(null); reload() }} />
     </div>
@@ -367,8 +463,8 @@ function PlanTitleToggle({ node, onReload }: { node: PlanNode; onReload: () => v
   )
 }
 
-// menu: rename / done / destination goal
-function PlanRowMenu({ node, onReload, onSetGoal }: { node: PlanNode; onReload: () => void; onSetGoal: (node: PlanNode) => void }) {
+// menu: edit details / rename / done / destination goal
+function PlanRowMenu({ node, onReload, onSetGoal, onEditPlan }: { node: PlanNode; onReload: () => void; onSetGoal: (node: PlanNode) => void; onEditPlan: (node: PlanNode) => void }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -380,6 +476,9 @@ function PlanRowMenu({ node, onReload, onSetGoal }: { node: PlanNode; onReload: 
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
+        <DropdownMenuItem onClick={() => onEditPlan(node)}>
+          <FaPencil className="mr-2 h-3.5 w-3.5" /> Edit details…
+        </DropdownMenuItem>
         <DropdownMenuItem onClick={() => document.dispatchEvent(new CustomEvent('cortex:rename-plan', { detail: node.id }))}>
           <FaPencil className="mr-2 h-3.5 w-3.5" /> Rename
         </DropdownMenuItem>
@@ -401,7 +500,7 @@ function PlanRowMenu({ node, onReload, onSetGoal }: { node: PlanNode; onReload: 
 
 // ─── Recursive plan node row ───────────────────────────────────────
 function PlanNodeRow({
-  node, depth, collapsed, toggleCollapse, onToggleTask, onSnoozeTask, onAddTask, onReload, allPlans, mode, onSetGoal,
+  node, depth, collapsed, toggleCollapse, onToggleTask, onSnoozeTask, onAddTask, onEditTask, onReload, allPlans, onEditPlan, onSetGoal,
 }: {
   node: PlanNode
   depth: number
@@ -409,14 +508,17 @@ function PlanNodeRow({
   toggleCollapse: (id: string) => void
   onToggleTask: (t: Task) => void
   onSnoozeTask: (t: Task) => void
-  onAddTask: (planId: string | null, title: string) => void
+  onAddTask: (planId: string | null, title: string, dueISO?: string) => void
+  onEditTask: (t: Task) => void
   onReload: () => void
   allPlans: { id: string; title: string; timeframe: string }[]
-  mode: string
+  onEditPlan: (node: PlanNode) => void
   onSetGoal: (node: PlanNode) => void
 }) {
   const [adding, setAdding] = useState(false)
   const [newTask, setNewTask] = useState('')
+  const [dueDate, setDueDate] = useState('')
+  const [dueTime, setDueTime] = useState('')
   const { toast } = useToast()
   const setView = useUI((s) => s.setView)
   const hasChildren = (node.children?.length ?? 0) > 0
@@ -425,6 +527,19 @@ function PlanNodeRow({
   const doneCount = tasks.filter((t) => t.status === 'done').length
 
   const TF_ICON: Record<string, string> = { year: '🎯', quarter: '📈', month: '📅', week: '🗓', day: '☀️' }
+
+  function submitTask() {
+    const t = newTask.trim()
+    if (!t) return
+    // date + time compose into a real instant in the USER's timezone (a bare
+    // string would be parsed as UTC on the server and shift the clock)
+    const due = dueDate ? new Date(`${dueDate}T${dueTime || '09:00'}:00`).toISOString() : undefined
+    onAddTask(node.id, t, due)
+    setNewTask('')
+    setDueDate('')
+    setDueTime('')
+    setAdding(false)
+  }
 
   return (
     <div style={{ marginLeft: depth > 0 ? 16 : 0 }}>
@@ -439,6 +554,7 @@ function PlanNodeRow({
           )}
           <PlanTitleToggle node={node} onReload={onReload} />
           <Badgeish timeframe={node.timeframe} />
+          <PlanSpanChip node={node} />
           {node.goal && (
             <button
               onClick={() => setView('goals')}
@@ -450,7 +566,7 @@ function PlanNodeRow({
             </button>
           )}
           <span className="ml-auto text-[10px] tabular-nums text-muted-foreground">{doneCount}/{tasks.length} tasks</span>
-          <PlanRowMenu node={node} onReload={onReload} onSetGoal={onSetGoal} />
+          <PlanRowMenu node={node} onReload={onReload} onSetGoal={onSetGoal} onEditPlan={onEditPlan} />
           <button
             onClick={async () => {
               await api.del(`/api/plans/${node.id}`)
@@ -468,34 +584,23 @@ function PlanNodeRow({
         </div>
 
         {adding && (
-          <div className="flex gap-2 px-3 pb-3">
-            <Input
-              value={newTask}
-              onChange={(e) => setNewTask(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && newTask.trim()) {
-                  onAddTask(node.id, newTask.trim())
-                  setNewTask('')
-                  setAdding(false)
-                }
-              }}
-              placeholder="Add a task to this plan…"
-              className="h-9"
-              autoFocus
-            />
-            <Button
-              size="sm"
-              className="h-9"
-              onClick={() => {
-                if (newTask.trim()) {
-                  onAddTask(node.id, newTask.trim())
-                  setNewTask('')
-                  setAdding(false)
-                }
-              }}
-            >
-              Add
-            </Button>
+          <div className="space-y-2 px-3 pb-3">
+            <div className="flex gap-2">
+              <Input
+                value={newTask}
+                onChange={(e) => setNewTask(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') submitTask()
+                }}
+                placeholder="Add a task to this plan…"
+                className="h-9"
+                autoFocus
+              />
+              <Button size="sm" className="h-9" onClick={submitTask}>
+                Add
+              </Button>
+            </div>
+            <DueFields dueDate={dueDate} dueTime={dueTime} onDate={setDueDate} onTime={setDueTime} hint="Optional — when this task is due" />
           </div>
         )}
 
@@ -510,7 +615,7 @@ function PlanNodeRow({
             >
               <div className="space-y-1 px-3 pb-3">
                 {tasks.map((t) => (
-                  <TaskRow key={t.id} task={t} onToggle={onToggleTask} onSnooze={onSnoozeTask} draggable />
+                  <TaskRow key={t.id} task={t} onToggle={onToggleTask} onSnooze={onSnoozeTask} onEdit={onEditTask} draggable />
                 ))}
                 {hasChildren && (node.children as PlanNode[]).map((child) => (
                   <PlanNodeRow
@@ -522,9 +627,10 @@ function PlanNodeRow({
                     onToggleTask={onToggleTask}
                     onSnoozeTask={onSnoozeTask}
                     onAddTask={onAddTask}
+                    onEditTask={onEditTask}
                     onReload={onReload}
                     allPlans={allPlans}
-                    mode={mode}
+                    onEditPlan={onEditPlan}
                     onSetGoal={onSetGoal}
                   />
                 ))}
@@ -545,8 +651,62 @@ function Badgeish({ timeframe }: { timeframe: string }) {
   )
 }
 
-// ─── Task row with checkbox + drag handle ──────────────────────────
-function TaskRow({ task, onToggle, onSnooze, draggable }: { task: Task; onToggle: (t: Task) => void; onSnooze: (t: Task) => void; draggable?: boolean }) {
+// start → end chip; red when the deadline passed while the plan is open.
+// Spans are derived from the timeframe when no end date is set.
+function PlanSpanChip({ node }: { node: PlanNode }) {
+  const span = planSpan(node)
+  const label = formatSpan(node)
+  if (!span) {
+    return (
+      <span className="hidden shrink-0 items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground sm:inline-flex" title="No start date set — edit the plan to place it on the calendar">
+        no date
+      </span>
+    )
+  }
+  const overdue = !node.done && span.end.getTime() < Date.now()
+  return (
+    <span
+      className={cn(
+        'hidden shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium sm:inline-flex',
+        overdue ? 'bg-danger/10 text-danger' : 'bg-muted text-muted-foreground'
+      )}
+      title={overdue ? 'Deadline passed' : 'Plan span'}
+    >
+      <FaClock className="h-3 w-3" />
+      {label}
+    </span>
+  )
+}
+
+// shared optional due date + time fields for inline task adds
+function DueFields({ dueDate, dueTime, onDate, onTime, hint }: { dueDate: string; dueTime: string; onDate: (v: string) => void; onTime: (v: string) => void; hint?: string }) {
+  return (
+    <div>
+      <div className="grid grid-cols-2 gap-2">
+        <Input
+          type="date"
+          value={dueDate}
+          onChange={(e) => onDate(e.target.value)}
+          className="h-8 text-xs"
+          aria-label="Due date (optional)"
+        />
+        <Input
+          type="time"
+          value={dueTime}
+          onChange={(e) => onTime(e.target.value)}
+          disabled={!dueDate}
+          className="h-8 text-xs"
+          aria-label="Due time (optional)"
+        />
+      </div>
+      {hint && <p className="mt-0.5 text-[10px] text-muted-foreground">{hint}</p>}
+    </div>
+  )
+}
+
+// ─── Task row: checkbox, edit, focus, snooze ────────────────────────
+function TaskRow({ task, onToggle, onSnooze, onEdit, draggable }: { task: Task; onToggle: (t: Task) => void; onSnooze: (t: Task) => void; onEdit: (t: Task) => void; draggable?: boolean }) {
+  const setFocusTask = useUI((s) => s.setFocusTask)
   return (
     <div
       draggable={draggable}
@@ -567,38 +727,64 @@ function TaskRow({ task, onToggle, onSnooze, draggable }: { task: Task; onToggle
         <span className="hidden shrink-0 items-center gap-1 text-[10px] text-muted-foreground sm:flex">
           <FaClock className="h-3 w-3" />
           {new Date(task.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+          {hasTimePart(task.dueDate) && (
+            <span className="tabular-nums"> · {new Date(task.dueDate).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</span>
+          )}
         </span>
       )}
-      <button onClick={() => onSnooze(task)} className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:bg-muted group-hover:opacity-100" aria-label="Snooze to tomorrow">
+      <button
+        onClick={() => setFocusTask({ id: task.id, title: task.title, goalId: task.goalId })}
+        className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground opacity-100 transition-opacity hover:bg-muted hover:text-primary sm:opacity-0 sm:group-hover:opacity-100"
+        aria-label={`Pomodoro on ${task.title}`}
+        title="Start a pomodoro on this task"
+      >
+        <FaStopwatch className="h-3.5 w-3.5" />
+      </button>
+      <button
+        onClick={() => onEdit(task)}
+        className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground opacity-100 transition-opacity hover:bg-muted sm:opacity-0 sm:group-hover:opacity-100"
+        aria-label={`Edit ${task.title}`}
+        title="Edit task"
+      >
+        <FaPencil className="h-3.5 w-3.5" />
+      </button>
+      <button onClick={() => onSnooze(task)} className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground opacity-100 transition-opacity hover:bg-muted sm:opacity-0 sm:group-hover:opacity-100" aria-label="Snooze to tomorrow" title="Snooze to tomorrow">
         <FaClock className="h-3.5 w-3.5" />
       </button>
     </div>
   )
 }
 
-// One-line add for the inbox — creates a task with no plan and no date,
-// the same shape quick capture produces.
-function InboxQuickAdd({ onAdd }: { onAdd: (title: string) => void }) {
+// One-line add for the inbox — creates a task with no plan; date/time optional.
+function InboxQuickAdd({ onAdd }: { onAdd: (title: string, dueISO?: string) => void }) {
   const [title, setTitle] = useState('')
+  const [dueDate, setDueDate] = useState('')
+  const [dueTime, setDueTime] = useState('')
+
+  function submit(e: FormEvent) {
+    e.preventDefault()
+    const v = title.trim()
+    if (!v) return
+    const due = dueDate ? new Date(`${dueDate}T${dueTime || '09:00'}:00`).toISOString() : undefined
+    onAdd(v, due)
+    setTitle('')
+    setDueDate('')
+    setDueTime('')
+  }
+
   return (
-    <form
-      className="flex items-center gap-2 pt-1"
-      onSubmit={(e) => {
-        e.preventDefault()
-        const v = title.trim()
-        if (!v) return
-        onAdd(v)
-        setTitle('')
-      }}
-    >
+    <form className="flex items-center gap-2 pt-1" onSubmit={submit}>
       <FaPlus className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-      <Input
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        placeholder="Add a task to the inbox…"
-        aria-label="Add task to inbox"
-        className="h-9"
-      />
+      <div className="min-w-0 flex-1 space-y-2">
+        <Input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Add a task to the inbox…"
+          aria-label="Add task to inbox"
+          className="h-9"
+        />
+        {title.trim() && <DueFields dueDate={dueDate} dueTime={dueTime} onDate={setDueDate} onTime={setDueTime} />}
+      </div>
       {title.trim() && (
         <Button type="submit" size="sm" className="h-9 shrink-0">
           Add
@@ -608,8 +794,179 @@ function InboxQuickAdd({ onAdd }: { onAdd: (title: string) => void }) {
   )
 }
 
+// ─── Edit task dialog — full editing from inbox, day, plan or kanban ──
+function EditTaskDialog({ open, task, plans, onClose, onSaved }: {
+  open: boolean
+  task: Task | null
+  plans: { id: string; title: string; timeframe: string }[]
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const [title, setTitle] = useState('')
+  const [priority, setPriority] = useState('med')
+  const [status, setStatus] = useState('todo')
+  const [dueDate, setDueDate] = useState('')
+  const [dueTime, setDueTime] = useState('')
+  const [estimate, setEstimate] = useState(30)
+  const [planId, setPlanId] = useState('none')
+  const [busy, setBusy] = useState(false)
+  const { toast } = useToast()
+
+  // prefill from the task each time the dialog opens
+  useEffect(() => {
+    if (!open || !task) return
+    setTitle(task.title)
+    setPriority(task.priority)
+    setStatus(task.status)
+    setEstimate(task.estimate)
+    setPlanId(task.planId ?? 'none')
+    if (task.dueDate) {
+      const d = new Date(task.dueDate)
+      setDueDate(todayISO(d))
+      setDueTime(hasTimePart(task.dueDate) ? `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` : '')
+    } else {
+      setDueDate('')
+      setDueTime('')
+    }
+  }, [open, task])
+
+  async function save() {
+    if (!task || !title.trim()) return
+    setBusy(true)
+    try {
+      await api.patch(`/api/tasks/${task.id}`, {
+        title: title.trim(),
+        priority,
+        status,
+        estimate,
+        // date + time compose in the USER's timezone (same rule as capture)
+        dueDate: dueDate ? new Date(`${dueDate}T${dueTime || '09:00'}:00`).toISOString() : null,
+        planId: planId === 'none' ? null : planId,
+      })
+      toast({ title: 'Task updated' })
+      onSaved()
+      onClose()
+    } catch {
+      toast({ title: 'Could not update task', variant: 'destructive' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function remove() {
+    if (!task) return
+    setBusy(true)
+    try {
+      await api.del(`/api/tasks/${task.id}`)
+      toast({ title: 'Task deleted' })
+      onSaved()
+      onClose()
+    } catch {
+      toast({ title: 'Could not delete task', variant: 'destructive' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose() }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Edit task</DialogTitle>
+          <DialogDescription>Change the details, set a due date and time, move it to another plan — or delete it.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <Input value={title} onChange={(e) => setTitle(e.target.value)} aria-label="Task title" placeholder="Task title" />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-muted-foreground">Priority</label>
+              <Select value={priority} onValueChange={setPriority}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="low">Low</SelectItem>
+                  <SelectItem value="med">Medium</SelectItem>
+                  <SelectItem value="high">High</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Status</label>
+              <Select value={status} onValueChange={setStatus}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todo">To do</SelectItem>
+                  <SelectItem value="doing">In progress</SelectItem>
+                  <SelectItem value="done">Done</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div>
+            <label className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>Due date &amp; time (deadline)</span>
+              {dueDate && (
+                <button type="button" onClick={() => { setDueDate(''); setDueTime('') }} className="text-[10px] font-medium text-primary hover:underline">
+                  Clear
+                </button>
+              )}
+            </label>
+            <div className="mt-1 flex gap-2">
+              <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="flex-1" aria-label="Due date" />
+              <Input
+                type="time"
+                value={dueTime}
+                onChange={(e) => setDueTime(e.target.value)}
+                disabled={!dueDate}
+                className="flex-1"
+                aria-label="Due time"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-muted-foreground">Estimate (minutes)</label>
+              <Input
+                type="number"
+                min={5}
+                step={5}
+                value={estimate}
+                onChange={(e) => setEstimate(Math.max(0, Number.parseInt(e.target.value || '0', 10) || 0))}
+                className="mt-1"
+                aria-label="Estimate in minutes"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Plan</label>
+              <Select value={planId} onValueChange={setPlanId}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">— inbox (no plan) —</SelectItem>
+                  {plans.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center justify-between gap-2">
+          <Button variant="ghost" className="text-danger hover:text-danger hover:bg-danger/10" onClick={remove} disabled={busy}>
+            <FaTrashCan className="mr-1.5 h-3.5 w-3.5" /> Delete
+          </Button>
+          <div className="flex gap-2">
+            <Button variant="ghost" onClick={onClose}>Cancel</Button>
+            <Button onClick={save} disabled={busy || !title.trim()}>
+              {busy && <FaSpinner className="mr-1.5 h-4 w-4 animate-spin" />} Save
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 // ─── Kanban board (todo / doing / done) ────────────────────────────
-function KanbanBoard({ plans, onToggle, onReload }: { plans: PlanNode[]; onToggle: (t: Task) => void; onReload: () => void }) {
+function KanbanBoard({ plans, onToggle, onEditTask, onReload }: { plans: PlanNode[]; onToggle: (t: Task) => void; onEditTask: (t: Task) => void; onReload: () => void }) {
   const columns: { key: string; label: string }[] = [
     { key: 'todo', label: 'To do' },
     { key: 'doing', label: 'In progress' },
@@ -652,14 +1009,30 @@ function KanbanBoard({ plans, onToggle, onReload }: { plans: PlanNode[]; onToggl
                 <div
                   draggable
                   onDragStart={(e) => e.dataTransfer.setData('text/task-id', t.id)}
-                  className="cursor-grab rounded-lg border bg-card p-3 transition-shadow hover:shadow-soft active:cursor-grabbing"
+                  onClick={() => onEditTask(t)}
+                  className="cursor-pointer rounded-lg border bg-card p-3 transition-shadow hover:shadow-soft"
+                  role="button"
+                  aria-label={`Edit ${t.title}`}
                 >
                   <div className="flex items-start gap-2">
-                    <Checkbox checked={t.status === 'done'} onCheckedChange={() => onToggle(t)} aria-label={`Toggle ${t.title}`} className="mt-0.5" />
+                    <Checkbox
+                      checked={t.status === 'done'}
+                      onCheckedChange={() => onToggle(t)}
+                      onClick={(e) => e.stopPropagation()}
+                      aria-label={`Toggle ${t.title}`}
+                      className="mt-0.5"
+                    />
                     <div className="min-w-0 flex-1">
                       <p className={cn('text-sm font-medium leading-snug', t.status === 'done' && 'line-through opacity-60')}>{t.title}</p>
                       <div className="mt-1 flex items-center gap-2 text-[10px] text-muted-foreground">
                         <PriorityDot priority={t.priority} /> ~{t.estimate}m
+                        {t.dueDate && (
+                          <span className="inline-flex items-center gap-1">
+                            <FaClock className="h-3 w-3" />
+                            {new Date(t.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                            {hasTimePart(t.dueDate) && <span className="tabular-nums">{new Date(t.dueDate).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</span>}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -676,39 +1049,90 @@ function KanbanBoard({ plans, onToggle, onReload }: { plans: PlanNode[]; onToggl
   )
 }
 
-// ─── Add plan dialog ───────────────────────────────────────────────
-function AddPlanDialog({ open, onOpenChange, allPlans, onCreated }: { open: boolean; onOpenChange: (v: boolean) => void; allPlans: { id: string; title: string; timeframe: string }[]; onCreated: () => void }) {
+// plan dates are saved from bare YYYY-MM-DD (server stores UTC midnight) —
+// recover the calendar day in UTC, never in the viewer's local zone
+function planDateInput(iso: string | null | undefined): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toISOString().slice(0, 10)
+}
+
+// ─── Plan dialog — create AND edit (title, timeframe, parent, goal,
+//     start date, deadline, notes) ─────────────────────────────────────
+function PlanDialog({ open, onOpenChange, plan, allPlans, onSaved }: {
+  open: boolean
+  onOpenChange: (v: boolean) => void
+  plan: PlanNode | null // null = create
+  allPlans: { id: string; title: string; timeframe: string }[]
+  onSaved: () => void
+}) {
   const [title, setTitle] = useState('')
   const [timeframe, setTimeframe] = useState('day')
   const [parentId, setParentId] = useState('none')
   const [goalId, setGoalId] = useState('none')
   const [goals, setGoals] = useState<Goal[]>([])
   const [startDate, setStartDate] = useState(todayISO())
+  const [endDate, setEndDate] = useState('')
+  const [notes, setNotes] = useState('')
   const [busy, setBusy] = useState(false)
   const { toast } = useToast()
 
+  const editing = !!plan
+
   useEffect(() => {
     if (!open) return
-    setGoalId('none')
     api.get<{ goals: Goal[] }>('/api/goals').then((d) => setGoals(d.goals)).catch(() => setGoals([]))
-  }, [open])
+    if (plan) {
+      setTitle(plan.title)
+      setTimeframe(plan.timeframe)
+      setParentId(plan.parentId ?? 'none')
+      setGoalId(plan.goalId ?? 'none')
+      setStartDate(planDateInput(plan.startDate) || todayISO())
+      setEndDate(planDateInput(plan.endDate))
+      setNotes(plan.notes ?? '')
+    } else {
+      setTitle('')
+      setTimeframe('day')
+      setParentId('none')
+      setGoalId('none')
+      setStartDate(todayISO())
+      setEndDate('')
+      setNotes('')
+    }
+  }, [open, plan])
 
-  async function create() {
+  async function submit() {
     if (!title.trim()) return
     setBusy(true)
     try {
-      await api.post('/api/plans', {
-        title: title.trim(),
-        timeframe,
-        parentId: parentId === 'none' ? null : parentId,
-        goalId: goalId === 'none' ? null : goalId,
-        startDate: startDate || undefined,
-      })
-      setTitle('')
+      if (editing && plan) {
+        await api.patch(`/api/plans/${plan.id}`, {
+          title: title.trim(),
+          timeframe,
+          parentId: parentId === 'none' ? null : parentId,
+          goalId: goalId === 'none' ? null : goalId,
+          startDate: startDate || null,
+          endDate: endDate || null,
+          notes: notes.trim() || null,
+        })
+        toast({ title: 'Plan updated' })
+      } else {
+        await api.post('/api/plans', {
+          title: title.trim(),
+          timeframe,
+          parentId: parentId === 'none' ? null : parentId,
+          goalId: goalId === 'none' ? null : goalId,
+          startDate: startDate || undefined,
+          endDate: endDate || undefined,
+          notes: notes.trim() || undefined,
+        })
+        toast({ title: 'Plan created' })
+      }
       onOpenChange(false)
-      onCreated()
+      onSaved()
     } catch {
-      toast({ title: 'Failed to create plan', variant: 'destructive' })
+      toast({ title: editing ? 'Could not update plan' : 'Failed to create plan', variant: 'destructive' })
     } finally {
       setBusy(false)
     }
@@ -718,8 +1142,12 @@ function AddPlanDialog({ open, onOpenChange, allPlans, onCreated }: { open: bool
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>New plan</DialogTitle>
-          <DialogDescription>Nest it under a parent plan (year → quarter → month → week → day) and optionally aim it at a goal.</DialogDescription>
+          <DialogTitle>{editing ? 'Edit plan' : 'New plan'}</DialogTitle>
+          <DialogDescription>
+            {editing
+              ? 'Update the details or the deadline — the calendar visibility follows the start and end dates.'
+              : 'Nest it under a parent plan (year → quarter → month → week → day) and optionally aim it at a goal.'}
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. September — interview sprint" aria-label="Plan title" autoFocus />
@@ -743,7 +1171,7 @@ function AddPlanDialog({ open, onOpenChange, allPlans, onCreated }: { open: bool
                 <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">— none (top level) —</SelectItem>
-                  {allPlans.map((p) => (
+                  {allPlans.filter((p) => p.id !== plan?.id).map((p) => (
                     <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>
                   ))}
                 </SelectContent>
@@ -762,15 +1190,28 @@ function AddPlanDialog({ open, onOpenChange, allPlans, onCreated }: { open: bool
               </SelectContent>
             </Select>
           </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-muted-foreground">Start date</label>
+              <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="mt-1" aria-label="Plan start date" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Deadline (end date)</label>
+              <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="mt-1" aria-label="Plan deadline (end date)" />
+            </div>
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            The plan shows in the Day view on every date it covers. Without an end date the timeframe decides the span (day = 1 day, week = 7 days, month / quarter / year = their calendar length).
+          </p>
           <div>
-            <label className="text-xs text-muted-foreground">Start date</label>
-            <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="mt-1" />
+            <label className="text-xs text-muted-foreground">Notes (optional)</label>
+            <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="mt-1 min-h-[64px]" aria-label="Plan notes" placeholder="Any details, links or context…" />
           </div>
         </div>
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={create} disabled={busy || !title.trim()}>
-            {busy && <FaSpinner className="mr-1.5 h-4 w-4 animate-spin" />} Create plan
+          <Button onClick={submit} disabled={busy || !title.trim()}>
+            {busy && <FaSpinner className="mr-1.5 h-4 w-4 animate-spin" />} {editing ? 'Save changes' : 'Create plan'}
           </Button>
         </div>
       </DialogContent>
@@ -886,3 +1327,5 @@ function GoalSelectDialog({ node, onClose, onSaved }: { node: PlanNode | null; o
     </Dialog>
   )
 }
+
+
