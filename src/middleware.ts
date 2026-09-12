@@ -21,6 +21,8 @@ const PUBLIC_APIS = [
   '/api/auth/mail-status',
   // operator diagnostic — booleans only, never secrets (see src/app/api/ops/health)
   '/api/ops/health',
+  // operator diagnostic — fixed public URL, no user input, rate-limited
+  '/api/ops/url-import-probe',
 ]
 
 export async function middleware(req: NextRequest) {

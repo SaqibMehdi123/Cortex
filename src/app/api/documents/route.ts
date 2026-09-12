@@ -3,7 +3,7 @@ import { db } from '@/lib/db'
 import { getSessionUser, unauthorized } from '@/lib/auth-server'
 import { safeFetch } from '@/lib/safe-fetch'
 import { putBuffer } from '@/lib/storage'
-import { INLINE_EXTRACT_MAX_BYTES } from '@/lib/pdf-extract'
+import { INLINE_EXTRACT_MAX_BYTES, extractPdfText } from '@/lib/pdf-extract'
 
 export const maxDuration = 120
 
@@ -149,7 +149,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ document }, { status: 201 })
   } catch (e) {
     console.error('POST /api/documents error', e)
-    return NextResponse.json({ error: 'Failed to create document' }, { status: 500 })
+    // detail: the real reason, for the signed-in operator's toast — without
+    // it every failure reports the same generic line and stays undebuggable.
+    const detail = e instanceof Error ? e.message.replace(/[\w-]{24,}/g, '[redacted]').slice(0, 220) : undefined
+    return NextResponse.json({ error: 'Failed to create document', detail }, { status: 500 })
   }
 }
 
@@ -250,25 +253,20 @@ async function createPdfDocument(
 ) {
   const deferExtract = buffer.length > INLINE_EXTRACT_MAX_BYTES
 
+  // extractPdfText is the hardened, batched extractor shared with the upload
+  // pipeline: page-batched against a time budget, and it CANNOT throw — a
+  // pathological or unparseable PDF degrades to "no text" (scan warning)
+  // instead of killing the whole import with a 500. The previous inline
+  // parser.getText() here had neither the budget nor the catch, so a slow/
+  // corrupt file meant the function window blew and the import died.
   let text = ''
   let pages = 0
   let metaTitle = ''
   if (!deferExtract) {
-    // pdf-parse v2 is ESM-only — dynamic import keeps it out of the bundler
-    const { PDFParse } = await import('pdf-parse')
-    const parser = new PDFParse({ data: new Uint8Array(buffer) })
-    try {
-      const result = await parser.getText()
-      text = result.text ?? ''
-      pages = result.pages?.length ?? result.total ?? 0
-      try {
-        const info = await parser.getInfo()
-        const rawTitle = (info.info as { Title?: string } | undefined)?.Title
-        if (rawTitle && rawTitle.length > 3) metaTitle = rawTitle
-      } catch {}
-    } finally {
-      await parser.destroy().catch(() => {})
-    }
+    const extraction = await extractPdfText(new Uint8Array(buffer), buffer.length)
+    text = extraction.text
+    pages = extraction.totalPages || extraction.pages
+    metaTitle = extraction.metaTitle
   }
 
   const cleaned = text

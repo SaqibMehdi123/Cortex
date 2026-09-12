@@ -76,6 +76,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, kind: 'note', note }, { status: 201 })
   } catch (e) {
     console.error('POST /api/capture error', e)
-    return NextResponse.json({ error: 'Failed to capture' }, { status: 500 })
+    // detail: the real reason, for the signed-in operator's toast.
+    const detail = e instanceof Error ? e.message.replace(/[\w-]{24,}/g, '[redacted]').slice(0, 220) : undefined
+    return NextResponse.json({ error: 'Failed to capture', detail }, { status: 500 })
   }
 }

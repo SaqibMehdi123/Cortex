@@ -11,7 +11,11 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   })
   const data = await res.json().catch(() => ({}))
   if (!res.ok) {
-    const err = new Error((data as { error?: string }).error || `Request failed (${res.status})`) as Error & { status?: number }
+    // Server 500s carry `detail` (the real reason) alongside the generic
+    // `error` — surface both so failures are debuggable from the toast.
+    const d = data as { error?: string; detail?: string }
+    const msg = [d.error, d.detail].filter(Boolean).join(' — ') || `Request failed (${res.status})`
+    const err = new Error(msg) as Error & { status?: number }
     err.status = res.status
     throw err
   }
