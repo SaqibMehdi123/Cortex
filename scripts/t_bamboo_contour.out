@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>BambooHR: The Complete HR Software for People, Payroll &#x26; Benefits</title>
+    <link rel="canonical" href="https://www.bamboohr.com/">
+    <meta name="description" content="BambooHR makes it easy to simplify HR, with award-winning solutions for everything from hire to retire. Learn more with a free demo today.">
+    <meta property="og:title" content="BambooHR: The Complete HR Software for People, Payroll &#x26; Benefits">
+    <meta property="og:description" content="BambooHR makes it easy to simplify HR, with award-winning solutions for everything from hire to retire. Learn more with a free demo today.">
+    <meta property="og:url" content="https://www.bamboohr.com/">
+    <meta property="og:image" content="https://www.bamboohr.com/media_115e701ac04beaf329bff3e3855a6c76267d2b007.png?width=1200&#x26;format=pjpg&#x26;optimize=medium">
+    <meta property="og:image:secure_url" content="https://www.bamboohr.com/media_115e701ac04beaf329bff3e3855a6c76267d2b007.png?width=1200&#x26;format=pjpg&#x26;optimize=medium">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="BambooHR: The Complete HR Software for People, Payroll &#x26; Benefits">
+    <meta name="twitter:description" content="BambooHR makes it easy to simplify HR, with award-winning solutions for everything from hire to retire. Learn more with a free demo today.">
+    <meta name="twitter:image" content="https://www.bamboohr.com/media_115e701ac04beaf329bff3e3855a6c76267d2b007.png?width=1200&#x26;format=pjpg&#x26;optimize=medium">
+    <meta name="eyelash-banner-enabled" content="true">
+    <meta name="theme" content="Green, Secondary Yellow">
+    <meta name="nav-control" content="Swap free trial for free demo">
+    <meta name="audience-resolution" content="full-redirect">
+    <meta property="audience:is-customer" content="https://main--bamboohr-website--bamboohr.aem.live/homepage-customer">
+    <meta property="audience:not-customer" content="https://main--bamboohr-website--bamboohr.aem.live/">
+    <meta property="audience:is-customer-non-admin" content="https://main--bamboohr-website--bamboohr.aem.live/">
+    <meta name="schema" content="FAQPage, Organization">
+    <meta name="localization-banner" content="true">
+    <meta name="target" content="on">
+    <meta name="eyelash-header-text" content="Join BambooHR Connect September 14–15:">
+    <meta name="eyelash-main-text" content="Free sessions on AI, compliance, and more!">
+    <meta name="eyelash-link" content="https://www.bamboohr.com/connect/new">
+    <meta name="eyelash-link-text" content="Register Now">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="/scripts/md5.min.js"></script>
+    <script src="/scripts/cheq.js"></script>
+    <script src="/scripts/scripts.js" type="module"></script>
+    <link rel="stylesheet" href="/styles/styles.css">
+    <link rel="icon" href="data:,">
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "@id": "https://www.bamboohr.com/#organization",
+  "name": "BambooHR",
+  "url": "https://www.bamboohr.com/",
+  "logo": "https://www.bamboohr.com/images/about/media-assets/bamboohr-logo-green.png",
+  "description": "BambooHR is an all-in-one HR software platform providing human resources information systems, payroll, and benefits administration for small and medium-sized businesses.",
+  "sameAs": [
+    "https://www.facebook.com/bamboohr/",
+    "https://x.com/bamboohr/",
+    "https://www.instagram.com/bamboohr/",
+    "https://www.linkedin.com/company/bamboohr/",
+    "https://www.youtube.com/user/bamboohr/"
+  ],
+  "contactPoint": {
+    "@type": "ContactPoint",
+    "telephone": "+1-866-387-9595",
+    "contactType": "customer service",
+    "areaServed": "US",
+    "availableLanguage": "English"
+  },
+  "address": {
+    "@type": "PostalAddress",
+    "streetAddress": "42 Future Way",
+    "addressLocality": "Draper",
+    "addressRegion": "UT",
+    "postalCode": "84020",
+    "addressCountry": "US"
+  },
+  "aggregateRating": {
+    "@type": "AggregateRating",
+    "ratingValue": "4.5",
+    "reviewCount": "5254",
+    "bestRating": "5",
+    "worstRating": "3"
+  }
+}
+</script>
+  </head>
+  <body>
+    <header></header>
+    <main>
+      <div>
+        <div class="spacer spacer-md"></div>
+        <div class="columns spacing-none hero-section awards-badges accent-text-green heading-accent-color-1 hero-heading-wide">
+          <div>
+            <div data-align="center">
+              <p><span class="icon icon-rating-capterra-white"></span></p>
+              <h1 id="from-hr-platform-to-hr-partner-with-bamboo-ai">From HR platform to HR partner<br><u>with Bamboo AI™</u></h1>
+              <p>Meet the intelligence layer built into BambooHR® that handles work for you so you can <strong>put your people first.</strong></p>
+            </div>
+          </div>
+        </div>
+        <div class="spacer 16"></div>
+        <div class="option-selector hero-tiles content-width-lg">
+          <div>
+            <div>Hiring &#x26; Onboarding</div>
+            <div>hiring-onboarding</div>
+          </div>
+          <div>
+            <div>HR Data &#x26; Reporting</div>
+            <div>hr-data-reporting</div>
+          </div>
+          <div>
+            <div>Payroll &#x26; Time</div>
+            <div>payroll-time</div>
+          </div>
+          <div>
+            <div>Benefits Administration</div>
+            <div>benefits-administration</div>
+          </div>
+          <div>
+            <div>Employee Experience</div>
+            <div>employee-experience</div>
+          </div>
+          <div>
+            <div>Performance Management</div>
+            <div>performance-management</div>
+          </div>
+          <div>
+            <div>Compensation</div>
+            <div>compensation</div>
+          </div>
+        </div>
+        <div class="spacer 32"></div>
+        <div class="title button content-width-xs button-size-lg spacing-none">
+          <div>
+            <div data-align="center"><a href="/fragments/modals/demo">Get My Free Demo</a></div>
+          </div>
+        </div>
+        <div class="spacer spacer-sm"></div>
+        <div class="image hero spacing-top-sm">
+          <div>
+            <div data-align="center">Image source</div>
+            <div data-align="center">bamboo-hero-ai-desktop</div>
+          </div>
+          <div>
+            <div data-align="center">Image source tablet</div>
+            <div data-align="center">bamboo-hero-ai-desktop</div>
+          </div>
+          <div>
+            <div data-align="center">Image source mobile</div>
+            <div data-align="center">bamboo-hero-ai-desktop</div>
+          </div>
+        </div>
+        <div class="spacer spacer-xl"></div>
+        <div class="section-metadata">
+          <div>
+            <div>Style</div>
+            <div>bg-image-dark-green-rays-hero-webp</div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="spacer spacer-xl"></div>
+        <div class="title spacing-sm content-width-xs">
+          <div>
+            <div data-align="center">
+              <h2 id="see-why-30000-businesses-love-working-with-bamboohr">See why 30,000 businesses love working with BambooHR<sup>®</sup></h2>
+            </div>
+          </div>
+        </div>
+        <div class="logos logo-carousel spacing-top-md spacing-bottom-sm">
+          <div>
+            <div></div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="spacer spacer-sm"></div>
+        <div class="title spacing-none">
+          <div>
+            <div data-align="center">
+              <h2 id="bamboohr-announcements">BambooHR announcements</h2>
+            </div>
+          </div>
+        </div>
+        <div class="cards image-top 3-columns content-width-lg spacing-bottom-none spacing-top-md no-box-shadow">
+          <div>
+            <div>
+              <p>
+                <picture>
+                  <source type="image/webp" srcset="./media_15e39ad01a2caf26d259eb4fb4176153aba37f219.png?width=2000&#x26;format=webply&#x26;optimize=medium" media="(min-width: 600px)">
+                  <source type="image/webp" srcset="./media_15e39ad01a2caf26d259eb4fb4176153aba37f219.png?width=750&#x26;format=webply&#x26;optimize=medium">
+                  <source type="image/png" srcset="./media_15e39ad01a2caf26d259eb4fb4176153aba37f219.png?width=2000&#x26;format=png&#x26;optimize=medium" media="(min-width: 600px)">
+                  <img loading="lazy" alt="" src="./media_15e39ad01a2caf26d259eb4fb4176153aba37f219.png?width=750&#x26;format=png&#x26;optimize=medium" width="720" height="476">
+                </picture>
+              </p>
+              <h4 id="put-your-people-data-to-work-with-connected-intelligence"><strong>Put Your People Data to Work with Connected Intelligence</strong></h4>
+              <p>Bamboo AI™ doesn't just suggest the next step—it completes routine work and brings you in when human judgment matters.</p>
+              <p><a href="/platform/ai">Learn More</a></p>
+            </div>
+          </div>
+          <div>
+            <div>
+              <p>
+                <picture>
+                  <source type="image/webp" srcset="./media_1e616c6c00d9d993de1eac8a86d76d2cd1dc0148f.png?width=2000&#x26;format=webply&#x26;optimize=medium" media="(min-width: 600px)">
+                  <source type="image/webp" srcset="./media_1e616c6c00d9d993de1eac8a86d76d2cd1dc0148f.png?width=750&#x26;format=webply&#x26;optimize=medium">
+                  <source type="image/png" srcset="./media_1e616c6c00d9d993de1eac8a86d76d2cd1dc0148f.png?width=2000&#x26;format=png&#x26;optimize=medium" media="(min-width: 600px)">
+                  <img loading="lazy" alt="" src="./media_1e616c6c00d9d993de1eac8a86d76d2cd1dc0148f.png?width=750&#x26;format=png&#x26;optimize=medium" width="750" height="496">
+                </picture>
+              </p>
+              <h4 id="build-your-hr-future-with-confidence"><strong>Build Your HR Future with Confidence</strong></h4>
+              <p>Join BambooHR Connect free September 14–15. Sessions on AI, compliance, etc. Real stories + strategies.</p>
+              <p><a href="/connect/new">Register Now</a></p>
+            </div>
+          </div>
+          <div>
+            <div>
+              <p>
+                <picture>
+                  <source type="image/webp" srcset="./media_1cb7d24a04dd240573a51a0136d66d87f97b4e687.png?width=2000&#x26;format=webply&#x26;optimize=medium" media="(min-width: 600px)">
+                  <source type="image/webp" srcset="./media_1cb7d24a04dd240573a51a0136d66d87f97b4e687.png?width=750&#x26;format=webply&#x26;optimize=medium">
+                  <source type="image/png" srcset="./media_1cb7d24a04dd240573a51a0136d66d87f97b4e687.png?width=2000&#x26;format=png&#x26;optimize=medium" media="(min-width: 600px)">
+                  <img loading="lazy" alt="" src="./media_1cb7d24a04dd240573a51a0136d66d87f97b4e687.png?width=750&#x26;format=png&#x26;optimize=medium" width="720" height="476">
+                </picture>
+              </p>
+              <h4 id="build-a-culture-where-people-feel-valued"><strong>Build a Culture Where People Feel Valued</strong></h4>
+              <p>Recognize great work, reward meaningful contributions, and reinforce core values — all within BambooHR.</p>
+              <p><a href="/platform/recognition-and-rewards/">Learn More</a></p>
+            </div>
+          </div>
+        </div>
+        <div class="spacer spacer-md"></div>
+      </div>
+      <div>
+        <div class="spacer spacer-sm"></div>
+        <div class="columns 5-7 heading-accent-color-green-3 heading-color-white text-color-white spacing-sm content-width-lg logo-160 col1-img-and-text logo-no-spacing">
+          <div>
+            <div>
+              <p>
+                <picture>
+                  <source type="image/webp" srcset="./media_172f28137099c17510f08f2283448da83814ecc96.png?width=2000&#x26;format=webply&#x26;optimize=medium" media="(min-width: 600px)">
+                  <source type="image/webp" srcset="./media_172f28137099c17510f08f2283448da83814ecc96.png?width=750&#x26;format=webply&#x26;optimize=medium">
+                  <source type="image/png" srcset="./media_172f28137099c17510f08f2283448da83814ecc96.png?width=2000&#x26;format=png&#x26;optimize=medium" media="(min-width: 600px)">
+                  <img loading="lazy" alt="" src="./media_172f28137099c17510f08f2283448da83814ecc96.png?width=750&#x26;format=png&#x26;optimize=medium" width="358" height="80">
+                </picture>
+              </p>
+              <h2 id="meet-bamboo-ai">Meet Bamboo AI™</h2>
+              <p>A built-in intelligence layer that understands your business, uncovers insights, guides better decisions, and gets work done.</p>
+              <p><a href="/platform/ai">Learn About Bamboo AI</a></p>
+            </div>
+            <div>
+              <picture>
+                <source type="image/webp" srcset="./media_1f1277cc7bec1f39de0561ac8485756bf8de78c69.png?width=2000&#x26;format=webply&#x26;optimize=medium" media="(min-width: 600px)">
+                <source type="image/webp" srcset="./media_1f1277cc7bec1f39de0561ac8485756bf8de78c69.png?width=750&#x26;format=webply&#x26;optimize=medium">
+                <source type="image/png" srcset="./media_1f1277cc7bec1f39de0561ac8485756bf8de78c69.png?width=2000&#x26;format=png&#x26;optimize=medium" media="(min-width: 600px)">
+                <img loading="lazy" alt="" src="./media_1f1277cc7bec1f39de0561ac8485756bf8de78c69.png?width=750&#x26;format=png&#x26;optimize=medium" width="1772" height="963">
+              </picture>
+            </div>
+          </div>
+        </div>
+        <div class="spacer spacer-sm"></div>
+        <div class="section-metadata">
+          <div>
+            <div>style</div>
+            <div>bg gradient dark green</div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="title section-header center-align spacing-bottom-none content-width-lg">
+          <div>
+            <div>
+              <h2 id="a-single-platform-where-everything-works-together"><strong>A single platform where everything works together</strong></h2>
+              <p>BambooHR saves you time and effort so you can focus on what matters most—growing your people, improving the employee experience, and taking your business forward.</p>
+            </div>
+          </div>
+        </div>
+        <div class="cards stacking content-width-lg spacing-top-lg spacing-bottom-xl">
+          <div>
+            <div>
+              <h3 id="hr-data--reporting"><strong>HR Data &#x26; Reporting</strong></h3>
+              <h5 id="employee-records"><strong>Employee Records</strong></h5>
+              <h5 id="automated-reporting"><strong>Automated Reporting</strong></h5>
+              <h5 id="mobile-app"><strong>Mobile App</strong></h5>
+              <p>BambooHR is your one-stop shop for data management, with instant, pre-built reports, automated workflows, and in-depth analytics to back you up and keep you moving.</p>
+              <p><a href="/fragments/modals/demo">Get a Demo</a></p>
+            </div>
+            <div>
+              <picture>
+                <source type="image/webp" srcset="./media_1e07622c55257f8648e28705bdbf50dd253e0acdb.png?width=2000&#x26;format=webply&#x26;optimize=medium" media="(min-width: 600px)">
+                <source type="image/webp" srcset="./media_1e07622c55257f8648e28705bdbf50dd253e0acdb.png?width=750&#x26;format=webply&#x26;optimize=medium">
+                <source type="image/png" srcset="./media_1e07622c55257f8648e28705bdbf50dd253e0acdb.png?width=2000&#x26;format=png&#x26;optimize=medium" media="(min-width: 600px)">
+                <img loading="lazy" alt="HR Data and Reporting" src="./media_1e07622c55257f8648e28705bdbf50dd253e0acdb.png?width=750&#x26;format=png&#x26;optimize=medium" width="1040" height="960">
+              </picture>
+            </div>
+          </div>
+          <div>
+            <div>
+              <h3 id="hiring--onboarding"><strong>Hiring &#x26; Onboarding</strong></h3>
+              <h5 id="applicant-tracking"><strong>Applicant Tracking</strong></h5>
+              <h5 id="candidate-experience"><strong>Candidate Experience</strong></h5>
+              <h5 id="onboarding-tasks"><strong>Onboarding Tasks</strong></h5>
+              <p>Find, hire, and onboard the best talent quickly. With the powerful BambooHR applicant tracking system and proactive onboarding tasks, you can create a compelling candidate experience and better first days for new hires.</p>
+              <p><a href="/fragments/modals/demo">Get a Demo</a></p>
+            </div>
+            <div>
+              <picture>
+                <source type="image/webp" srcset="./media_12aae53247bb79dc368aa02d26935eac260e84b38.png?width=2000&#x26;format=webply&#x26;optimize=medium" media="(min-width: 600px)">
+                <source type="image/webp" srcset="./media_12aae53247bb79dc368aa02d26935eac260e84b38.png?width=750&#x26;format=webply&#x26;optimize=medium">
+                <source type="image/png" srcset="./media_12aae53247bb79dc368aa02d26935eac260e84b38.png?width=2000&#x26;format=png&#x26;optimize=medium" media="(min-width: 600px)">
+                <img loading="lazy" alt="Hiring and Onboarding" src="./media_12aae53247bb79dc368aa02d26935eac260e84b38.png?width=750&#x26;format=png&#x26;optimize=medium" width="1040" height="960">
+              </picture>
+            </div>
+          </div>
+          <div>
+            <div>
+              <h3 id="payroll-time--benefits"><strong>Payroll, Time &#x26; Benefits</strong></h3>
+              <h5 id="time-tracking"><strong>Time Tracking</strong></h5>
+              <h5 id="benefits-enrollment"><strong>Benefits Enrollment</strong></h5>
+              <h5 id="payroll-automation"><strong>Payroll Automation</strong></h5>
+              <p>Track hours and manage multi-rate pay, simplify time off requests, streamline benefits enrollment, and run payroll all from a single platform. No more data double entry or manual approval processes—just easy, accurate payroll for you and your employees.</p>
+              <p><a href="/fragments/modals/demo">Get a Demo</a></p>
+            </div>
+            <div>
+              <picture>
+                <source type="image/webp" srcset="./media_16036d6b09ceca9a1f6cb0dffdf3e71531d88cc3f.png?width=2000&#x26;format=webply&#x26;optimize=medium" media="(min-width: 600px)">
+                <source type="image/webp" srcset="./media_16036d6b09ceca9a1f6cb0dffdf3e71531d88cc3f.png?width=750&#x26;format=webply&#x26;optimize=medium">
+                <source type="image/png" srcset="./media_16036d6b09ceca9a1f6cb0dffdf3e71531d88cc3f.png?width=2000&#x26;format=png&#x26;optimize=medium" media="(min-width: 600px)">
+                <img loading="lazy" alt="Payroll, Time and Benefits" src="./media_16036d6b09ceca9a1f6cb0dffdf3e71531d88cc3f.png?width=750&#x26;format=png&#x26;optimize=medium" width="1040" height="960">
+              </picture>
+            </div>
+          </div>
+          <div>
+            <div>
+              <h3 id="employee-experience--performance"><strong>Employee Experience &#x26; Performance</strong></h3>
+              <h5 id="employee-satisfaction"><strong>Employee Satisfaction</strong></h5>
+              <h5 id="performance-growth"><strong>Performance Growth</strong></h5>
+              <h5 id="recognition--awards"><strong>Recognition &#x26; Awards</strong></h5>
+              <p>Build the kind of workplace where your people know you’re invested in their happiness and development. Get the tools you need to gather feedback, strengthen employee satisfaction, and grow your people.</p>
+              <p><a href="/fragments/modals/demo">Get a Demo</a></p>
+            </div>
+            <div>
+              <picture>
+                <source type="image/webp" srcset="./media_133a9f49aa9ae9e579ece04e10bec0acaf362aed6.png?width=2000&#x26;format=webply&#x26;optimize=medium" media="(min-width: 600px)">
+                <source type="image/webp" srcset="./media_133a9f49aa9ae9e579ece04e10bec0acaf362aed6.png?width=750&#x26;format=webply&#x26;optimize=medium">
+                <source type="image/png" srcset="./media_133a9f49aa9ae9e579ece04e10bec0acaf362aed6.png?width=2000&#x26;format=png&#x26;optimize=medium" media="(min-width: 600px)">
+                <img loading="lazy" alt="Employee Experience and Performance" src="./media_133a9f49aa9ae9e579ece04e10bec0acaf362aed6.png?width=750&#x26;format=png&#x26;optimize=medium" width="1040" height="960">
+              </picture>
+            </div>
+          </div>
+          <div>
+            <div>
+              <h3 id="compensation"><strong>Compensation</strong></h3>
+              <h5 id="compensation-planning"><strong>Compensation Planning</strong></h5>
+              <h5 id="benchmarking-data"><strong>Benchmarking Data</strong></h5>
+              <h5 id="streamlined-approvals"><strong>Streamlined Approvals</strong></h5>
+              <p>Take the lead on compensation strategy with access to trusted benchmarking data and advanced planning tools. Create salary bands, streamline approvals, communicate total rewards, and ensure fair pay—all within one easy-to-use platform.</p>
+              <p><a href="/fragments/modals/demo">Get a Demo</a></p>
+            </div>
+            <div>
+              <picture>
+                <source type="image/webp" srcset="./media_12c3827bbcdd3ca7088e8391e643717f1df573469.png?width=2000&#x26;format=webply&#x26;optimize=medium" media="(min-width: 600px)">
+                <source type="image/webp" srcset="./media_12c3827bbcdd3ca7088e8391e643717f1df573469.png?width=750&#x26;format=webply&#x26;optimize=medium">
+                <source type="image/png" srcset="./media_12c3827bbcdd3ca7088e8391e643717f1df573469.png?width=2000&#x26;format=png&#x26;optimize=medium" media="(min-width: 600px)">
+                <img loading="lazy" alt="Compensation" src="./media_12c3827bbcdd3ca7088e8391e643717f1df573469.png?width=750&#x26;format=png&#x26;optimize=medium" width="1040" height="960">
+              </picture>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="spacer spacer-xl"></div>
+        <div class="title content-width-md spacing-none heading-accent-color-green-3">
+          <div>
+            <div data-align="center">
+              <h2 id="bamboohr-customers-save-hundreds-of-hours-and-reduce-hr-costs-by-40">BambooHR customers save hundreds of hours and <u>reduce HR costs by 40%</u></h2>
+            </div>
+          </div>
+        </div>
+        <div class="cards 3-columns image-fit divider spacing-lg">
+          <div>
+            <div data-align="center">
+              <p><strong>Saved $70,000</strong> a year in time-savings using pre-built and custom reports.</p>
+              <p>
+                <picture>
+                  <source type="image/webp" srcset="./media_1f26ffd0a1953850910b470f6260b6d3f9f1267af.png?width=2000&#x26;format=webply&#x26;optimize=medium" media="(min-width: 600px)">
+                  <source type="image/webp" srcset="./media_1f26ffd0a1953850910b470f6260b6d3f9f1267af.png?width=750&#x26;format=webply&#x26;optimize=medium">
+                  <source type="image/png" srcset="./media_1f26ffd0a1953850910b470f6260b6d3f9f1267af.png?width=2000&#x26;format=png&#x26;optimize=medium" media="(min-width: 600px)">
+                  <img loading="lazy" alt="" src="./media_1f26ffd0a1953850910b470f6260b6d3f9f1267af.png?width=750&#x26;format=png&#x26;optimize=medium" width="379" height="129">
+                </picture>
+              </p>
+            </div>
+          </div>
+          <div>
+            <div data-align="center">
+              <p><strong>Saved $40,000</strong> annually and <strong>hundreds of hours</strong> with BambooHR Performance Management.</p>
+              <p>
+                <picture>
+                  <source type="image/webp" srcset="./media_1b4179c08c961ad993289476c833ff15b74cb2b93.png?width=2000&#x26;format=webply&#x26;optimize=medium" media="(min-width: 600px)">
+                  <source type="image/webp" srcset="./media_1b4179c08c961ad993289476c833ff15b74cb2b93.png?width=750&#x26;format=webply&#x26;optimize=medium">
+                  <source type="image/png" srcset="./media_1b4179c08c961ad993289476c833ff15b74cb2b93.png?width=2000&#x26;format=png&#x26;optimize=medium" media="(min-width: 600px)">
+                  <img loading="lazy" alt="" src="./media_1b4179c08c961ad993289476c833ff15b74cb2b93.png?width=750&#x26;format=png&#x26;optimize=medium" width="258" height="104">
+                </picture>
+              </p>
+            </div>
+          </div>
+          <div>
+            <div data-align="center">
+              <p><strong>Saved $20,000</strong> annually and <strong>20 hours</strong> a week with BambooHR payroll.</p>
+              <p>
+                <picture>
+                  <source type="image/webp" srcset="./media_17d945bd94ad04c24ad5b42bb1c4371ffc6a9c63c.png?width=2000&#x26;format=webply&#x26;optimize=medium" media="(min-width: 600px)">
+                  <source type="image/webp" srcset="./media_17d945bd94ad04c24ad5b42bb1c4371ffc6a9c63c.png?width=750&#x26;format=webply&#x26;optimize=medium">
+                  <source type="image/png" srcset="./media_17d945bd94ad04c24ad5b42bb1c4371ffc6a9c63c.png?width=2000&#x26;format=png&#x26;optimize=medium" media="(min-width: 600px)">
+                  <img loading="lazy" alt="" src="./media_17d945bd94ad04c24ad5b42bb1c4371ffc6a9c63c.png?width=750&#x26;format=png&#x26;optimize=medium" width="256" height="53">
+                </picture>
+              </p>
+            </div>
+          </div>
+        </div>
+        <div class="columns 6-6 button content-width-xs button-size-lg spacing-none">
+          <div>
+            <div data-align="right"><a href="https://www.bamboohr.com/demo">Get a Demo</a></div>
+            <div><a href="https://www.bamboohr.com/customers/">See Case Studies</a></div>
+          </div>
+        </div>
+        <div class="spacer spacer-xl"></div>
+      </div>
+      <div>
+        <div class="title spacing-bottom-lg padding-top-xl">
+          <div>
+            <div data-align="center">
+              <h2 id="pre-built-integrations">150+ pre-built integrations</h2>
+            </div>
+          </div>
+        </div>
+        <div class="image has-breakpoint-images spacing-lg no-optimize">
+          <div>
+            <div data-align="center">
+              <p>
+                <picture>
+                  <source type="image/webp" srcset="./media_1762b38c4f682d2ff4e8bba3f4a4bcccb9e8a811b.png?width=2000&#x26;format=webply&#x26;optimize=medium" media="(min-width: 600px)">
+                  <source type="image/webp" srcset="./media_1762b38c4f682d2ff4e8bba3f4a4bcccb9e8a811b.png?width=750&#x26;format=webply&#x26;optimize=medium">
+                  <source type="image/png" srcset="./media_1762b38c4f682d2ff4e8bba3f4a4bcccb9e8a811b.png?width=2000&#x26;format=png&#x26;optimize=medium" media="(min-width: 600px)">
+                  <img loading="lazy" alt="" src="./media_1762b38c4f682d2ff4e8bba3f4a4bcccb9e8a811b.png?width=750&#x26;format=png&#x26;optimize=medium" width="516" height="1192">
+                </picture>
+              </p>
+              <p>
+                <picture>
+                  <source type="image/webp" srcset="./media_189f045cfb9f2ae74ee5cab73ce4419b06eb9cf9e.png?width=2000&#x26;format=webply&#x26;optimize=medium" media="(min-width: 600px)">
+                  <source type="image/webp" srcset="./media_189f045cfb9f2ae74ee5cab73ce4419b06eb9cf9e.png?width=750&#x26;format=webply&#x26;optimize=medium">
+                  <source type="image/png" srcset="./media_189f045cfb9f2ae74ee5cab73ce4419b06eb9cf9e.png?width=2000&#x26;format=png&#x26;optimize=medium" media="(min-width: 600px)">
+                  <img loading="lazy" alt="" src="./media_189f045cfb9f2ae74ee5cab73ce4419b06eb9cf9e.png?width=750&#x26;format=png&#x26;optimize=medium" width="1938" height="540">
+                </picture>
+              </p>
+              <p>
+                <picture>
+                  <source type="image/webp" srcset="./media_189f045cfb9f2ae74ee5cab73ce4419b06eb9cf9e.png?width=2000&#x26;format=webply&#x26;optimize=medium" media="(min-width: 600px)">
+                  <source type="image/webp" srcset="./media_189f045cfb9f2ae74ee5cab73ce4419b06eb9cf9e.png?width=750&#x26;format=webply&#x26;optimize=medium">
+                  <source type="image/png" srcset="./media_189f045cfb9f2ae74ee5cab73ce4419b06eb9cf9e.png?width=2000&#x26;format=png&#x26;optimize=medium" media="(min-width: 600px)">
+                  <img loading="lazy" alt="" src="./media_189f045cfb9f2ae74ee5cab73ce4419b06eb9cf9e.png?width=750&#x26;format=png&#x26;optimize=medium" width="1938" height="540">
+                </picture>
+              </p>
+              <p>
+                <picture>
+                  <source type="image/webp" srcset="./media_189f045cfb9f2ae74ee5cab73ce4419b06eb9cf9e.png?width=2000&#x26;format=webply&#x26;optimize=medium" media="(min-width: 600px)">
+                  <source type="image/webp" srcset="./media_189f045cfb9f2ae74ee5cab73ce4419b06eb9cf9e.png?width=750&#x26;format=webply&#x26;optimize=medium">
+                  <source type="image/png" srcset="./media_189f045cfb9f2ae74ee5cab73ce4419b06eb9cf9e.png?width=2000&#x26;format=png&#x26;optimize=medium" media="(min-width: 600px)">
+                  <img loading="lazy" alt="" src="./media_189f045cfb9f2ae74ee5cab73ce4419b06eb9cf9e.png?width=750&#x26;format=png&#x26;optimize=medium" width="1938" height="540">
+                </picture>
+              </p>
+            </div>
+          </div>
+        </div>
+        <div class="columns button content-width-xs button-size-lg spacing-none">
+          <div>
+            <div data-align="center"><a href="https://www.bamboohr.com/integrations/">See All Integrations</a></div>
+          </div>
+        </div>
+        <div class="spacer 46"></div>
+        <div class="section-metadata">
+          <div>
+            <div>Style</div>
+            <div>Dark green integrations</div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="spacer spacer-md"></div>
+        <div class="title spacing-top-md spacing-bottom-md">
+          <div>
+            <div data-align="center">
+              <h2 id="hear-from-our-customers">Hear from our customers</h2>
+            </div>
+          </div>
+        </div>
+        <div class="carousel style-9 g2-card spacing-bottom-lg content-width-lg spacing-top-none">
+          <div>
+            <div>
+              <p>
+                <picture>
+                  <source type="image/webp" srcset="./media_1f44517ac6def3169c522a575c0ce7eaafcaa66d1.png?width=2000&#x26;format=webply&#x26;optimize=medium" media="(min-width: 600px)">
+                  <source type="image/webp" srcset="./media_1f44517ac6def3169c522a575c0ce7eaafcaa66d1.png?width=750&#x26;format=webply&#x26;optimize=medium">
+                  <source type="image/png" srcset="./media_1f44517ac6def3169c522a575c0ce7eaafcaa66d1.png?width=2000&#x26;format=png&#x26;optimize=medium" media="(min-width: 600px)">
+                  <img loading="lazy" alt="" src="./media_1f44517ac6def3169c522a575c0ce7eaafcaa66d1.png?width=750&#x26;format=png&#x26;optimize=medium" width="112" height="112">
+                </picture>
+              </p>
+              <p>
+                <picture>
+                  <source type="image/webp" srcset="./media_1d7d2273a8b9fd1782140ef9a0fb1e673b64799ee.png?width=2000&#x26;format=webply&#x26;optimize=medium" media="(min-width: 600px)">
+                  <source type="image/webp" srcset="./media_1d7d2273a8b9fd1782140ef9a0fb1e673b64799ee.png?width=750&#x26;format=webply&#x26;optimize=medium">
+                  <source type="image/png" srcset="./media_1d7d2273a8b9fd1782140ef9a0fb1e673b64799ee.png?width=2000&#x26;format=png&#x26;optimize=medium" media="(min-width: 600px)">
+                  <img loading="lazy" alt="" src="./media_1d7d2273a8b9fd1782140ef9a0fb1e673b64799ee.png?width=750&#x26;format=png&#x26;optimize=medium" width="257" height="48">
+                </picture> <strong>4.4</strong> (5,800+ reviews)
+              </p>
+            </div>
+          </div>
+          <div>
+            <div>
+              <p>
+                <picture>
+                  <source type="image/webp" srcset="./media_1ee88e862940c2e2205ead9a6dcc87ae83a1aeb1a.png?width=2000&#x26;format=webply&#x26;optimize=medium" media="(min-width: 600px)">
+                  <source type="image/webp" srcset="./media_1ee88e862940c2e2205ead9a6dcc87ae83a1aeb1a.png?width=750&#x26;format=webply&#x26;optimize=medium">
+                  <source type="image/png" srcset="./media_1ee88e862940c2e2205ead9a6dcc87ae83a1aeb1a.png?width=2000&#x26;format=png&#x26;optimize=medium" media="(min-width: 600px)">
+                  <img loading="lazy" alt="" src="./media_1ee88e862940c2e2205ead9a6dcc87ae83a1aeb1a.png?width=750&#x26;format=png&#x26;optimize=medium" width="196" height="36">
+                </picture>
+              </p>
+              <p>Core HR functions are now centralized and accessible reducing the administrative burden.</p>
+              <p>
+                <picture>
+                  <source type="image/webp" srcset="./media_19a8acaef243d4781f7b47e8ebb49eb51dafa9c32.png?width=2000&#x26;format=webply&#x26;optimize=medium" media="(min-width: 600px)">
+                  <source type="image/webp" srcset="./media_19a8acaef243d4781f7b47e8ebb49eb51dafa9c32.png?width=750&#x26;format=webply&#x26;optimize=medium">
+                  <source type="image/png" srcset="./media_19a8acaef243d4781f7b47e8ebb49eb51dafa9c32.png?width=2000&#x26;format=png&#x26;optimize=medium" media="(min-width: 600px)">
+                  <img loading="lazy" alt="" src="./media_19a8acaef243d4781f7b47e8ebb49eb51dafa9c32.png?width=750&#x26;format=png&#x26;optimize=medium" width="128" height="128">
+                </picture> <strong><em>Melissa E.</em><u>Director of Safety and Risk Management</u></strong>
+              </p>
+            </div>
+          </div>
+          <div>
+            <div>
+              <p>
+                <picture>
+                  <source type="image/webp" srcset="./media_1ee88e862940c2e2205ead9a6dcc87ae83a1aeb1a.png?width=2000&#x26;format=webply&#x26;optimize=medium" media="(min-width: 600px)">
+                  <source type="image/webp" srcset="./media_1ee88e862940c2e2205ead9a6dcc87ae83a1aeb1a.png?width=750&#x26;format=webply&#x26;optimize=medium">
+                  <source type="image/png" srcset="./media_1ee88e862940c2e2205ead9a6dcc87ae83a1aeb1a.png?width=2000&#x26;format=png&#x26;optimize=medium" media="(min-width: 600px)">
+                  <img loading="lazy" alt="" src="./media_1ee88e862940c2e2205ead9a6dcc87ae83a1aeb1a.png?width=750&#x26;format=png&#x26;optimize=medium" width="196" height="36">
+                </picture>
+              </p>
+              <p>Streamlines our processes and makes our HR operations more efficient and cohesive.</p>
+              <p>
+                <picture>
+                  <source type="image/webp" srcset="./media_101adc48caaa322dda5ac04410d61ce055c37e0ab.png?width=2000&#x26;format=webply&#x26;optimize=medium" media="(min-width: 600px)">
+                  <source type="image/webp" srcset="./media_101adc48caaa322dda5ac04410d61ce055c37e0ab.png?width=750&#x26;format=webply&#x26;optimize=medium">
+                  <source type="image/png" srcset="./media_101adc48caaa322dda5ac04410d61ce055c37e0ab.png?width=2000&#x26;format=png&#x26;optimize=medium" media="(min-width: 600px)">
+                  <img loading="lazy" alt="" src="./media_101adc48caaa322dda5ac04410d61ce055c37e0ab.png?width=750&#x26;format=png&#x26;optimize=medium" width="128" height="128">
+                </picture> <strong><em>Skye M.</em><u>HR Generalist, ABI Attachments</u></strong>
+              </p>
+            </div>
+          </div>
+          <div>
+            <div>
+              <p>
+                <picture>
+                  <source type="image/webp" srcset="./media_1ee88e862940c2e2205ead9a6dcc87ae83a1aeb1a.png?width=2000&#x26;format=webply&#x26;optimize=medium" media="(min-width: 600px)">
+                  <source type="image/webp" srcset="./media_1ee88e862940c2e2205ead9a6dcc87ae83a1aeb1a.png?width=750&#x26;format=webply&#x26;optimize=medium">
+                  <source type="image/png" srcset="./media_1ee88e862940c2e2205ead9a6dcc87ae83a1aeb1a.png?width=2000&#x26;format=png&#x26;optimize=medium" media="(min-width: 600px)">
+                  <img loading="lazy" alt="" src="./media_1ee88e862940c2e2205ead9a6dcc87ae83a1aeb1a.png?width=750&#x26;format=png&#x26;optimize=medium" width="196" height="36">
+                </picture>
+              </p>
+              <p>BambooHR has given me more time to do the more important things!</p>
+              <p>
+                <picture>
+                  <source type="image/webp" srcset="./media_1abc774eb5b28b10ca32090139018b35c2f06f3c0.png?width=2000&#x26;format=webply&#x26;optimize=medium" media="(min-width: 600px)">
+                  <source type="image/webp" srcset="./media_1abc774eb5b28b10ca32090139018b35c2f06f3c0.png?width=750&#x26;format=webply&#x26;optimize=medium">
+                  <source type="image/png" srcset="./media_1abc774eb5b28b10ca32090139018b35c2f06f3c0.png?width=2000&#x26;format=png&#x26;optimize=medium" media="(min-width: 600px)">
+                  <img loading="lazy" alt="" src="./media_1abc774eb5b28b10ca32090139018b35c2f06f3c0.png?width=750&#x26;format=png&#x26;optimize=medium" width="128" height="128">
+                </picture> <strong><em>Jocelyn E.</em><u>HR Director, 2Great Pediatric Therapy</u></strong>
+              </p>
+            </div>
+          </div>
+          <div>
+            <div>
+              <p>
+                <picture>
+                  <source type="image/webp" srcset="./media_1ee88e862940c2e2205ead9a6dcc87ae83a1aeb1a.png?width=2000&#x26;format=webply&#x26;optimize=medium" media="(min-width: 600px)">
+                  <source type="image/webp" srcset="./media_1ee88e862940c2e2205ead9a6dcc87ae83a1aeb1a.png?width=750&#x26;format=webply&#x26;optimize=medium">
+                  <source type="image/png" srcset="./media_1ee88e862940c2e2205ead9a6dcc87ae83a1aeb1a.png?width=2000&#x26;format=png&#x26;optimize=medium" media="(min-width: 600px)">
+                  <img loading="lazy" alt="" src="./media_1ee88e862940c2e2205ead9a6dcc87ae83a1aeb1a.png?width=750&#x26;format=png&#x26;optimize=medium" width="196" height="36">
+                </picture>
+              </p>
+              <p>Out of all the HRIS systems, BambooHR is the easiest to connect with—it's simple, user-friendly, and a breeze to troubleshoot.</p>
+              <p>
+                <picture>
+                  <source type="image/webp" srcset="./media_1423d1c1a36a5575fec3218b0b8ad7e80ee5f57a4.png?width=2000&#x26;format=webply&#x26;optimize=medium" media="(min-width: 600px)">
+                  <source type="image/webp" srcset="./media_1423d1c1a36a5575fec3218b0b8ad7e80ee5f57a4.png?width=750&#x26;format=webply&#x26;optimize=medium">
+                  <source type="image/png" srcset="./media_1423d1c1a36a5575fec3218b0b8ad7e80ee5f57a4.png?width=2000&#x26;format=png&#x26;optimize=medium" media="(min-width: 600px)">
+                  <img loading="lazy" alt="" src="./media_1423d1c1a36a5575fec3218b0b8ad7e80ee5f57a4.png?width=750&#x26;format=png&#x26;optimize=medium" width="128" height="128">
+                </picture> <strong><em>Christina F.</em><u>Product Support Specialist at Culture Amp</u></strong>
+              </p>
+            </div>
+          </div>
+        </div>
+        <div class="spacer spacer-xl"></div>
+        <div class="columns 6-6 button content-width-xs button-size-lg spacing-none">
+          <div>
+            <div data-align="right"><a href="/fragments/modals/demo">Get a Demo</a></div>
+            <div><a href="https://www.bamboohr.com/signup/">Start Free Trial</a></div>
+          </div>
+        </div>
+        <div class="spacer spacer-lg"></div>
+        <div class="section-metadata">
+          <div>
+            <div>Style</div>
+            <div>dark-green-carousel</div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="title title-emb-1 spacing-top-lg spacing-bottom-lg">
+          <div>
+            <div data-align="center">
+              <h2 id="frequently-asked-questions">Frequently Asked Questions</h2>
+            </div>
+          </div>
+        </div>
+        <div class="tabs style-3 spacing-top-lg spacing-bottom-xl faq-page-schema">
+          <div>
+            <div>
+              <h2 id="what-does-bamboohr-do">What does BambooHR do?</h2>
+              <p>BambooHR is the complete HR platform that brings all your employee, payroll, time, and benefit information together in one place, giving you the data accuracy, security, and coordination you need to sleep soundly.</p>
+            </div>
+          </div>
+          <div>
+            <div>
+              <h2 id="does-bamboohr-do-payroll">Does BambooHR do payroll?</h2>
+              <p>Yes. BambooHR has its own add-on payroll solution that allows data to flow automatically, reducing the risk of double entry and making payroll runs quick and easy. In addition to seamless data flow, payroll customers also enjoy comprehensive payroll reporting, superior customer support, and full-service tax filing. Learn more by visiting the <a href="https://www.bamboohr.com/platform/payroll/">product page</a> on the BambooHR website.</p>
+            </div>
+          </div>
+          <div>
+            <div>
+              <h2 id="how-much-does-bamboohr-cost">How much does BambooHR cost?</h2>
+              <p>BambooHR pricing varies depending on the number of employees at your organization and the features you select. To get a free price quote, call 1-866-387-9595 or visit our <a href="https://www.bamboohr.com/pricing/">pricing page.</a></p>
+            </div>
+          </div>
+          <div>
+            <div>
+              <h2 id="how-many-countries-is-bamboohr-in">How many countries is BambooHR in?</h2>
+              <p>BambooHR serves customers in over 150+ countries.</p>
+            </div>
+          </div>
+          <div>
+            <div>
+              <h2 id="is-your-support-team-outsourced">Is your support team outsourced?</h2>
+              <p>No, our support team is entirely in-house to ensure you receive the best service possible.</p>
+            </div>
+          </div>
+          <div>
+            <div>
+              <h2 id="is-bamboohr-a-peo">Is BambooHR a PEO?</h2>
+              <p>BambooHR is an HR software solution, not an outsourcing provider. While we don't provide HR staff for you, we do offer top-notch tools that help time-strapped HR professionals perform the work of many. Even a one-person HR department can use BambooHR to analyze people data, hire talent, onboard new employees, manage compensation, and help strengthen their company culture. And that's just the beginning.</p>
+            </div>
+          </div>
+          <div>
+            <div>
+              <h2 id="wheres-my-data-housed-how-secure-is-bamboohr">Where's my data housed? How secure is BambooHR?</h2>
+              <p>BambooHR customer data is hosted in the United States, Canada, or Ireland, depending on the location and needs of individual customers and applicable laws. All information is encrypted in transit, and sensitive fields are encrypted at rest. In addition, the data center located in Ireland meets all of the data requirements of the European Union, European Economic Area, Switzerland, and the United Kingdom.</p>
+              <p>We use a Zero Trust model to keep your data locked down at every level, and we take multiple measures to ensure it stays that way. Here are just some of the measures we take to prevent data leaks and unauthorized data access:</p>
+              <ul>
+                <li>Defense in Depth multi-level data security</li>
+                <li>Annual third-party SOC II security audit</li>
+                <li>Frequent vulnerability scans</li>
+                <li>SAML Support</li>
+                <li>Web application firewall</li>
+                <li>Annual penetration test</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="spacer spacer-xl"></div>
+        <div class="title spacing-none">
+          <div>
+            <div data-align="center">
+              <h2 id="in-a-rush-try-bamboohr-now">In a rush? Try BambooHR now!</h2>
+              <p><a href="https://www.bamboohr.com/signup/">Start Free Trial</a></p>
+            </div>
+          </div>
+        </div>
+        <div class="spacer spacer-xl"></div>
+        <div class="section-metadata">
+          <div>
+            <div>Style</div>
+            <div>Dark green cta</div>
+          </div>
+        </div>
+        <div class="modal-fragment"></div>
+      </div>
+    </main>
+    <footer></footer>
+  </body>
+</html>
