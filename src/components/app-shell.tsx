@@ -11,6 +11,7 @@ import type { DashboardData } from '@/lib/types'
 import { recurrenceLabel } from '@/lib/reminder-span'
 import { hasTimePart } from '@/lib/plan-span'
 import { CortexMark } from '@/components/logo'
+import { PomodoroPill } from '@/components/focus-timer'
 import {
   Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetTrigger,
   Popover, PopoverContent, PopoverTrigger,
@@ -380,9 +381,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </nav>
 
         {/* ── Mobile floating action stack ──
-            Vertical test layout: mindmap (only while a book is open) on
-            top, the AI chat toggle under it, quick capture at the bottom. */}
-        <div className="fixed bottom-20 right-4 z-40 flex flex-col gap-3 lg:hidden">
+            Pomodoro pill (while minimized) on top, then mindmap (only
+            while a book is open), the AI chat toggle, quick capture at
+            the bottom — one shared column, so the pill can never cover
+            the capture “+” */}
+        <div className="fixed bottom-20 right-4 z-40 flex flex-col items-end gap-3 lg:hidden">
+          <PomodoroPill />
           {readerDocId && <ReaderMindmapButton />}
           <ChatToggleButton />
           <button
@@ -396,13 +400,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* ── Desktop floating action stack (same vertical order) — shifts
             left of the Copilot dock while it is open so all actions stay
-            reachable; swaps to icon buttons to keep the column narrow. */}
+            reachable; swaps to icon buttons to keep the column narrow.
+            lg:flex (not xl:) so the pomodoro pill and quick capture also
+            exist on laptop widths where the bottom tab bar is gone. */}
         <div
           className={cn(
-            'fixed bottom-6 z-30 hidden flex-col gap-3 transition-all duration-200 xl:flex',
+            'fixed bottom-6 z-30 hidden flex-col items-end gap-3 transition-all duration-200 lg:flex',
             copilotOpen ? 'right-[400px]' : 'right-6'
           )}
         >
+          <PomodoroPill />
           {readerDocId && <ReaderMindmapButton />}
           <ChatToggleButton />
           <button

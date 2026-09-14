@@ -93,7 +93,6 @@ export function FocusTimer() {
   const isWork = phase === 'work'
   const total = isWork ? settings.workMin * 60 : (phase === 'short' ? settings.shortMin : settings.longMin) * 60
   const idle = !running && phaseElapsed === 0 && completed === 0 && !breakChoicePending
-  const pillVisible = (running || phaseElapsed > 0 || completed > 0) && !dialogOpen
   const pct = total > 0 ? Math.min(1, 1 - secondsLeft / total) : 0
   const R = 78
   const C = 2 * Math.PI * R
@@ -298,9 +297,34 @@ export function FocusTimer() {
         </DialogContent>
       </Dialog>
 
-      {/* floating pill — countdown survives navigation & closed dialog */}
-      {pillVisible && (
-        <div className="fixed bottom-16 right-3 z-40 flex items-center gap-1 rounded-full border bg-card/95 py-2 pl-3 pr-1.5 shadow-soft backdrop-blur sm:bottom-5 sm:right-5">
+      {/* floating pill moved into the app-shell action stacks (see
+          <PomodoroPill /> below) so it can never sit on top of the
+          quick-capture “+” — it is the top item of the same column */}
+    </>
+  )
+}
+
+// ── floating pill: the minimized pomodoro ────────────────────────────
+// Rendered as the FIRST item of the app-shell floating action stacks
+// (mobile + desktop), i.e. directly above the AI toggle and the
+// quick-capture “+”. Belonging to the same anchored column means it can
+// never overlap the “+” and it shifts left automatically when the
+// Copilot dock opens.
+export function PomodoroPill() {
+  const secondsLeft = usePomodoro((s) => s.secondsLeft)
+  const running = usePomodoro((s) => s.running)
+  const dialogOpen = usePomodoro((s) => s.dialogOpen)
+  const completed = usePomodoro((s) => s.completed)
+  const phaseElapsed = usePomodoro((s) => s.phaseElapsed)
+  const phase = usePomodoro((s) => s.phase)
+  const breakChoicePending = usePomodoro((s) => s.breakChoicePending)
+
+  const isWork = phase === 'work'
+  const pillVisible = (running || phaseElapsed > 0 || completed > 0) && !dialogOpen
+  if (!pillVisible) return null
+
+  return (
+    <div className="flex items-center gap-1 rounded-full border bg-card/95 py-2 pl-3 pr-1.5 shadow-soft backdrop-blur">
           <button
             onClick={() => usePomodoro.getState().open()}
             className="flex items-center gap-2"
@@ -326,9 +350,7 @@ export function FocusTimer() {
           >
             <FaClose className="h-3.5 w-3.5" />
           </button>
-        </div>
-      )}
-    </>
+    </div>
   )
 }
 
