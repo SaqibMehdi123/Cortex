@@ -11,17 +11,28 @@ import { classifyRoleFamily } from '@/lib/job-families'
 //     (Karachi/Lahore roles), Motive (Islamabad/Lahore/Karachi hubs) and Raft
 //     (Pakistani-founded)
 //   - Lever boards (official ATS API): Mistral AI — plus Educative (Lahore)
+//   - Workable widget API: Devsinc (Lahore HQ, ~34 live roles)
+//   - JazzHR public boards: VentureDive (Karachi/Lahore) and 10Pearls
+//     (Karachi/Lahore/Islamabad + international)
+//   - Zoho Recruit public careers API: Techlogix (Lahore/Karachi/Islamabad)
+//   - WordPress REST job post types: Folio3 (Karachi/Lahore) and PureLogics
+//     (Lahore) — their careers run on WP with a public jobs post type
+//   - NETSOL Technologies (Lahore) — dedicated careers site openings archive
 //   - NSTP (National Science & Technology Park at NUST, Islamabad) — the
 //     park's own public jobs API serving its resident companies & startups
 //   - LinkedIn Pakistan — the public guest jobs endpoint (jobs + internships,
-//     real companies, permanent company-logo URLs)
+//     real companies, permanent company-logo URLs), including rotating
+//     per-company searches (Systems Limited, CureMD, Arbisoft, Tkxel, Daraz,
+//     Contour Software, CodeNinja, Inbox, Nextbridge, …) that are filtered by
+//     the company name on each card so only true matches land on the board
 //   - RemoteOK public job API (AI/ML-relevant only)
 //   - Remotive public job API (data category)
 // Listings are de-duplicated per account by URL, so re-fetching is safe and
 // every user keeps their own discover feed + saved state.
-// (Rozee.pk / Bayt / Mustakbil / nstp.pk HTML pages were tested and block
-// datacenter IPs via Cloudflare — not usable server-side; the ATS boards and
-// the nstp.pk JSON API / LinkedIn guest endpoint are the reliable channels.)
+// (Rozee.pk / Bayt / Mustakbil / nstp.pk HTML pages / Confiz / Bykea were
+// tested and block datacenter IPs via Cloudflare; Afiniti, i2c and Nisum run
+// JS-only or auth-gated ATS frontends — not usable server-side. The boards
+// above are the verified, reliable channels.)
 
 const UA = 'Mozilla/5.0 (X11; Linux x86_64) Cortex/1.0'
 
@@ -57,6 +68,25 @@ const GREENHOUSE_BOARDS: Array<{ board: string; company: string }> = [
 const LEVER_BOARDS: Array<{ board: string; company: string }> = [
   { board: 'mistral', company: 'Mistral AI' },
   { board: 'educative', company: 'Educative' },
+]
+
+// More verified keyless boards for Pakistani employers (curl-tested 2026-09).
+// Workable serves its widget JSON account-wide; JazzHR public boards and Zoho
+// Recruit career sites expose the openings list without auth too.
+const WORKABLE_ACCOUNTS: Array<{ account: string; company: string }> = [
+  { account: 'devsinc-17', company: 'Devsinc' },
+]
+const JAZZHR_BOARDS: Array<{ board: string; company: string }> = [
+  { board: 'venturedive', company: 'VentureDive' },
+  { board: '10pearls', company: '10Pearls' },
+]
+const ZOHO_RECRUIT_SITES: Array<{ host: string; company: string }> = [
+  { host: 'techlogix.zohorecruit.com', company: 'Techlogix' },
+]
+// WordPress careers with a public jobs post type (wp-json/wp/v2/<type>).
+const WP_JOB_SITES: Array<{ site: string; type: string; company: string; pages: number }> = [
+  { site: 'https://folio3.com', type: 'jobs', company: 'Folio3', pages: 2 },
+  { site: 'https://purelogics.com', type: 'job-listings', company: 'PureLogics', pages: 1 },
 ]
 
 const RELEVANT =
@@ -131,6 +161,181 @@ async function fetchLever(board: string, company: string): Promise<Listing[]> {
     logoUrl: null,
     publishedAt: j.createdAt ? new Date(j.createdAt) : null,
   }))
+}
+
+// Workable public widget API — account-level board JSON, no key. Verified
+// live 2026-09: devsinc-17 serves ~34 jobs with Pakistan city/country.
+async function fetchWorkable(account: string, company: string): Promise<Listing[]> {
+  const data = (await fetchJSON(`https://apply.workable.com/api/v1/widget/accounts/${account}?details=true`)) as {
+    jobs?: Array<{
+      title: string
+      shortcode: string
+      city?: string
+      state?: string
+      country?: string
+      published_on?: string
+      created_at?: string
+    }>
+  }
+  return (data.jobs ?? []).slice(0, PER_SOURCE_CAP).map((j) => ({
+    company,
+    role: j.title.trim(),
+    roleFamily: classifyRoleFamily(j.title),
+    type: classify(j.title),
+    location: [j.city, j.state, j.country].filter(Boolean).join(', ') || null,
+    source: `${company} (Workable)`,
+    // keep the account slug in the URL so the company logo can be derived
+    url: `https://apply.workable.com/${account}/j/${j.shortcode}`,
+    externalId: j.shortcode,
+    logoUrl: null,
+    publishedAt: asDate(j.published_on ?? j.created_at),
+  }))
+}
+
+// JazzHR (resumator) public board — the /apply/ page lists every opening as
+// a title anchor followed by a location cell; slice each card from its
+// anchor to the next one. Verified live 2026-09 (venturedive, 10pearls).
+async function fetchJazzHR(board: string, company: string): Promise<Listing[]> {
+  const res = await fetch(`https://${board}.applytojob.com/apply/`, {
+    headers: { 'User-Agent': UA, Accept: 'text/html' },
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+    cache: 'no-store',
+  })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  const html = await res.text()
+  // Boards ship two JazzHR templates: rows with a resumator-job-title-link
+  // class and location cell, or list-group items with the title as the plain
+  // anchor text and the location in a fa-map-marker item. Using the anchor's
+  // own inner text for the title covers both.
+  const anchors = [...html.matchAll(/<a[^>]*href="(https:\/\/[a-z0-9-]+\.applytojob\.com\/apply\/[A-Za-z0-9]+\/[A-Za-z0-9-]+)"[^>]*>([\s\S]*?)<\/a>/gi)]
+  const seen = new Set<string>()
+  const out: Listing[] = []
+  for (let i = 0; i < anchors.length; i++) {
+    const url = decodeEntities(anchors[i][1])
+    if (seen.has(url)) continue
+    const start = anchors[i].index ?? 0
+    const end = i + 1 < anchors.length ? anchors[i + 1].index ?? html.length : html.length
+    const card = html.slice(start, end)
+    const title = tagText(anchors[i][2])
+    if (!title) continue
+    seen.add(url)
+    out.push({
+      company,
+      role: title,
+      roleFamily: classifyRoleFamily(title),
+      type: classify(title),
+      location:
+        tagText(card.match(/resumator-job-location-column[^>]*>([\s\S]*?)<\//)?.[1] ?? '') ||
+        tagText(card.match(/fa-map-marker[^>]*><\/i>([^<]*)/)?.[1] ?? '') ||
+        null,
+      source: `${company} (JazzHR)`,
+      url,
+      externalId: url.match(/\/apply\/([A-Za-z0-9]+)\//)?.[1] ?? null,
+      logoUrl: null,
+      publishedAt: null,
+    })
+  }
+  return out.slice(0, PER_SOURCE_CAP)
+}
+
+// Zoho Recruit public careers API — keyless JSON of published openings.
+// Verified live 2026-09: techlogix.zohorecruit.com returns names, cities
+// and self URLs for its Lahore/Karachi/Islamabad roles.
+async function fetchZohoRecruit(host: string, company: string): Promise<Listing[]> {
+  const data = (await fetchJSON(`https://${host}/recruit/v2/public/Job_Openings?pagename=Careers`)) as {
+    data?: Array<{
+      id: string
+      Job_Opening_Name?: string
+      Posting_Title?: string
+      City?: string
+      Country?: string
+      Job_Type?: string
+      '$url'?: string
+    }>
+  }
+  return (data.data ?? []).slice(0, PER_SOURCE_CAP).map((j) => {
+    const role = (j.Posting_Title || j.Job_Opening_Name || '').trim()
+    return {
+      company,
+      role,
+      roleFamily: classifyRoleFamily(role),
+      type: `${j.Job_Type ?? ''} ${role}`.toLowerCase().includes('intern') ? 'internship' as const : classify(role),
+      location: [j.City, j.Country].filter(Boolean).join(', ') || null,
+      source: `${company} (Zoho Recruit)`,
+      url: (j.$url ?? '').split('?')[0] || `https://${host}/jobs/Careers`,
+      externalId: j.id,
+      logoUrl: null,
+      publishedAt: null,
+    }
+  })
+}
+
+// WordPress REST job post types — several Pakistani companies run careers
+// on WordPress with a public jobs post type; wp-json serves them keyless.
+async function fetchWpJobs(site: string, postType: string, company: string, pages = 1): Promise<Listing[]> {
+  const out: Listing[] = []
+  for (let page = 1; page <= pages; page++) {
+    const res = await fetch(`${site}/wp-json/wp/v2/${postType}?per_page=100&page=${page}`, {
+      headers: { 'User-Agent': UA, Accept: 'application/json' },
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+      cache: 'no-store',
+    })
+    if (!res.ok) break // out-of-range page or protected REST — keep what we have
+    const rows = (await res.json()) as Array<{ id: number; link?: string; title?: { rendered?: string }; date_gmt?: string }>
+    for (const r of rows) {
+      const role = decodeEntities(r.title?.rendered ?? '').trim()
+      if (!role || !r.link) continue
+      out.push({
+        company,
+        role,
+        roleFamily: classifyRoleFamily(role),
+        type: classify(role),
+        location: null,
+        source: `${company} (site)`,
+        url: r.link,
+        externalId: String(r.id),
+        logoUrl: null,
+        publishedAt: asDate(r.date_gmt),
+      })
+    }
+    if (rows.length < 100) break
+  }
+  return out.slice(0, PER_SOURCE_CAP)
+}
+
+// NETSOL Technologies (Lahore) — dedicated WordPress careers site; the
+// openings archive lists every current opening with its title in the
+// anchor text (plus a duplicate "View Job" anchor to skip).
+async function fetchNetsol(): Promise<Listing[]> {
+  const res = await fetch('https://careers.netsoltech.com/openings/', {
+    headers: { 'User-Agent': UA, Accept: 'text/html' },
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+    cache: 'no-store',
+  })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  const html = await res.text()
+  const seen = new Set<string>()
+  const out: Listing[] = []
+  for (const m of html.matchAll(/<a[^>]*href="(https:\/\/careers\.netsoltech\.com\/openings\/([a-z0-9-]+)\/)"[^>]*>([\s\S]*?)<\/a>/gi)) {
+    const slug = m[2]
+    if (seen.has(slug)) continue
+    const role = tagText(m[3])
+    if (!role || /^view job$/i.test(role)) continue
+    seen.add(slug)
+    out.push({
+      company: 'NETSOL Technologies',
+      role,
+      roleFamily: classifyRoleFamily(role),
+      type: classify(role),
+      location: 'Lahore, Pakistan', // NETSOL careers openings run through its Lahore HQ
+      source: 'NETSOL (careers site)',
+      url: m[1],
+      externalId: slug,
+      logoUrl: null,
+      publishedAt: null,
+    })
+  }
+  return out.slice(0, PER_SOURCE_CAP)
 }
 
 async function fetchRemoteOK(): Promise<Listing[]> {
@@ -238,6 +443,45 @@ const LINKEDIN_QUERIES = [
   { keywords: 'internship', start: 0 },
 ]
 
+// Per-company guest searches: the keyword is the company name, so most
+// returned cards belong to that employer; each card's company field is then
+// checked against the expected name and only true matches are kept, so
+// name-alike noise (agencies, similar firms) never reaches the board.
+// Verified 2026-09: Systems Limited, CureMD, 10Pearls, Devsinc, Daraz and
+// Contour Software all return their own jobs; misses simply return 0.
+const LINKEDIN_COMPANY_QUERIES: Array<{ keywords: string; match: RegExp; company: string }> = [
+  { keywords: 'Systems Limited', match: /systems limited/i, company: 'Systems Limited' },
+  { keywords: 'CureMD', match: /curemd/i, company: 'CureMD' },
+  { keywords: 'NETSOL', match: /netsol/i, company: 'NETSOL Technologies' },
+  { keywords: 'Arbisoft', match: /arbisoft/i, company: 'Arbisoft' },
+  { keywords: '10Pearls', match: /10pearls/i, company: '10Pearls' },
+  { keywords: 'Devsinc', match: /devsinc/i, company: 'Devsinc' },
+  { keywords: 'Tkxel', match: /tkxel/i, company: 'Tkxel' },
+  { keywords: 'CodeNinja', match: /codeninja/i, company: 'CodeNinja' },
+  { keywords: 'Daraz', match: /daraz/i, company: 'Daraz' },
+  { keywords: 'Contour Software', match: /contour software/i, company: 'Contour Software' },
+  { keywords: 'Inbox Business Technologies', match: /inbox business/i, company: 'Inbox Business Technologies' },
+  { keywords: 'Nextbridge', match: /nextbridge/i, company: 'Nextbridge' },
+  { keywords: 'VentureDive', match: /venturedive/i, company: 'VentureDive' },
+]
+// The guest endpoint throttles hammering clients, so each sync runs a
+// rotating window of 7 company searches (3h rotation) — a day of refreshes
+// covers all of them without firing every query in one run.
+const LINKEDIN_COMPANY_PER_RUN = 7
+
+type LinkedInRun = { keywords: string; start: number; match?: RegExp; company?: string }
+
+async function fetchLinkedInQuery(q: LinkedInRun): Promise<Listing[]> {
+  const res = await fetch(
+    `https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords=${encodeURIComponent(q.keywords)}&location=Pakistan&start=${q.start}`,
+    { headers: { 'User-Agent': UA, Accept: 'text/html' }, signal: AbortSignal.timeout(TIMEOUT_MS), cache: 'no-store' },
+  )
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  const cards = parseLinkedInCards(await res.text())
+  const picked = q.match ? cards.filter((c) => q.match!.test(c.company)) : cards
+  return picked.map((c) => ({ ...c, company: q.company ?? c.company })).slice(0, PER_SOURCE_CAP)
+}
+
 function decodeEntities(s: string): string {
   return s
     .replace(/&amp;/g, '&')
@@ -288,18 +532,19 @@ function parseLinkedInCards(html: string): Listing[] {
 
 async function fetchLinkedInPakistan(): Promise<Listing[]> {
   const out: Listing[] = []
-  for (const q of LINKEDIN_QUERIES) {
+  const window3h = Math.floor(Date.now() / (3 * 60 * 60 * 1000))
+  const from = window3h % LINKEDIN_COMPANY_QUERIES.length
+  const companyPicks = Array.from(
+    { length: Math.min(LINKEDIN_COMPANY_PER_RUN, LINKEDIN_COMPANY_QUERIES.length) },
+    (_, i) => LINKEDIN_COMPANY_QUERIES[(from + i) % LINKEDIN_COMPANY_QUERIES.length],
+  )
+  const runs: LinkedInRun[] = [
+    ...LINKEDIN_QUERIES.map((q) => ({ keywords: q.keywords, start: q.start })),
+    ...companyPicks.map((c) => ({ keywords: c.keywords, start: 0, match: c.match, company: c.company })),
+  ]
+  for (const q of runs) {
     try {
-      const res = await fetch(
-        `https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords=${encodeURIComponent(q.keywords)}&location=Pakistan&start=${q.start}`,
-        {
-          headers: { 'User-Agent': UA, Accept: 'text/html' },
-          signal: AbortSignal.timeout(TIMEOUT_MS),
-          cache: 'no-store',
-        },
-      )
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      out.push(...parseLinkedInCards(await res.text()))
+      out.push(...(await fetchLinkedInQuery(q)))
       // gentle pacing — the guest endpoint throttles hammering clients
       await new Promise((r) => setTimeout(r, 700))
     } catch (e) {
@@ -333,6 +578,11 @@ export async function POST(req: NextRequest) {
     const tasks: Array<{ name: string; run: () => Promise<Listing[]> }> = [
       ...GREENHOUSE_BOARDS.map((b) => ({ name: b.company, run: () => fetchGreenhouse(b.board, b.company) })),
       ...LEVER_BOARDS.map((b) => ({ name: b.company, run: () => fetchLever(b.board, b.company) })),
+      ...WORKABLE_ACCOUNTS.map((b) => ({ name: b.company, run: () => fetchWorkable(b.account, b.company) })),
+      ...JAZZHR_BOARDS.map((b) => ({ name: b.company, run: () => fetchJazzHR(b.board, b.company) })),
+      ...ZOHO_RECRUIT_SITES.map((b) => ({ name: b.company, run: () => fetchZohoRecruit(b.host, b.company) })),
+      ...WP_JOB_SITES.map((b) => ({ name: b.company, run: () => fetchWpJobs(b.site, b.type, b.company, b.pages) })),
+      { name: 'NETSOL Technologies', run: fetchNetsol },
       { name: 'NSTP (NUST park)', run: fetchNSTP },
       { name: 'LinkedIn Pakistan', run: fetchLinkedInPakistan },
       { name: 'RemoteOK', run: fetchRemoteOK },

@@ -82,6 +82,16 @@ const KNOWN_BOARD_DOMAINS: Record<string, string> = {
   raft: 'raft.do',
   educative: 'educative.io',
   mistral: 'mistral.ai',
+  // Workable account slug (URLs keep the account so the logo derives)
+  'devsinc-17': 'devsinc.com',
+  // LinkedIn company slugs whose real domain differs from the naive guess
+  systemslimited: 'systemsltd.com',
+  'systems-limited': 'systemsltd.com',
+  'netsol-technologies': 'netsoltech.com',
+  'netsol-technologies-inc': 'netsoltech.com',
+  'inbox-business-technologies': 'inboxbiz.com',
+  'codeninja-inc': 'codeninja.pk',
+  daraz: 'daraz.pk',
 }
 
 function listingDomain(url: string | null | undefined): string | null {
@@ -89,7 +99,18 @@ function listingDomain(url: string | null | undefined): string | null {
   try {
     const u = new URL(url)
     const host = u.hostname.replace(/^www\./, '')
+    // NETSOL runs a dedicated careers subdomain
+    if (/(^|\.)netsoltech\.com$/i.test(host)) return 'netsoltech.com'
     const ats = /^(boards\.greenhouse\.io|job-boards\.greenhouse\.io|jobs\.lever\.co|jobs\.ashbyhq\.com|apply\.workable\.com|jobs\.recruitee\.com)$/i
+    // boards whose company slug is the subdomain (JazzHR, Zoho Recruit)
+    const subdomainBoard = /^([a-z0-9-]+)\.(applytojob|zohorecruit)\.com$/i
+    const sub = host.match(subdomainBoard)
+    if (sub) {
+      const known = KNOWN_BOARD_DOMAINS[sub[1].toLowerCase()]
+      if (known) return known
+      if (/^[a-z0-9][a-z0-9-]{1,40}$/i.test(sub[1])) return `${sub[1].replace(/-/g, '')}.com`
+      return null
+    }
     if (ats.test(host)) {
       const slug = u.pathname.split('/').filter(Boolean)[0] ?? ''
       const known = KNOWN_BOARD_DOMAINS[slug.toLowerCase()]
@@ -577,8 +598,9 @@ function DiscoverTab() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-xs text-muted-foreground">
-          Pulled live from official company ATS boards (including Pakistan-based roles at Careem, Motive, Raft &amp; Educative)
-          and the RemoteOK &amp; Remotive job APIs — refreshes automatically every few hours, or force a pull anytime.
+          Pulled live from official company ATS &amp; careers boards — Systems Limited, NETSOL, 10Pearls, Arbisoft, Folio3, Devsinc,
+          VentureDive, Techlogix, Careem, Motive, Educative and more — plus LinkedIn, RemoteOK &amp; Remotive feeds. Refreshes
+          automatically every few hours, or force a pull anytime.
         </p>
         <div className="flex items-center gap-2">
           {lastFetchedAt && !fetching && !autoFetching && <span className="hidden text-xs text-muted-foreground sm:inline">Updated {timeAgo(lastFetchedAt)}</span>}
