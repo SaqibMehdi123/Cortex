@@ -11,12 +11,17 @@ import { classifyRoleFamily } from '@/lib/job-families'
 //     (Karachi/Lahore roles), Motive (Islamabad/Lahore/Karachi hubs) and Raft
 //     (Pakistani-founded)
 //   - Lever boards (official ATS API): Mistral AI — plus Educative (Lahore)
+//   - NSTP (National Science & Technology Park at NUST, Islamabad) — the
+//     park's own public jobs API serving its resident companies & startups
+//   - LinkedIn Pakistan — the public guest jobs endpoint (jobs + internships,
+//     real companies, permanent company-logo URLs)
 //   - RemoteOK public job API (AI/ML-relevant only)
 //   - Remotive public job API (data category)
 // Listings are de-duplicated per account by URL, so re-fetching is safe and
 // every user keeps their own discover feed + saved state.
-// (Rozee.pk / Bayt / Mustakbil were tested and block datacenter IPs via
-// Cloudflare — not usable server-side; ATS boards are the reliable channel.)
+// (Rozee.pk / Bayt / Mustakbil / nstp.pk HTML pages were tested and block
+// datacenter IPs via Cloudflare — not usable server-side; the ATS boards and
+// the nstp.pk JSON API / LinkedIn guest endpoint are the reliable channels.)
 
 const UA = 'Mozilla/5.0 (X11; Linux x86_64) Cortex/1.0'
 
@@ -32,6 +37,7 @@ type Listing = {
   source: string
   url: string
   externalId: string | null
+  logoUrl: string | null
   publishedAt: Date | null
 }
 
@@ -100,6 +106,7 @@ async function fetchGreenhouse(board: string, company: string): Promise<Listing[
     source: `${company} (Greenhouse)`,
     url: j.absolute_url,
     externalId: String(j.id),
+    logoUrl: null,
     publishedAt: asDate(j.updated_at),
   }))
 }
@@ -121,6 +128,7 @@ async function fetchLever(board: string, company: string): Promise<Listing[]> {
     source: `${company} (Lever)`,
     url: j.hostedUrl,
     externalId: j.id,
+    logoUrl: null,
     publishedAt: j.createdAt ? new Date(j.createdAt) : null,
   }))
 }
@@ -142,6 +150,7 @@ async function fetchRemoteOK(): Promise<Listing[]> {
       source: 'RemoteOK',
       url: String(r.url),
       externalId: r.id ? String(r.id) : null,
+      logoUrl: null,
       publishedAt: asDate(r.date),
     })
     if (out.length >= PER_SOURCE_CAP) break
@@ -173,11 +182,132 @@ async function fetchRemotive(): Promise<Listing[]> {
       source: 'Remotive',
       url: j.url,
       externalId: String(j.id),
+      logoUrl: null,
       publishedAt: asDate(j.publication_date),
     })
     if (out.length >= PER_SOURCE_CAP) break
   }
   return out
+}
+
+// NSTP (National Science & Technology Park at NUST, Islamabad) — the park's
+// own public JSON API serving jobs from its resident companies & startups
+// (HATO Pakistan, ApnaFarm, Victreat, Rapidev, Telerelation, United
+// Refrigeration, Skylift, ...). Verified keyless, 2026-09. The park's HTML
+// pages sit behind a Cloudflare challenge but /api/common/jobs does not.
+// Detail view is a modal on nstp.pk/jobs, so each listing anchors its job id
+// to keep URLs (and dedupe) unique. Company logos come tokenized from the
+// park portal and can expire — the Discover card falls back to favicons then.
+async function fetchNSTP(): Promise<Listing[]> {
+  const data = (await fetchJSON('https://nstp.pk/api/common/jobs?page=1&limit=100')) as {
+    jobs?: Array<{
+      _id: string
+      title: string
+      employment_type?: string
+      location?: string
+      createdAt?: string
+      company?: { name?: string; logo?: string }
+    }>
+  }
+  return (data.jobs ?? []).slice(0, PER_SOURCE_CAP).map((j) => ({
+    company: j.company?.name?.trim() || 'NSTP resident company',
+    role: j.title.trim(),
+    roleFamily: classifyRoleFamily(j.title),
+    // employment_type is authoritative but not always filled correctly —
+    // "Data Engineer Intern" ships as "Full-time" — so the title counts too
+    type: `${j.employment_type ?? ''} ${j.title}`.toLowerCase().includes('intern') ? 'internship' : 'job',
+    location: j.location?.trim() || 'NSTP, NUST H-12, Islamabad',
+    source: 'NSTP (NUST park)',
+    url: `https://nstp.pk/jobs#${j._id}`,
+    externalId: j._id,
+    logoUrl: j.company?.logo || null,
+    publishedAt: asDate(j.createdAt),
+  }))
+}
+
+// LinkedIn — public "guest" jobs endpoint: the server-rendered search
+// fragment the website itself loads without login. Verified live 2026-09
+// from a datacenter IP. Returns ~10 cards per page; three gentle sequential
+// queries cover software jobs + internships across Pakistan. Cards carry
+// permanent licdn company-logo URLs, stored so Discover cards show real
+// logos like the news/papers tabs. If LinkedIn throttles the IP, the source
+// simply reports failed for that run — same graceful handling as any feed.
+const LINKEDIN_QUERIES = [
+  { keywords: 'software engineer', start: 0 },
+  { keywords: 'software engineer', start: 10 },
+  { keywords: 'internship', start: 0 },
+]
+
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+}
+
+function tagText(s: string): string {
+  return decodeEntities(s.replace(/<[^>]*>/g, ' ')).replace(/\s+/g, ' ').trim()
+}
+
+function parseLinkedInCards(html: string): Listing[] {
+  const out: Listing[] = []
+  // Every card starts with its full-card overlay anchor ("jobs/view" link);
+  // slicing card i from anchor i to anchor i+1 keeps each card's fields
+  // (logo → title → company → location → date) inside its own chunk.
+  const anchors = [...html.matchAll(/href="(https:\/\/[a-z.]*linkedin\.com\/jobs\/view\/[^"]+)"/gi)]
+  for (let i = 0; i < anchors.length; i++) {
+    const start = anchors[i].index ?? 0
+    const end = i + 1 < anchors.length ? anchors[i + 1].index ?? html.length : html.length
+    const card = html.slice(start, end)
+    const role = tagText(card.match(/base-search-card__title">([\s\S]*?)<\/h3>/)?.[1] ?? '')
+    if (!role) continue
+    const company = tagText(card.match(/base-search-card__subtitle">([\s\S]*?)<\/h4>/)?.[1] ?? '') || 'LinkedIn company'
+    const location = tagText(card.match(/job-search-card__location">([\s\S]*?)<\/span>/)?.[1] ?? '') || null
+    const dateRaw = card.match(/datetime="(\d{4}-\d{2}-\d{2})/)?.[1] ?? null
+    // ghost cards (no logo) use data-ghost-url — only real company logos match "company-logo"
+    const logo = card.match(/data-delayed-url="(https:\/\/media\.licdn\.com\/dms\/image\/[^"]*company-logo[^"]*)"/)?.[1] ?? null
+    const url = decodeEntities(anchors[i][1].split('?')[0])
+    out.push({
+      company,
+      role,
+      roleFamily: classifyRoleFamily(role),
+      type: classify(role),
+      location,
+      source: 'LinkedIn Pakistan',
+      url,
+      externalId: url.match(/-(\d+)\/?$/)?.[1] ?? null,
+      logoUrl: logo ? decodeEntities(logo) : null,
+      publishedAt: asDate(dateRaw),
+    })
+  }
+  return out
+}
+
+async function fetchLinkedInPakistan(): Promise<Listing[]> {
+  const out: Listing[] = []
+  for (const q of LINKEDIN_QUERIES) {
+    try {
+      const res = await fetch(
+        `https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords=${encodeURIComponent(q.keywords)}&location=Pakistan&start=${q.start}`,
+        {
+          headers: { 'User-Agent': UA, Accept: 'text/html' },
+          signal: AbortSignal.timeout(TIMEOUT_MS),
+          cache: 'no-store',
+        },
+      )
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      out.push(...parseLinkedInCards(await res.text()))
+      // gentle pacing — the guest endpoint throttles hammering clients
+      await new Promise((r) => setTimeout(r, 700))
+    } catch (e) {
+      console.error('opportunities/fetch LinkedIn query failed:', e instanceof Error ? e.message : e)
+    }
+    if (out.length >= PER_SOURCE_CAP) break
+  }
+  return out.slice(0, PER_SOURCE_CAP)
 }
 
 export async function POST(req: NextRequest) {
@@ -203,6 +333,8 @@ export async function POST(req: NextRequest) {
     const tasks: Array<{ name: string; run: () => Promise<Listing[]> }> = [
       ...GREENHOUSE_BOARDS.map((b) => ({ name: b.company, run: () => fetchGreenhouse(b.board, b.company) })),
       ...LEVER_BOARDS.map((b) => ({ name: b.company, run: () => fetchLever(b.board, b.company) })),
+      { name: 'NSTP (NUST park)', run: fetchNSTP },
+      { name: 'LinkedIn Pakistan', run: fetchLinkedInPakistan },
       { name: 'RemoteOK', run: fetchRemoteOK },
       { name: 'Remotive', run: fetchRemotive },
     ]
@@ -248,6 +380,7 @@ export async function POST(req: NextRequest) {
             source: l.source,
             url: l.url,
             externalId: l.externalId,
+            logoUrl: l.logoUrl,
             publishedAt: l.publishedAt,
           })),
         })

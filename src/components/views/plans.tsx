@@ -72,6 +72,14 @@ export function PlansView() {
   // column source). ALL statuses — the kanban's Done column needs them too;
   // the day agenda's "Unscheduled" group filters done ones out itself.
   const unassignedTasks = useApi<{ tasks: Task[] }>(`/api/tasks?unassigned=1`, [])
+  // Kanban cutoff — local midnight of the selected day expressed as a UTC
+  // instant (same convention as the tasks day-window API). The board is a
+  // day-aware lens: tasks completed before this moment, or scheduled before
+  // it and still open, stay in the outline instead of the board.
+  const kanbanCutoff = useMemo(() => {
+    const [y, m, d] = selectedDay.split('-').map((v) => Number.parseInt(v, 10))
+    return Date.UTC(y, (m || 1) - 1, d || 1) + tzOffset * 60_000
+  }, [selectedDay, tzOffset])
   // Reminders — filtered per selected day by the shared reminder-span rules.
   const reminders = useApi<{ reminders: Reminder[] }>('/api/reminders', [])
   const activeReminders = useMemo(
@@ -374,6 +382,8 @@ export function PlansView() {
         <KanbanBoard
           plans={data.plans}
           individual={unassignedTasks.data?.tasks.filter((t) => !t.planId) ?? []}
+          cutoffMs={kanbanCutoff}
+          day={selectedDay}
           onToggle={toggleTask}
           onEditTask={openEdit}
           onReload={reloadAll}
@@ -1238,7 +1248,7 @@ function EditTaskDialog({ open, task, plans, onClose, onSaved }: {
 }
 
 // ─── Kanban board (todo / doing / done) ────────────────────────────
-function KanbanBoard({ plans, individual, onToggle, onEditTask, onReload }: { plans: PlanNode[]; individual: Task[]; onToggle: (t: Task) => void; onEditTask: (t: Task) => void; onReload: () => void }) {
+function KanbanBoard({ plans, individual, cutoffMs, day, onToggle, onEditTask, onReload }: { plans: PlanNode[]; individual: Task[]; cutoffMs: number; day: string; onToggle: (t: Task) => void; onEditTask: (t: Task) => void; onReload: () => void }) {
   const columns: { key: string; label: string }[] = [
     { key: 'todo', label: 'To do' },
     { key: 'doing', label: 'In progress' },
@@ -1247,6 +1257,14 @@ function KanbanBoard({ plans, individual, onToggle, onEditTask, onReload }: { pl
   // plan-tree tasks carry their plan's name; individual (planId=null) tasks
   // — quick capture, day-agenda adds — have none. Both belong on the board:
   // status lives on the task, not on the plan it may or may not have.
+  // Stale tasks don't clutter the board: a done task is hidden once it was
+  // completed before the selected day; an open task hides once its due date
+  // has passed. Unscheduled tasks are always current, future ones upcoming.
+  // The outline view above remains the complete archive either way.
+  const kanbanVisible = (t: Task) => {
+    if (t.status === 'done' && t.completedAt) return new Date(t.completedAt).getTime() >= cutoffMs
+    return !t.dueDate || new Date(t.dueDate).getTime() >= cutoffMs
+  }
   const allTasks = useMemo(() => {
     const out: { t: Task; planTitle: string | null }[] = []
     const walk = (nodes: PlanNode[]) => {
@@ -1257,12 +1275,17 @@ function KanbanBoard({ plans, individual, onToggle, onEditTask, onReload }: { pl
     }
     walk(plans)
     for (const t of individual) out.push({ t, planTitle: null })
-    return out
-  }, [plans, individual])
+    return out.filter(({ t }) => kanbanVisible(t))
+    // kanbanVisible closes over cutoffMs
+  }, [plans, individual, cutoffMs])
   const inColumn = (key: string) => allTasks.filter(({ t }) => t.status === key)
 
   return (
-    <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+    <div className="space-y-2">
+      <p className="text-xs text-muted-foreground">
+        Follows the selected day — tasks completed or scheduled before {day} stay in the outline view.
+      </p>
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
       {columns.map((col) => (
         <div
           key={col.key}
@@ -1325,6 +1348,7 @@ function KanbanBoard({ plans, individual, onToggle, onEditTask, onReload }: { pl
           </div>
         </div>
       ))}
+      </div>
     </div>
   )
 }

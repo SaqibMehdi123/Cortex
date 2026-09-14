@@ -67,6 +67,68 @@ function companyAvatar(company: string) {
   )
 }
 
+// ATS boards host many companies under one domain — the company slug sits in
+// the path. LinkedIn job URLs end in -at-{company-slug}-{id}. Known slugs are
+// pinned to the real domain so the favicon is the right company's logo.
+const KNOWN_BOARD_DOMAINS: Record<string, string> = {
+  anthropic: 'anthropic.com',
+  togetherai: 'together.ai',
+  scaleai: 'scale.com',
+  databricks: 'databricks.com',
+  figureai: 'figure.ai',
+  imbue: 'imbue.com',
+  careem: 'careem.com',
+  motive: 'motive.com',
+  raft: 'raft.do',
+  educative: 'educative.io',
+  mistral: 'mistral.ai',
+}
+
+function listingDomain(url: string | null | undefined): string | null {
+  if (!url) return null
+  try {
+    const u = new URL(url)
+    const host = u.hostname.replace(/^www\./, '')
+    const ats = /^(boards\.greenhouse\.io|job-boards\.greenhouse\.io|jobs\.lever\.co|jobs\.ashbyhq\.com|apply\.workable\.com|jobs\.recruitee\.com)$/i
+    if (ats.test(host)) {
+      const slug = u.pathname.split('/').filter(Boolean)[0] ?? ''
+      const known = KNOWN_BOARD_DOMAINS[slug.toLowerCase()]
+      if (known) return known
+      if (/^[a-z0-9][a-z0-9-]{1,40}$/i.test(slug)) return `${slug.replace(/-/g, '')}.com`
+      return null
+    }
+    if (/(^|\.)linkedin\.com$/i.test(host)) {
+      const m = u.pathname.match(/-at-([a-z0-9-]+)-\d+$/i)
+      return m ? `${m[1].replace(/-/g, '')}.com` : null
+    }
+    // park board hosts many companies — no single domain to favicon
+    if (/(^|\.)nstp\.pk$/i.test(host)) return null
+    return host
+  } catch {
+    return null
+  }
+}
+
+// Real company logo for Discover cards — mirrors the favicon look of the
+// news/papers tabs: stored logo first (LinkedIn and NSTP supply one with the
+// listing), else a favicon for the company domain derived from the posting
+// URL, else the letter avatar. Broken/expired logo URLs fall back too.
+function CompanyLogo({ company, url, logoUrl }: { company: string; url: string; logoUrl?: string | null }) {
+  const [failed, setFailed] = useState(false)
+  const domain = useMemo(() => listingDomain(url), [url])
+  const src = logoUrl || (domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=64` : null)
+  if (!src || failed) return companyAvatar(company)
+  return (
+    <img
+      src={src}
+      alt=""
+      loading="lazy"
+      onError={() => setFailed(true)}
+      className="h-9 w-9 shrink-0 rounded-xl border bg-background object-contain p-1"
+    />
+  )
+}
+
 export function CareerView() {
   const [tab, setTab] = useState<'pipeline' | 'discover' | 'scholarships'>('pipeline')
 
@@ -671,7 +733,7 @@ function DiscoverTab() {
             <Card key={l.id} className="group border transition-shadow hover:shadow-soft">
               <CardContent className="p-4">
                 <div className="flex items-start gap-2.5">
-                  {companyAvatar(l.company)}
+                  <CompanyLogo company={l.company} url={l.url} logoUrl={l.logoUrl} />
                   <div className="min-w-0 flex-1">
                     <p className="line-clamp-2 text-sm font-semibold leading-snug">{l.role}</p>
                     <p className="mt-0.5 truncate text-xs text-muted-foreground">{l.company}</p>

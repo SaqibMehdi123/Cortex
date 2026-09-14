@@ -292,6 +292,7 @@ model JobListing {
   source      String
   url         String
   externalId  String?
+  logoUrl     String?   // company logo image (LinkedIn CDN, NSTP portal) — may be absent; UI falls back to favicons
   publishedAt DateTime?
   saved       Boolean   @default(false)
   fetchedAt   DateTime  @default(now())

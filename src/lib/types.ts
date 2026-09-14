@@ -237,6 +237,7 @@ export interface JobListing {
   source: string
   url: string
   externalId: string | null
+  logoUrl: string | null // company logo image (LinkedIn CDN, NSTP portal) — may be absent; cards fall back to favicons
   publishedAt: string | null
   saved: boolean
   fetchedAt: string
