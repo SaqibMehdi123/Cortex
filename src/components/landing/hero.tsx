@@ -448,10 +448,10 @@ export function LandingHero({ authed, firstName }: { authed: boolean; firstName:
                 </span>
                 <div>
                   <p className="text-[11.5px] font-medium leading-tight text-foreground">
-                    Job match — ML Engineer
+                    Job match — Research Intern
                   </p>
                   <p className="font-mono text-[9.5px] leading-tight text-muted-foreground">
-                    zürich · visa sponsored
+                    tokyo · relocation help
                   </p>
                 </div>
               </div>
@@ -466,7 +466,7 @@ export function LandingHero({ authed, firstName }: { authed: boolean; firstName:
               >
                 <FaLayerGroup className="h-3.5 w-3.5 text-muted-foreground" />
                 <p className="font-mono text-[10px] text-muted-foreground">
-                  <span className="font-semibold text-foreground">14 cards</span> due · SM-2
+                  <span className="font-semibold text-foreground">14 cards</span> due today
                 </p>
               </div>
             </div>

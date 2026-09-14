@@ -56,7 +56,7 @@ const TOOLS: Tool[] = [
   {
     icon: <FaTowerBroadcast className="h-[22px] w-[22px]" />,
     title: 'AI news radar',
-    desc: '97+ sources re-read every few hours. Each story lands pre-summarized, ranked by what it changes for you.',
+    desc: 'Sources re-read every few hours. Each story lands pre-summarized, ranked by what it changes for you.',
     tag: 'auto-refresh',
     accent: 'var(--chart-1)',
     span: 'sm:col-span-2 lg:col-span-3',

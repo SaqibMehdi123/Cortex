@@ -68,7 +68,7 @@ export async function verifyPassword(password: string, stored: string): Promise<
   const parts = stored.split('$')
   if (parts.length !== 4 || parts[0] !== 'pbkdf2') return false
   const iterations = Number(parts[1])
-  const salt = fromB64url(parts[2])
+  const salt = new Uint8Array(fromB64url(parts[2]))
   const expected = parts[3]
   const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveBits'])
   const bits = await crypto.subtle.deriveBits(

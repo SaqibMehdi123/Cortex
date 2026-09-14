@@ -106,7 +106,7 @@ function NewsTab() {
         const okSources = r.perSource?.filter((s) => s.ok).length ?? 0
         toast({
           title: `Fetched ${r.totalNew} new stories from real feeds`,
-          description: `${okSources}/${r.perSource?.length ?? 0} sources responded. OpenAI, DeepMind, Hugging Face, TLDR AI, Import AI…`,
+          description: `${okSources}/${r.perSource?.length ?? 0} sources responded.`,
         })
       }
       reload()
@@ -137,10 +137,12 @@ function NewsTab() {
     <div className="space-y-4">
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2">
-        <Button size="sm" className="h-9" onClick={fetchNews} disabled={fetching || autoFetching}>
-          {(fetching || autoFetching) ? <FaSpinner className="mr-1.5 h-4 w-4 animate-spin" /> : <FaRotate className="mr-1.5 h-4 w-4" />}
-          Fetch latest
-        </Button>
+        {articles.length > 0 && (
+          <Button size="sm" className="h-9" onClick={fetchNews} disabled={fetching || autoFetching}>
+            {(fetching || autoFetching) ? <FaSpinner className="mr-1.5 h-4 w-4 animate-spin" /> : <FaRotate className="mr-1.5 h-4 w-4" />}
+            Fetch latest
+          </Button>
+        )}
         <Button variant="outline" size="sm" className="h-9" onClick={() => setSourcesOpen(true)}>
           <FaSliders className="mr-1.5 h-4 w-4" /> Sources
         </Button>
@@ -224,8 +226,8 @@ function NewsTab() {
             q || savedOnly || source !== 'all'
               ? 'Try widening the time range or clearing filters.'
               : autoFetching
-                ? 'Pulling real stories straight from OpenAI, DeepMind, Hugging Face, Microsoft Research, TLDR AI, Import AI and more — this runs automatically the first time you visit.'
-                : 'Your feed refreshes automatically every few hours, or hit “Fetch latest” to pull real stories from OpenAI, DeepMind, Hugging Face, Microsoft Research, TLDR AI, Import AI and more right now — each with a 3-line AI digest.'
+                ? 'Pulling your first stories from curated AI labs & newsletters — first visit only, then automatic.'
+                : 'Your feed refreshes automatically every few hours — or hit “Fetch latest” for a fresh pull right now.'
           }
           action={q || savedOnly || source !== 'all' || autoFetching ? undefined : { label: 'Fetch latest now', onClick: fetchNews }}
         />
@@ -487,15 +489,16 @@ function PapersTab() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        <Button size="sm" className="h-9" onClick={syncPapers} disabled={syncing || autoSyncing}>
-          {(syncing || autoSyncing) ? <FaSpinner className="mr-1.5 h-4 w-4 animate-spin" /> : <FaRotate className="mr-1.5 h-4 w-4" />}
-          Sync papers
-        </Button>
+        {papers.length > 0 && (
+          <Button size="sm" className="h-9" onClick={syncPapers} disabled={syncing || autoSyncing}>
+            {(syncing || autoSyncing) ? <FaSpinner className="mr-1.5 h-4 w-4 animate-spin" /> : <FaRotate className="mr-1.5 h-4 w-4" />}
+            Fetch latest
+          </Button>
+        )}
         {papersLastFetchedAt && !syncing && !autoSyncing && (
           <span className="text-xs text-muted-foreground">Updated {timeAgo(papersLastFetchedAt)}</span>
         )}
         {autoSyncing && <span className="text-xs text-muted-foreground">Syncing in background…</span>}
-        <p className="hidden text-xs text-muted-foreground sm:block">Hugging Face Daily Papers + arXiv cs.AI / cs.CL / cs.LG / cs.CV</p>
         <div className="relative ml-auto w-full sm:w-52">
           <FaMagnifyingGlass className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search papers…" className="h-9 pl-9 text-xs" aria-label="Search papers" />
@@ -549,9 +552,9 @@ function PapersTab() {
           description={
             q || savedOnly
               ? 'Try widening the time range or clearing filters.'
-              : 'Sync to pull today\'s research papers straight from Hugging Face Daily Papers and fresh arXiv submissions. Every paper can be auto-analyzed: the problem it solves, the innovation it brings, and key results.'
+              : 'Fetch to pull today\'s research papers from Hugging Face Daily Papers and fresh arXiv submissions. Each can be auto-analyzed: problem, innovation, key results.'
           }
-          action={q || savedOnly ? undefined : { label: 'Sync papers now', onClick: syncPapers }}
+          action={q || savedOnly ? undefined : { label: 'Fetch latest now', onClick: syncPapers }}
         />
       ) : (
         <div className="grid gap-3 lg:grid-cols-2">

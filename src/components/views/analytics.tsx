@@ -79,7 +79,7 @@ export function AnalyticsView() {
       <Card className="transition-shadow hover:shadow-soft">
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2 text-sm">
-            <FaBookOpen className="h-4 w-4 text-primary" /> Reading time
+            <FaBookOpen className="h-4 w-4 text-primary" /> Daily reading time
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -108,7 +108,7 @@ export function AnalyticsView() {
         <Card className="transition-shadow hover:shadow-soft">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm">
-              <FaListCheck className="h-4 w-4 text-success" /> Tasks completed
+              <FaListCheck className="h-4 w-4 text-success" /> Daily tasks completed
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -130,7 +130,7 @@ export function AnalyticsView() {
         <Card className="transition-shadow hover:shadow-soft">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm">
-              <FaStopwatch className="h-4 w-4 text-warning" /> Focus hours
+              <FaStopwatch className="h-4 w-4 text-warning" /> Daily focus hours
             </CardTitle>
           </CardHeader>
           <CardContent>

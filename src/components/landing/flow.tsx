@@ -25,13 +25,13 @@ const STEPS = [
     n: '03',
     icon: FaLayerGroup,
     title: 'Retain',
-    desc: 'Flashcards and mindmaps on an SM-2 schedule. Memory that compounds instead of rotting in a folder.',
+    desc: 'Flashcards and mindmaps on a spaced-repetition schedule. Memory that compounds instead of rotting in a folder.',
   },
   {
     n: '04',
     icon: FaCalendarCheck,
     title: 'Act',
-    desc: 'Plan the week, run the focus timer, and let the radar hand you the right jobs and scholarships.',
+    desc: 'Plan the week, run the focus timer, and let the radar surface what needs your attention.',
   },
 ]
 
@@ -246,7 +246,7 @@ export function CopilotSection() {
                 </em>
               </>
             }
-            lede="Not a chatbot bolted onto a file list — a dock that knows your library, plans and goals."
+            lede="A dock that knows your library, plans and goals — answers come with your context, not from scratch."
           />
           <div className="mt-10 flex flex-col">
             {POINTS.map((p, i) => (

@@ -144,9 +144,11 @@ export function GoalsView() {
           <h1 className="font-display text-2xl tracking-tight sm:text-[1.7rem]">Goals</h1>
           <p className="text-sm text-muted-foreground">Milestones, streaks and velocity — progress you can see.</p>
         </div>
-        <Button onClick={() => setCreateOpen(true)}>
-          <FaPlus className="mr-1.5 h-4 w-4" /> New goal
-        </Button>
+        {active.length > 0 && (
+          <Button onClick={() => setCreateOpen(true)}>
+            <FaPlus className="mr-1.5 h-4 w-4" /> New goal
+          </Button>
+        )}
       </div>
 
       {active.length === 0 ? (
@@ -200,7 +202,7 @@ export function GoalsView() {
                       </span>
                     )}
                     <span className="inline-flex items-center gap-1 tabular-nums">
-                      <FaArrowTrendUp className="h-3 w-3" /> {goal.velocity?.reduce((a, b) => a + b, 0) ?? 0} milestones / 8wk
+                      <FaArrowTrendUp className="h-3 w-3" /> {goal.velocity?.reduce((a, b) => a + b, 0) ?? 0} / 8wk
                     </span>
                   </div>
 
@@ -284,7 +286,7 @@ export function GoalsView() {
       )}
 
       <CreateGoalDialog open={createOpen} onOpenChange={setCreateOpen} onCreated={() => reload()} />
-      <EditGoalDialog goal={editGoal} onOpenChange={(v) => !v && setEditGoal(null)} onSaved={() => reload()} />
+      <EditGoalDialog goal={editGoal} onOpenChange={() => setEditGoal(null)} onSaved={() => reload()} />
     </div>
   )
 }

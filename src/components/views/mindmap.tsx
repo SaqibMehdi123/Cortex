@@ -253,7 +253,7 @@ export function MindmapView() {
           description="Cortex can auto-generate a mindmap from any document in your library, from your notes, or from any topic you type."
           action={{ label: 'Generate with AI', onClick: () => setGenOpen(true) }}
         />
-        <GenerateDialog open={genOpen} onOpenChange={setGenOpen} onCreated={(id) => { reload(); setActiveId(id) }} hasDocs={(data?.mindmaps.length ?? 0) >= 0} />
+        <GenerateDialog open={genOpen} onOpenChange={setGenOpen} onCreated={(id) => { reload(); setActiveId(id) }} />
       </div>
     )
   }
@@ -490,7 +490,7 @@ export function MindmapView() {
         <p className="pointer-events-none absolute right-3 top-3 text-[10px] text-muted-foreground">drag to pan · ⌘/Ctrl+scroll to zoom</p>
       </div>
 
-      <GenerateDialog open={genOpen} onOpenChange={setGenOpen} onCreated={(id) => { reload(); setActiveId(id); setTimeout(fitView, 400) }} hasDocs={!!data && data.mindmaps.length >= 0} />
+      <GenerateDialog open={genOpen} onOpenChange={setGenOpen} onCreated={(id) => { reload(); setActiveId(id); setTimeout(fitView, 400) }} />
     </div>
   )
 }
@@ -500,11 +500,13 @@ function Header({ onCreate, hasMaps }: { onCreate: () => void; hasMaps: boolean 
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Mindmaps</h1>
-        <p className="text-sm text-muted-foreground">{hasMaps ? 'Drag nodes, recolor, auto-layout, export.' : 'Visual maps of your knowledge, auto-built.'}</p>
+        <p className="text-sm text-muted-foreground">Visual maps of your documents and topics.</p>
       </div>
-      <Button onClick={onCreate}>
-        <FaWandMagicSparkles className="mr-1.5 h-4 w-4" /> Generate
-      </Button>
+      {hasMaps && (
+        <Button onClick={onCreate}>
+          <FaWandMagicSparkles className="mr-1.5 h-4 w-4" /> Generate
+        </Button>
+      )}
     </div>
   )
 }

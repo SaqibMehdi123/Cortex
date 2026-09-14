@@ -180,7 +180,7 @@ export function DashboardView() {
             {g.icon}
             {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
           </div>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">
+          <h1 className="mt-1 text-2xl font-bold tracking-tight">
             {g.text}, {data.greetingName}
           </h1>
         </div>
@@ -286,7 +286,6 @@ export function DashboardView() {
                       {section.tasks.length > 0 && (
                         <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">{section.tasks.length} task{section.tasks.length === 1 ? '' : 's'}</span>
                       )}
-                      <Badge variant="outline" className="shrink-0 text-[10px]">plan</Badge>
                     </div>
                     {section.tasks.slice(0, 3).map((t) => (
                       <div key={t.id} className="ml-5 sm:ml-7">
@@ -296,7 +295,7 @@ export function DashboardView() {
                       </div>
                     ))}
                     {section.tasks.length > 3 && (
-                      <button onClick={() => setView('plans')} className="block w-full pl-5 text-left text-[10px] text-muted-foreground transition-colors hover:text-primary sm:pl-7">
+                      <button onClick={() => setView('plans')} className="block w-full text-center text-[10px] text-muted-foreground transition-colors hover:text-primary">
                         + {section.tasks.length - 3} more in this plan — open Plans
                       </button>
                     )}
@@ -337,8 +336,8 @@ export function DashboardView() {
                     )}
                   </>
                 )}
-                <p className="hidden pt-1 text-center text-[10px] text-muted-foreground sm:block lg:hidden xl:block">
-                  Swipe right to complete, left to snooze (touch devices)
+                <p className="pt-1 text-center text-[10px] text-muted-foreground">
+                  Swipe right to complete, left to snooze
                 </p>
               </>
             )}
@@ -388,11 +387,11 @@ export function DashboardView() {
         <Card className="gap-4 py-5 transition-shadow hover:shadow-soft">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-sm">
-              <FaNewspaper className="h-4 w-4 text-primary" /> News digest
+              <FaNewspaper className="h-4 w-4 text-primary" /> News &amp; Papers
             </CardTitle>
             <CardAction>
               <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setView('news')}>
-                Radar <FaChevronRight className="h-3.5 w-3.5" />
+                Open <FaChevronRight className="h-3.5 w-3.5" />
               </Button>
             </CardAction>
           </CardHeader>
@@ -400,7 +399,7 @@ export function DashboardView() {
             {data.newsDigest.length === 0 ? (
               <p className="flex items-center justify-center gap-2 py-6 text-center text-sm text-muted-foreground">
                 {newsAutoFetching && <FaSpinner className="h-3.5 w-3.5 animate-spin" />}
-                {newsAutoFetching ? 'Fetching the latest AI news…' : 'No stories yet — hit Fetch latest on the News radar.'}
+                {newsAutoFetching ? 'Fetching the latest AI news…' : 'No stories yet — fetch the latest in News & Papers.'}
               </p>
             ) : (
               data.newsDigest.map((n) => (

@@ -11,11 +11,11 @@ export interface FaqItem {
 export const FAQS: FaqItem[] = [
   {
     q: 'Is Cortex free?',
-    a: 'Yes — free while in beta. Create an account with email or Google and every module is unlocked: library, plans, goals, radar, career, mindmaps, flashcards and analytics.',
+    a: 'Yes — free while in beta. Create an account with email or Google and every module is unlocked: library, plans, goals, news, career, mindmaps, flashcards and analytics.',
   },
   {
-    q: 'How does the radar stay current?',
-    a: 'It fetches the moment you open it, then quietly refreshes in the background whenever the digest is older than three hours. A manual force-refresh is always one click away.',
+    q: 'How does News & Papers stay current?',
+    a: 'It refreshes automatically every few hours (and the first time you open it if the feed is stale). A manual force-refresh is always one click away.',
   },
   {
     q: 'Where does my data live?',

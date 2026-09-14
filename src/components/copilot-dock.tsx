@@ -153,7 +153,6 @@ export function CopilotDock() {
         </div>
         <div className="flex-1">
           <p className="text-sm font-semibold">Copilot</p>
-          <p className="text-xs text-muted-foreground">Ask across your workspace</p>
         </div>
         <Button
           variant="ghost"
@@ -224,7 +223,7 @@ export function CopilotDock() {
           ))}
           {busy && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <FaSpinner className="h-4 w-4 animate-spin" /> Thinking across your workspace…
+              <FaSpinner className="h-4 w-4 animate-spin" /> Thinking…
             </div>
           )}
         </div>
@@ -241,7 +240,7 @@ export function CopilotDock() {
                 send()
               }
             }}
-            placeholder="Ask anything about your knowledge…"
+            placeholder="Ask anything…"
             className="min-h-[44px] flex-1 resize-none"
             rows={1}
             aria-label="Message Copilot"

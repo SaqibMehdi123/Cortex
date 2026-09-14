@@ -286,7 +286,7 @@ export function LibraryView() {
                       {/* The books + the plank they sit on */}
                       <span className="flex h-20 items-end justify-center gap-1 rounded-md border-b-2 border-primary/30 bg-muted/40 px-2.5">
                         {spineDocs.length === 0 ? (
-                          <span className="pb-1.5 text-[11px] italic text-muted-foreground">empty — drop a book</span>
+                          <span className="pb-1.5 text-[11px] italic text-muted-foreground">empty</span>
                         ) : (
                           spineDocs.map((d, i) => (
                             <span
@@ -400,15 +400,15 @@ export function LibraryView() {
           ) : !data || data.documents.length === 0 ? (
             <EmptyState
               icon={<FaBookOpen className="h-5 w-5" />}
-              title={q ? `No matches for “${q}”` : activeShelf ? 'This shelf is empty' : 'Import your first paper'}
+              title={q ? `No matches for “${q}”` : activeShelf ? 'This shelf is empty' : 'Your library is empty'}
               description={
                 q
                   ? 'Try a different search — titles, authors, tags and summaries are all searched.'
                   : activeShelf
                     ? 'Drag a book onto this shelf, or open the shelf button on any book card to file it here.'
-                    : "Paste a URL to any article or paper, paste raw text, or add a book you're reading. Ask AI questions about it once it's here."
+                    : "Paste a URL, paste raw text, or add a book — then ask AI questions about it."
               }
-              action={activeShelf && !q ? undefined : { label: 'Import a document', onClick: () => setImportOpen(true) }}
+              action={activeShelf && !q ? undefined : { label: 'Import', onClick: () => setImportOpen(true) }}
             />
           ) : layout === 'grid' ? (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -510,12 +510,6 @@ export function LibraryView() {
                           ))}
                         </div>
                       )}
-                      {shelfOf(doc) && (
-                        <div className="flex items-center gap-1.5 pt-0.5 text-[10px] text-muted-foreground">
-                          <FaLayerGroup className="h-2.5 w-2.5 shrink-0" />
-                          <span className="truncate">{shelfOf(doc)!.name}</span>
-                        </div>
-                      )}
                     </CardContent>
                   </Card>
                 </div>
@@ -606,7 +600,7 @@ export function LibraryView() {
                     <FaTrashCan className="h-3.5 w-3.5" />
                   </Button>
                   <Badge variant="outline" className={cn('shrink-0 text-[10px]', STATUS_STYLES[doc.status])}>
-                    {doc.status === 'queued' ? 'later' : doc.status}
+                    {doc.status === 'queued' ? 'read later' : doc.status}
                   </Badge>
                 </div>
               ))}
@@ -1157,7 +1151,7 @@ function ImportDialog({ open, onOpenChange, onImported, shelves, onShelfCreated 
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Import to library</DialogTitle>
-          <DialogDescription>PDFs open in an embedded viewer with their original layout intact — text is also extracted for highlights &amp; AI. Web articles are fetched automatically.</DialogDescription>
+          <DialogDescription>Bring in anything — PDFs, articles, raw text or books.</DialogDescription>
         </DialogHeader>
         <Tabs value={mode} onValueChange={(v) => setMode(v as typeof mode)}>
           <TabsList className="grid w-full grid-cols-4">
@@ -1193,7 +1187,7 @@ function ImportDialog({ open, onOpenChange, onImported, shelves, onShelfCreated 
                 ) : (
                   <>
                     <span className="text-sm font-medium">Drop a PDF here or click to browse</span>
-                    <span className="text-xs text-muted-foreground">Up to 200 MB — big files are streamed to disk, with live progress · scans without text open in the viewer</span>
+                    <span className="text-xs text-muted-foreground">Up to 200 MB — scanned PDFs without text still open in the viewer</span>
                   </>
                 )}
                 <input
@@ -1213,7 +1207,7 @@ function ImportDialog({ open, onOpenChange, onImported, shelves, onShelfCreated 
             <>
               <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://arxiv.org/pdf/1706.03762 or any article URL" aria-label="Article URL" autoFocus />
               <p className="text-xs text-muted-foreground">
-                Direct PDF links (arXiv, papers, reports…) are stored with their original layout and open in the embedded viewer. Other links are fetched as clean reading text.
+                Direct PDF links keep their original layout in the embedded viewer; other links become clean reading text.
               </p>
             </>
           ) : (
@@ -1282,7 +1276,6 @@ function ImportDialog({ open, onOpenChange, onImported, shelves, onShelfCreated 
               </SelectContent>
             </Select>
           )}
-          <p className="text-[11px] text-muted-foreground">Common space keeps the book in the main list — a shelf files it in the bookcase above.</p>
         </div>
         {mode === 'pdf' && busy && uploadPct !== null && (
           <div className="space-y-1.5">
@@ -1301,7 +1294,7 @@ function ImportDialog({ open, onOpenChange, onImported, shelves, onShelfCreated 
             <FaRegBookmark className="mr-1.5 h-4 w-4" />
             {mode === 'pdf'
               ? (busy
-                ? (uploadPct !== null && uploadPct < 100 ? `Uploading ${uploadPct}%` : 'Extracting text…')
+                ? (uploadPct !== null && uploadPct < 100 ? 'Uploading…' : 'Extracting text…')
                 : 'Upload & extract')
               : 'Add to library'}
           </Button>

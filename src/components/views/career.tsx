@@ -75,13 +75,7 @@ export function CareerView() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Career</h1>
-          <p className="text-sm text-muted-foreground">
-            {tab === 'pipeline'
-              ? 'Internship & job pipeline.'
-              : tab === 'discover'
-                ? 'Live listings from authentic sources — save any into your pipeline.'
-                : 'Masters & PhD scholarships, fellowships and funded programs, refreshed for you.'}
-          </p>
+          <p className="text-sm text-muted-foreground">Track applications, browse live listings and save scholarships.</p>
         </div>
         <div className="flex items-center gap-1 rounded-xl border bg-muted/40 p-1">
           <button
@@ -166,7 +160,7 @@ function PipelineTab() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
-          {nextDeadline?.deadline ? `Next deadline: ${nextDeadline.company} in ${Math.max(0, daysUntil(nextDeadline.deadline))}d.` : ''}
+          {nextDeadline?.deadline ? `Next deadline: ${nextDeadline.company} in ${Math.max(0, daysUntil(nextDeadline.deadline) ?? 0)}d.` : ''}
         </p>
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" onClick={scanGmail} disabled={scanning}>
@@ -519,13 +513,13 @@ function DiscoverTab() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-xs text-muted-foreground">
-          Pulled live from official company ATS boards (Anthropic, Mistral AI, Databricks, Together AI, Scale AI, Figure AI, Imbue) and
-          the RemoteOK & Remotive public job APIs. Refreshes automatically every few hours — or force a pull anytime.
+          Pulled live from official company ATS boards and the RemoteOK &amp; Remotive job APIs — refreshes automatically every few
+          hours, or force a pull anytime.
         </p>
         <div className="flex items-center gap-2">
           {lastFetchedAt && !fetching && !autoFetching && <span className="hidden text-xs text-muted-foreground sm:inline">Updated {timeAgo(lastFetchedAt)}</span>}
           {autoFetching && <span className="hidden text-xs text-muted-foreground sm:inline">Refreshing in background…</span>}
-          <Button onClick={fetchListings} disabled={fetching || autoFetching}>
+          <Button onClick={fetchListings} disabled={fetching || autoFetching} className={total === 0 ? 'hidden' : ''}>
             {(fetching || autoFetching) ? <FaSpinner className="mr-1.5 h-4 w-4 animate-spin" /> : <FaRotate className="mr-1.5 h-4 w-4" />}
             {fetching ? 'Fetching…' : 'Fetch latest'}
           </Button>
@@ -648,8 +642,8 @@ function DiscoverTab() {
           title={autoFetching ? 'Fetching opportunities…' : 'No listings yet'}
           description={
             autoFetching
-              ? 'Pulling live jobs, internships and research positions from official company boards and public job APIs — this runs automatically the first time you visit.'
-              : 'Your board refreshes automatically every few hours, or hit “Fetch latest” to pull live jobs, internships and research positions from official company boards and public job APIs right now. Every card links to the real posting.'
+              ? 'Pulling live jobs, internships and research positions from official boards — first visit only, then automatic.'
+              : 'Your board refreshes automatically every few hours, or force a pull right now. Every card links to the real posting.'
           }
           action={autoFetching ? undefined : { label: fetching ? 'Fetching…' : 'Fetch opportunities', onClick: fetchListings }}
         />
@@ -807,13 +801,13 @@ function ScholarshipsTab() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-xs text-muted-foreground">
-          Masters & PhD scholarships, fellowships and funded programs from Scholarships Corner, Fully Funded Scholarships and
-          Opportunity Desk. The list refreshes itself every few hours — save anything worth applying to.
+          Masters &amp; PhD scholarships, fellowships and funded programs — the list refreshes itself every few hours. Save anything
+          worth applying to.
         </p>
         <div className="flex items-center gap-2">
           {lastFetchedAt && !fetching && !autoFetching && <span className="hidden text-xs text-muted-foreground sm:inline">Updated {timeAgo(lastFetchedAt)}</span>}
           {autoFetching && <span className="hidden text-xs text-muted-foreground sm:inline">Refreshing in background…</span>}
-          <Button size="sm" className="h-9" onClick={fetchScholarships} disabled={fetching || autoFetching}>
+          <Button size="sm" className={cn('h-9', total === 0 && 'hidden')} onClick={fetchScholarships} disabled={fetching || autoFetching}>
             {(fetching || autoFetching) ? <FaSpinner className="mr-1.5 h-4 w-4 animate-spin" /> : <FaRotate className="mr-1.5 h-4 w-4" />}
             {fetching ? 'Fetching…' : 'Fetch latest'}
           </Button>
@@ -868,8 +862,8 @@ function ScholarshipsTab() {
           title={autoFetching ? 'Fetching scholarships…' : 'No scholarships yet'}
           description={
             autoFetching
-              ? 'Pulling masters & PhD scholarships, fellowships and funded programs from curated scholarship feeds — this runs automatically the first time you visit.'
-              : 'Your list refreshes automatically every few hours, or hit “Fetch latest” to pull masters & PhD scholarships and funded programs from Scholarships Corner, Fully Funded Scholarships and Opportunity Desk right now.'
+              ? 'Pulling the latest scholarships from curated feeds — first visit only, then automatic.'
+              : 'Your list refreshes automatically every few hours — or hit “Fetch latest” to pull funded programs right now.'
           }
           action={autoFetching ? undefined : { label: fetching ? 'Fetching…' : 'Fetch scholarships', onClick: fetchScholarships }}
         />

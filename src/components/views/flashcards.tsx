@@ -102,14 +102,11 @@ export function FlashcardsView() {
           <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
             <FaLayerGroup className="h-6 w-6 text-primary" /> Flashcards
           </h1>
-          <p className="text-sm text-muted-foreground">SM-2 spaced repetition — highlights become memory.</p>
+          <p className="text-sm text-muted-foreground">Spaced repetition — highlights become memory.</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={() => setCreateOpen(true)}>
             <FaPlus className="mr-1.5 h-4 w-4" /> New card
-          </Button>
-          <Button onClick={startReview} disabled={due === 0}>
-            <FaPlay className="mr-1.5 h-4 w-4" /> Review {due > 0 && `(${due})`}
           </Button>
         </div>
       </div>
@@ -121,8 +118,8 @@ export function FlashcardsView() {
             <span className="text-2xl font-bold">{due}</span>
           </div>
           <div className="min-w-0 flex-1">
-            <p className="font-semibold">{due > 0 ? `${due} card${due === 1 ? '' : 's'} due today` : 'All caught up!'}</p>
-            <p className="text-sm text-muted-foreground">{due > 0 ? 'Clear the queue to keep your memory curve healthy.' : 'New reviews appear as intervals elapse. Create cards from highlights in the Reader.'}</p>
+            <p className="font-semibold">{due > 0 ? <>card{due === 1 ? '' : 's'} due today</> : 'All caught up!'}</p>
+            <p className="text-sm text-muted-foreground">{due > 0 ? 'Clear the queue to keep your memory curve healthy.' : 'New cards come from highlights in the Reader — reviews appear as intervals elapse.'}</p>
           </div>
           {due > 0 && (
             <Button onClick={startReview}>

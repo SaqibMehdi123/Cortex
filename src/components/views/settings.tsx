@@ -42,7 +42,6 @@ export function SettingsView() {
     <div className="anim-fade-up mx-auto max-w-2xl space-y-4 pb-8">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
-        <p className="text-sm text-muted-foreground">Profile, appearance, Google integrations and data ownership.</p>
       </div>
 
       {me?.user && <AccountCard user={me.user} />}
@@ -69,7 +68,7 @@ export function SettingsView() {
 
       <div className="flex items-start gap-2 rounded-xl border border-dashed p-4 text-xs text-muted-foreground">
         <FaInfo className="mt-0.5 h-4 w-4 shrink-0" />
-        <p>Cortex syncs across your laptop and phone with the same account. Offline edits queue locally and resolve on reconnect — last write wins per field, so nothing is lost silently.</p>
+        <p>Cortex syncs across your laptop and phone with the same account. Offline edits queue locally and resolve on reconnect — nothing is lost silently.</p>
       </div>
     </div>
   )
@@ -96,7 +95,6 @@ function AccountCard({ user }: { user: { id: string; name: string; email: string
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-sm"><FaShieldHalved className="h-4 w-4 text-primary" /> Account</CardTitle>
-        <CardDescription>You are signed in as {user.name}.</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -201,8 +199,7 @@ function DigestCard({ email }: { email?: string }) {
           <span className="truncate font-medium" title={email}>{email ?? 'your account email'}</span>
         </div>
         <p className="border-t pt-2 text-xs text-muted-foreground">
-          Includes tasks due today, overdue work, today&apos;s reminders and deadlines coming up this week.
-          Emails are only sent when something is actually on your agenda — no empty pings.
+          Only sent when something is actually on your agenda — no empty pings.
         </p>
       </CardContent>
     </Card>
@@ -271,7 +268,7 @@ function GoogleCard() {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-sm"><FaChrome className="h-4 w-4 text-primary" /> Google account</CardTitle>
-        <CardDescription>Real OAuth for Gmail (read) and Google Calendar (read + write). Credentials stay on your server.</CardDescription>
+        <CardDescription>Sync career emails and deadline tasks with Google.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3 text-sm">
         {!status ? (
@@ -309,7 +306,7 @@ function GoogleCard() {
               </span>
               <div className="min-w-0 flex-1">
                 <p className="truncate font-medium">{status.email ?? 'Google account'}</p>
-                <p className="text-xs text-muted-foreground">Gmail (read) &amp; Calendar (read/write) connected · tokens auto-refresh</p>
+                <p className="text-xs text-muted-foreground">Connected · tokens auto-refresh</p>
               </div>
               <Button variant="outline" size="sm" onClick={disconnect} disabled={busy === 'disconnect'}>
                 <FaRightFromBracket className="mr-1.5 h-3.5 w-3.5" /> Disconnect
@@ -326,7 +323,7 @@ function GoogleCard() {
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              “Scan inbox” reads your last 25 emails, keeps only career-relevant ones and files them in Career (opportunity / interview / offer / rejection / deadline). Re-running is safe — duplicates are skipped.
+              “Scan inbox” reads your last 25 emails and files career-relevant ones in Career. Re-running is safe — duplicates are skipped.
             </p>
           </div>
         ) : (
@@ -341,7 +338,7 @@ function GoogleCard() {
         )}
         <div className="flex items-center gap-2 border-t pt-3 text-xs text-muted-foreground">
           <FaEnvelope className="h-3.5 w-3.5" />
-          Prefer not to use OAuth? You can still paste any email into Career → Add application for AI classification.
+          No OAuth? Paste any email into Career → Add application for AI classification.
         </div>
       </CardContent>
     </Card>

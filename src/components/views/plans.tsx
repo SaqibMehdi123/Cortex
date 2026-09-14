@@ -1,6 +1,6 @@
 'use client'
 
-import { FaBell, FaBullseye, FaCalendarDays, FaCheck, FaChevronDown, FaChevronRight, FaCircleCheck, FaClock, FaClone, FaEllipsis, FaList, FaPencil, FaPlus, FaSpinner, FaStopwatch, FaTableColumns, FaTrashCan, FaWandMagicSparkles, FaXmark } from 'react-icons/fa6'
+import { FaBell, FaBullseye, FaCalendarDays, FaCheck, FaChevronDown, FaChevronRight, FaClock, FaClone, FaEllipsis, FaList, FaPencil, FaPlus, FaSpinner, FaStopwatch, FaTableColumns, FaTrashCan, FaWandMagicSparkles, FaXmark } from 'react-icons/fa6'
 import { useCallback, useMemo, useState, useEffect, type FormEvent } from 'react'
 import { api, todayISO } from '@/lib/client'
 import type { Plan, Task, Goal, Reminder } from '@/lib/types'
@@ -14,7 +14,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -132,7 +132,7 @@ export function PlansView() {
   async function addDayTask(title: string, dueISO?: string) {
     try {
       await api.post('/api/tasks', { title, dueDate: dueISO })
-      toast({ title: dueISO ? 'Task added' : 'Task added — no date set (find it under Unscheduled on today)' })
+      toast({ title: dueISO ? 'Task added' : 'Task added', description: dueISO ? undefined : 'No date set — find it under Unscheduled.' })
       reload()
       dayTasks.reload()
       unassignedTasks.reload()
@@ -287,7 +287,7 @@ export function PlansView() {
             <div className="space-y-2">{[1, 2].map((i) => <SkeletonCard key={i} className="h-10" />)}</div>
           ) : (dayTasks.data?.tasks.filter((t) => !t.planId).length ?? 0) === 0 ? (
             <p className="py-4 text-center text-sm text-muted-foreground">
-              No individual tasks due this day. Tasks under a plan live on the plan itself in the outline below.
+              No tasks for this day.
             </p>
           ) : (
             dayTasks.data!.tasks.filter((t) => !t.planId).map((t) => (
@@ -383,7 +383,7 @@ export function PlansView() {
       <EditTaskDialog open={editOpen} task={editingTask} plans={allPlansFlat} onClose={() => { setEditOpen(false); setEditingTask(null) }} onSaved={reloadAll} />
       <PlanDialog open={addOpen} onOpenChange={setAddOpen} plan={null} allPlans={allPlansFlat} onSaved={reload} />
       <PlanDialog open={!!editPlan} onOpenChange={(v) => { if (!v) setEditPlan(null) }} plan={editPlan} allPlans={allPlansFlat} onSaved={() => { setEditPlan(null); reload() }} />
-      <TemplatesDialog open={templatesOpen} onOpenChange={setTemplatesOpen} onApplied={() => { reload(); toast({ title: 'Template applied — plans & tasks created', description: 'Find them in the outline above (starter templates also add a goal).' }) }} />
+      <TemplatesDialog open={templatesOpen} onOpenChange={setTemplatesOpen} onApplied={() => { reload(); toast({ title: 'Template applied', description: 'Plans & tasks created.' }) }} />
       <SaveTemplateDialog node={templateFor} onClose={() => setTemplateFor(null)} onSaved={() => { setTemplateFor(null); toast({ title: 'Saved to your templates', description: 'Open Templates to apply it to any future plan.' }) }} />
       <GoalSelectDialog node={goalFor} onClose={() => setGoalFor(null)} onSaved={() => { setGoalFor(null); reload() }} />
       <ReminderEditDialog reminder={editingReminder} onClose={() => setEditingReminder(null)} onSaved={reminders.reload} />
@@ -397,15 +397,6 @@ function PlanTitleToggle({ node, onReload }: { node: PlanNode; onReload: () => v
   const [title, setTitle] = useState(node.title)
   const [busy, setBusy] = useState(false)
   const { toast } = useToast()
-
-  // the row menu's "Rename" action focuses this row's editor
-  useEffect(() => {
-    const handler = (e: Event) => {
-      if ((e as CustomEvent).detail === node.id) setEditing(true)
-    }
-    document.addEventListener('cortex:rename-plan', handler)
-    return () => document.removeEventListener('cortex:rename-plan', handler)
-  }, [node.id])
 
   async function toggleDone() {
     try {
@@ -471,8 +462,9 @@ function PlanTitleToggle({ node, onReload }: { node: PlanNode; onReload: () => v
   )
 }
 
-// menu: edit details / rename / done / destination goal / save as template
+// menu: edit details / destination goal / save as template / delete
 function PlanRowMenu({ node, onReload, onSetGoal, onEditPlan, onSaveTemplate }: { node: PlanNode; onReload: () => void; onSetGoal: (node: PlanNode) => void; onEditPlan: (node: PlanNode) => void; onSaveTemplate: (node: PlanNode) => void }) {
+  const { toast } = useToast()
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -487,22 +479,22 @@ function PlanRowMenu({ node, onReload, onSetGoal, onEditPlan, onSaveTemplate }: 
         <DropdownMenuItem onClick={() => onEditPlan(node)}>
           <FaPencil className="mr-2 h-3.5 w-3.5" /> Edit details…
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => document.dispatchEvent(new CustomEvent('cortex:rename-plan', { detail: node.id }))}>
-          <FaPencil className="mr-2 h-3.5 w-3.5" /> Rename
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          onClick={async () => {
-            await api.patch(`/api/plans/${node.id}`, { done: !node.done })
-            onReload()
-          }}
-        >
-          <FaCircleCheck className="mr-2 h-3.5 w-3.5" /> {node.done ? 'Mark as not done' : 'Mark as done'}
-        </DropdownMenuItem>
         <DropdownMenuItem onClick={() => onSetGoal(node)}>
           <FaBullseye className="mr-2 h-3.5 w-3.5" /> Destination goal…
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => onSaveTemplate(node)}>
           <FaClone className="mr-2 h-3.5 w-3.5" /> Save as template…
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onClick={async () => {
+            await api.del(`/api/plans/${node.id}`)
+            toast({ title: 'Plan deleted' })
+            onReload()
+          }}
+          className="text-danger focus:text-danger"
+        >
+          <FaTrashCan className="mr-2 h-3.5 w-3.5" /> Delete plan
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -569,7 +561,6 @@ function PlanNodeRow({
             <span className="w-6 text-center text-sm">{TF_ICON[node.timeframe]}</span>
           )}
           <PlanTitleToggle node={node} onReload={onReload} />
-          <Badgeish timeframe={node.timeframe} />
           <PlanSpanChip node={node} />
           {node.goal && (
             <button
@@ -583,17 +574,6 @@ function PlanNodeRow({
           )}
           <span className="ml-auto text-[10px] tabular-nums text-muted-foreground">{doneCount}/{tasks.length} tasks</span>
           <PlanRowMenu node={node} onReload={onReload} onSetGoal={onSetGoal} onEditPlan={onEditPlan} onSaveTemplate={onSaveTemplate} />
-          <button
-            onClick={async () => {
-              await api.del(`/api/plans/${node.id}`)
-              toast({ title: 'Plan deleted' })
-              onReload()
-            }}
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground opacity-60 transition-opacity hover:text-danger"
-            aria-label="Delete plan"
-          >
-            <FaTrashCan className="h-3.5 w-3.5" />
-          </button>
           <button
             onClick={() => (adding ? closeForm() : setAdding(true))}
             className="flex h-7 w-7 items-center justify-center rounded-lg text-primary hover:bg-muted"
@@ -666,14 +646,6 @@ function PlanNodeRow({
         </AnimatePresence>
       </div>
     </div>
-  )
-}
-
-function Badgeish({ timeframe }: { timeframe: string }) {
-  return (
-    <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase text-muted-foreground">
-      {timeframe}
-    </span>
   )
 }
 
@@ -866,7 +838,7 @@ function ReminderRow({ reminder, onDone, onDelete, onEdit }: { reminder: Reminde
         {recurrenceLabel(reminder.recurrence, reminder.startDate)}
       </span>
       {reminder.showDays > 1 && reminder.recurrence !== 'daily' && (
-        <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground" title="How many consecutive days this reminder appears, starting on its day">
+        <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground" title="Days this reminder stays visible">
           shows {reminder.showDays}d
         </span>
       )}
@@ -921,7 +893,7 @@ function ReminderQuickAdd({ selectedDay, onSaved }: { selectedDay: string; onSav
     setBusy(true)
     try {
       await api.post('/api/reminders', { title: v, startDate: date || selectedDay, recurrence, showDays })
-      toast({ title: 'Reminder added', description: 'It will appear only on the days it covers.' })
+      toast({ title: 'Reminder added' })
       onSaved()
       close()
     } catch (err) {
@@ -975,7 +947,7 @@ function ReminderQuickAdd({ selectedDay, onSaved }: { selectedDay: string; onSav
       </div>
       {recurrence !== 'daily' && (
         <div>
-          <label className="text-[10px] text-muted-foreground">Show for N day(s) — consecutive days it appears, starting on its day</label>
+          <label className="text-[10px] text-muted-foreground">Show for N day(s)</label>
           <Input
             type="number"
             min={1}
@@ -1042,7 +1014,7 @@ function ReminderEditDialog({ reminder, onClose, onSaved }: { reminder: Reminder
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><FaBell className="h-4 w-4 text-primary" /> Edit reminder</DialogTitle>
           <DialogDescription>
-            The reminder appears on the days it covers — its first day, then on the cadence you pick, for as many days as you set.
+            Shows on its first day, then on the cadence you pick, for as many days as you set.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
@@ -1202,7 +1174,7 @@ function EditTaskDialog({ open, task, plans, onClose, onSaved }: {
           </div>
           <div>
             <label className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>Due date &amp; time (deadline)</span>
+              <span>Due date &amp; time</span>
               {dueDate && (
                 <button type="button" onClick={() => { setDueDate(''); setDueTime('') }} className="text-[10px] font-medium text-primary hover:underline">
                   Clear
@@ -1454,7 +1426,7 @@ function PlanDialog({ open, onOpenChange, plan, allPlans, onSaved }: {
           <DialogDescription>
             {editing
               ? 'Update the details or the deadline — the calendar visibility follows the start and end dates.'
-              : 'Nest it under a parent plan (year → quarter → month → week → day) and optionally aim it at a goal.'}
+              : 'Nest it under a parent plan and optionally aim it at a goal.'}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
@@ -1509,7 +1481,7 @@ function PlanDialog({ open, onOpenChange, plan, allPlans, onSaved }: {
             </div>
           </div>
           <p className="text-[11px] text-muted-foreground">
-            The plan appears in the day agenda (under the week strip) on every date it covers. Without an end date the timeframe decides the span (day = 1 day, week = 7 days, month / quarter / year = their calendar length).
+            Shown in the day agenda on every date the plan covers — without an end date, the timeframe decides the span.
           </p>
           <div>
             <label className="text-xs text-muted-foreground">Notes (optional)</label>
@@ -1585,7 +1557,7 @@ function TemplatesDialog({ open, onOpenChange, onApplied }: { open: boolean; onO
         <DialogHeader>
           <DialogTitle>Plan templates</DialogTitle>
           <DialogDescription>
-            Save any of your plans as a reusable blueprint from its ⋯ menu, then apply it here — a fresh copy of the plan, its sub-plans and its tasks, ready to customize.
+            Reusable blueprints — applying one creates a fresh copy of a plan, its sub-plans and its tasks.
           </DialogDescription>
         </DialogHeader>
 
