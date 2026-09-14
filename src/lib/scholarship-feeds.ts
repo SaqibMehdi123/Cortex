@@ -12,7 +12,21 @@ export const SCHOLARSHIP_FEEDS: ScholarshipFeed[] = [
   { key: 'scholarshipscorner', name: 'Scholarships Corner', url: 'https://scholarshipscorner.website/feed/' },
   { key: 'fullyfundedscholarships', name: 'Fully Funded Scholarships', url: 'https://fullyfundedscholarships.org/?feed=rss2' },
   { key: 'opportunitydesk', name: 'Opportunity Desk', url: 'https://opportunitydesk.org/feed/' },
+  { key: 'opportunitiescorners', name: 'Opportunities Corners', url: 'https://opportunitiescorners.com/feed/' },
 ]
+
+export type ScholarshipKind = 'scholarship' | 'exchange'
+
+// Exchange programs (fully-funded cultural/youth exchanges, summits,
+// conferences, Model UN, hackathons…) are a distinct category the user
+// tracks separately from degree scholarships. Title-keyword classification:
+// feed posts carry enough signal for a fast, free, predictable split.
+export function classifyScholarshipKind(title: string): ScholarshipKind {
+  const t = title.toLowerCase()
+  if (/\b(exchange (program|programme|scholarship)|cultural exchange|youth exchange|student exchange)\b/.test(t)) return 'exchange'
+  if (/\b(summit|conference|hackathon|olympiad|model (united nations|un)|youth (camp|forum|dialogue|assembly|congress)|delegates?|delegation)\b/.test(t)) return 'exchange'
+  return 'scholarship'
+}
 
 export type ScholarshipLevel = 'masters' | 'phd' | 'other'
 

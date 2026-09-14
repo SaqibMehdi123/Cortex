@@ -3,7 +3,7 @@ import Parser from 'rss-parser'
 import { db } from '@/lib/db'
 import { getSessionUser, unauthorized } from '@/lib/auth-server'
 import { beginSync, stampSync, abortSync } from '@/lib/sync-guard'
-import { SCHOLARSHIP_FEEDS, classifyScholarshipLevel, classifyScholarshipFunding, extractScholarshipCountry, type ScholarshipLevel } from '@/lib/scholarship-feeds'
+import { SCHOLARSHIP_FEEDS, classifyScholarshipLevel, classifyScholarshipFunding, classifyScholarshipKind, extractScholarshipCountry, type ScholarshipLevel } from '@/lib/scholarship-feeds'
 
 export const maxDuration = 60
 
@@ -27,6 +27,7 @@ interface Row {
   provider: string
   source: string
   level: ScholarshipLevel
+  kind: string
   funding: string | null
   country: string | null
   summary: string | null
@@ -86,6 +87,7 @@ export async function POST(req: NextRequest) {
             provider: feed.name,
             source: feed.key,
             level: classifyScholarshipLevel(title),
+            kind: classifyScholarshipKind(title),
             funding: classifyScholarshipFunding(title),
             country: extractScholarshipCountry(title),
             summary: summary || null,
@@ -126,6 +128,7 @@ export async function POST(req: NextRequest) {
             provider: r.provider,
             url: r.url,
             level: r.level,
+            kind: r.kind,
             funding: r.funding,
             country: r.country,
             summary: r.summary,

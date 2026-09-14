@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getSessionUser, unauthorized } from '@/lib/auth-server'
 
-// GET /api/opportunities/listings?type=&source=&family=&q=&saved=1
+// GET /api/opportunities/listings?type=&source=&family=&region=&q=&saved=1
 // The signed-in user's fetched listings, with filters + counts for the Discover tab.
 export async function GET(req: NextRequest) {
   try {
@@ -13,6 +13,7 @@ export async function GET(req: NextRequest) {
     const type = searchParams.get('type')
     const source = searchParams.get('source')
     const family = searchParams.get('family')
+    const region = searchParams.get('region')
     const q = searchParams.get('q')?.trim()
     const saved = searchParams.get('saved')
 
@@ -21,13 +22,29 @@ export async function GET(req: NextRequest) {
     if (source) where.source = source
     if (family) where.roleFamily = family
     if (saved === '1' || saved === '0') where.saved = saved === '1'
-    if (q) {
-      where.OR = [
-        { role: { contains: q } },
-        { company: { contains: q } },
-        { location: { contains: q } },
-      ]
+
+    // q and the Pakistan region filter both need OR groups — combine without
+    // overwriting each other via AND when both are active.
+    const orGroups: Array<Array<Record<string, unknown>>> = []
+    if (region === 'pakistan') {
+      orGroups.push([
+        { location: { contains: 'Pakistan', mode: 'insensitive' } },
+        { location: { contains: 'Karachi', mode: 'insensitive' } },
+        { location: { contains: 'Lahore', mode: 'insensitive' } },
+        { location: { contains: 'Islamabad', mode: 'insensitive' } },
+        { location: { contains: 'Rawalpindi', mode: 'insensitive' } },
+        { location: { contains: 'Faisalabad', mode: 'insensitive' } },
+      ])
     }
+    if (q) {
+      orGroups.push([
+        { role: { contains: q, mode: 'insensitive' } },
+        { company: { contains: q, mode: 'insensitive' } },
+        { location: { contains: q, mode: 'insensitive' } },
+      ])
+    }
+    if (orGroups.length === 1) where.OR = orGroups[0]
+    else if (orGroups.length > 1) where.AND = orGroups.map((g) => ({ OR: g }))
 
     const [listings, total, byType, sources, byFamily] = await Promise.all([
       db.jobListing.findMany({

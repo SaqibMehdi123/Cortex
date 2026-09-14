@@ -1149,10 +1149,10 @@ function EditTaskDialog({ open, task, plans, onClose, onSaved }: {
         <div className="space-y-3">
           <Input value={title} onChange={(e) => setTitle(e.target.value)} aria-label="Task title" placeholder="Task title" />
           <div className="grid grid-cols-2 gap-3">
-            <div>
+            <div className="min-w-0">
               <label className="text-xs text-muted-foreground">Priority</label>
               <Select value={priority} onValueChange={setPriority}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="mt-1 w-full min-w-0"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="low">Low</SelectItem>
                   <SelectItem value="med">Medium</SelectItem>
@@ -1160,10 +1160,10 @@ function EditTaskDialog({ open, task, plans, onClose, onSaved }: {
                 </SelectContent>
               </Select>
             </div>
-            <div>
+            <div className="min-w-0">
               <label className="text-xs text-muted-foreground">Status</label>
               <Select value={status} onValueChange={setStatus}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="mt-1 w-full min-w-0"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="todo">To do</SelectItem>
                   <SelectItem value="doing">In progress</SelectItem>
@@ -1195,7 +1195,7 @@ function EditTaskDialog({ open, task, plans, onClose, onSaved }: {
             <p className="mt-1 text-[10px] text-muted-foreground">The time is when the task is DUE — its deadline, not a start time.</p>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div>
+            <div className="min-w-0">
               <label className="text-xs text-muted-foreground">Estimate (minutes)</label>
               <Input
                 type="number"
@@ -1207,12 +1207,12 @@ function EditTaskDialog({ open, task, plans, onClose, onSaved }: {
                 aria-label="Estimate in minutes"
               />
             </div>
-            <div>
+            <div className="min-w-0">
               <label className="text-xs text-muted-foreground">Plan</label>
               <Select value={planId} onValueChange={setPlanId}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="mt-1 w-full min-w-0"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">— no plan (standalone) —</SelectItem>
+                  <SelectItem value="none">No plan (standalone)</SelectItem>
                   {plans.map((p) => (
                     <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>
                   ))}
@@ -1432,10 +1432,10 @@ function PlanDialog({ open, onOpenChange, plan, allPlans, onSaved }: {
         <div className="space-y-3">
           <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. September — interview sprint" aria-label="Plan title" autoFocus />
           <div className="grid grid-cols-2 gap-3">
-            <div>
+            <div className="min-w-0">
               <label className="text-xs text-muted-foreground">Timeframe</label>
               <Select value={timeframe} onValueChange={setTimeframe}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="mt-1 w-full min-w-0"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="year">Year</SelectItem>
                   <SelectItem value="quarter">Quarter</SelectItem>
@@ -1445,12 +1445,12 @@ function PlanDialog({ open, onOpenChange, plan, allPlans, onSaved }: {
                 </SelectContent>
               </Select>
             </div>
-            <div>
+            <div className="min-w-0">
               <label className="text-xs text-muted-foreground">Under parent</label>
               <Select value={parentId} onValueChange={setParentId}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="mt-1 w-full min-w-0"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">— none (top level) —</SelectItem>
+                  <SelectItem value="none">None (top level)</SelectItem>
                   {allPlans.filter((p) => p.id !== plan?.id).map((p) => (
                     <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>
                   ))}
@@ -1458,12 +1458,12 @@ function PlanDialog({ open, onOpenChange, plan, allPlans, onSaved }: {
               </Select>
             </div>
           </div>
-          <div>
+          <div className="min-w-0">
             <label className="flex items-center gap-1 text-xs text-muted-foreground"><FaBullseye className="h-3 w-3" /> Destination goal (optional)</label>
             <Select value={goalId} onValueChange={setGoalId}>
-              <SelectTrigger className="mt-1"><SelectValue placeholder="No destination goal" /></SelectTrigger>
+              <SelectTrigger className="mt-1 w-full min-w-0"><SelectValue placeholder="No destination goal" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">— no destination goal —</SelectItem>
+                <SelectItem value="none">No destination goal</SelectItem>
                 {goals.map((g) => (
                   <SelectItem key={g.id} value={g.id}>{g.title}{g.status === 'completed' ? ' ✓' : ''}</SelectItem>
                 ))}
@@ -2013,9 +2013,9 @@ function GoalSelectDialog({ node, onClose, onSaved }: { node: PlanNode | null; o
           </DialogDescription>
         </DialogHeader>
         <Select value={goalId} onValueChange={setGoalId}>
-          <SelectTrigger><SelectValue placeholder="Choose a goal" /></SelectTrigger>
+          <SelectTrigger className="w-full min-w-0"><SelectValue placeholder="Choose a goal" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="none">— no destination goal —</SelectItem>
+            <SelectItem value="none">No destination goal</SelectItem>
             {(goals ?? []).map((g) => (
               <SelectItem key={g.id} value={g.id}>{g.title}{g.status === 'completed' ? ' ✓' : ''}</SelectItem>
             ))}

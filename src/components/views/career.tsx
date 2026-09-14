@@ -430,6 +430,7 @@ function DiscoverTab() {
   const [type, setType] = useState('')
   const [family, setFamily] = useState('')
   const [source, setSource] = useState('')
+  const [region, setRegion] = useState('')
   const [search, setSearch] = useState('')
   const [q, setQ] = useState('')
   const [savedOnly, setSavedOnly] = useState(false)
@@ -447,11 +448,12 @@ function DiscoverTab() {
     if (type) p.set('type', type)
     if (family) p.set('family', family)
     if (source) p.set('source', source)
+    if (region) p.set('region', region)
     if (q.trim()) p.set('q', q.trim())
     if (savedOnly) p.set('saved', '1')
     const s = p.toString()
     return `/api/opportunities/listings${s ? `?${s}` : ''}`
-  }, [type, family, source, q, savedOnly])
+  }, [type, family, source, region, q, savedOnly])
 
   const { data, loading, reload } = useApi<ListingIndex>(url)
 
@@ -513,8 +515,8 @@ function DiscoverTab() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-xs text-muted-foreground">
-          Pulled live from official company ATS boards and the RemoteOK &amp; Remotive job APIs — refreshes automatically every few
-          hours, or force a pull anytime.
+          Pulled live from official company ATS boards (including Pakistan-based roles at Careem, Motive, Raft &amp; Educative)
+          and the RemoteOK &amp; Remotive job APIs — refreshes automatically every few hours, or force a pull anytime.
         </p>
         <div className="flex items-center gap-2">
           {lastFetchedAt && !fetching && !autoFetching && <span className="hidden text-xs text-muted-foreground sm:inline">Updated {timeAgo(lastFetchedAt)}</span>}
@@ -542,6 +544,16 @@ function DiscoverTab() {
               {t.key && counts[t.key] ? <span className="ml-1 text-[10px] opacity-70">{counts[t.key]}</span> : null}
             </button>
           ))}
+          <button
+            onClick={() => setRegion(region === 'pakistan' ? '' : 'pakistan')}
+            className={cn(
+              'flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
+              region === 'pakistan' ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted',
+            )}
+            aria-pressed={region === 'pakistan'}
+          >
+            <FaLocationDot className="h-3.5 w-3.5" /> Pakistan
+          </button>
           <button
             onClick={() => setSavedOnly(!savedOnly)}
             className={cn(
@@ -714,9 +726,12 @@ const LEVEL_META: Record<string, { label: string; style: string }> = {
   other: { label: 'Opportunity', style: 'bg-muted text-muted-foreground' },
 }
 
+const EXCHANGE_META = { label: 'Exchange', style: 'bg-accent text-accent-foreground' }
+
 function ScholarshipsTab() {
   const { toast } = useToast()
   const [level, setLevel] = useState('')
+  const [kind, setKind] = useState('')
   const [savedOnly, setSavedOnly] = useState(false)
   const [search, setSearch] = useState('')
   const [q, setQ] = useState('')
@@ -731,11 +746,12 @@ function ScholarshipsTab() {
   const url = useMemo(() => {
     const p = new URLSearchParams()
     if (level) p.set('level', level)
+    if (kind) p.set('kind', kind)
     if (savedOnly) p.set('saved', '1')
     if (q.trim()) p.set('q', q.trim())
     const s = p.toString()
     return `/api/scholarships${s ? `?${s}` : ''}`
-  }, [level, savedOnly, q])
+  }, [level, kind, savedOnly, q])
 
   const { data, loading, reload } = useApi<ScholarshipIndex>(url)
 
@@ -790,9 +806,15 @@ function ScholarshipsTab() {
 
   const items = data?.items ?? []
   const counts = data?.counts ?? {}
+  const kindCounts = data?.kindCounts ?? {}
   const total = data?.total ?? 0
-  const LEVELS = [
+  const KINDS = [
     { key: '', label: 'All' },
+    { key: 'scholarship', label: 'Scholarships' },
+    { key: 'exchange', label: 'Exchanges' },
+  ]
+  const LEVELS = [
+    { key: '', label: 'All levels' },
     { key: 'masters', label: 'Masters' },
     { key: 'phd', label: 'PhD' },
   ]
@@ -801,8 +823,8 @@ function ScholarshipsTab() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-xs text-muted-foreground">
-          Masters &amp; PhD scholarships, fellowships and funded programs — the list refreshes itself every few hours. Save anything
-          worth applying to.
+          Masters &amp; PhD scholarships, fellowships, fully-funded exchange programs — the list refreshes itself every few hours.
+          Save anything worth applying to.
         </p>
         <div className="flex items-center gap-2">
           {lastFetchedAt && !fetching && !autoFetching && <span className="hidden text-xs text-muted-foreground sm:inline">Updated {timeAgo(lastFetchedAt)}</span>}
@@ -817,6 +839,20 @@ function ScholarshipsTab() {
       {/* filters */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex flex-wrap items-center gap-1.5">
+          {KINDS.map((k) => (
+            <button
+              key={k.key}
+              onClick={() => setKind(k.key)}
+              className={cn(
+                'rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
+                kind === k.key ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted',
+              )}
+            >
+              {k.label}
+              {k.key && kindCounts[k.key] ? <span className="ml-1 text-[10px] opacity-70">{kindCounts[k.key]}</span> : null}
+            </button>
+          ))}
+          <span className="mx-0.5 h-5 w-px bg-border" aria-hidden />
           {LEVELS.map((l) => (
             <button
               key={l.key}
@@ -876,7 +912,7 @@ function ScholarshipsTab() {
       ) : (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
           {items.map((s) => {
-            const meta = LEVEL_META[s.level] ?? LEVEL_META.other
+            const meta = s.kind === 'exchange' ? EXCHANGE_META : LEVEL_META[s.level] ?? LEVEL_META.other
             return (
               <Card key={s.id} className="group border transition-shadow hover:shadow-soft">
                 <CardContent className="p-4">

@@ -1263,10 +1263,10 @@ function ImportDialog({ open, onOpenChange, onImported, shelves, onShelfCreated 
               }}
             >
               <SelectTrigger id="import-shelf" className="w-full" aria-label="Shelf to add this book to">
-                <SelectValue placeholder="Common space — all books" />
+                <SelectValue placeholder="Common space (all books)" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">Common space — all books</SelectItem>
+                <SelectItem value="none">Common space (all books)</SelectItem>
                 {shelves.map((s) => (
                   <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
                 ))}

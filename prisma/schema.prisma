@@ -313,10 +313,11 @@ model Scholarship {
   provider  String // feed/site the opportunity came from
   url       String
   level     String    @default("other") // masters | phd | other
+  kind      String    @default("scholarship") // scholarship | exchange — exchange covers fully-funded exchange programs, summits, conferences & youth programs
   country   String? // best-effort host-country extraction from the title
   funding   String? // "Fully funded" | "Funded" | "… stipend"
   summary   String? // RSS content snippet
-  source    String // feed key: scholarshipscorner | fullyfundedscholarships | opportunitydesk
+  source    String // feed key: scholarshipscorner | fullyfundedscholarships | opportunitydesk | opportunitiescorners
   saved     Boolean   @default(false)
   fetchedAt DateTime  @default(now())
   createdAt DateTime  @default(now())

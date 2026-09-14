@@ -262,6 +262,7 @@ export interface Scholarship {
   provider: string
   url: string
   level: string // masters | phd | other
+  kind: string // scholarship | exchange
   country: string | null
   funding: string | null
   summary: string | null
@@ -275,6 +276,7 @@ export interface ScholarshipIndex {
   items: Scholarship[]
   total: number
   counts: Record<string, number>
+  kindCounts?: Record<string, number>
   sources: Array<{ name: string; count: number }>
 }
 

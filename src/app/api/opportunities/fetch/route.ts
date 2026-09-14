@@ -7,12 +7,16 @@ import { classifyRoleFamily } from '@/lib/job-families'
 // POST /api/opportunities/fetch — pull jobs, internships and research positions
 // from authentic, keyless public sources:
 //   - Greenhouse boards (official ATS API): Anthropic, Together AI, Scale AI,
-//     Databricks, Figure AI, Imbue
-//   - Lever boards (official ATS API): Mistral AI
+//     Databricks, Figure AI, Imbue — plus Pakistan-linked employers Careem
+//     (Karachi/Lahore roles), Motive (Islamabad/Lahore/Karachi hubs) and Raft
+//     (Pakistani-founded)
+//   - Lever boards (official ATS API): Mistral AI — plus Educative (Lahore)
 //   - RemoteOK public job API (AI/ML-relevant only)
 //   - Remotive public job API (data category)
 // Listings are de-duplicated per account by URL, so re-fetching is safe and
 // every user keeps their own discover feed + saved state.
+// (Rozee.pk / Bayt / Mustakbil were tested and block datacenter IPs via
+// Cloudflare — not usable server-side; ATS boards are the reliable channel.)
 
 const UA = 'Mozilla/5.0 (X11; Linux x86_64) Cortex/1.0'
 
@@ -38,10 +42,15 @@ const GREENHOUSE_BOARDS: Array<{ board: string; company: string }> = [
   { board: 'databricks', company: 'Databricks' },
   { board: 'figureai', company: 'Figure AI' },
   { board: 'imbue', company: 'Imbue' },
+  // Pakistan-linked employers — verified live ATS boards (curl-tested 2026-09)
+  { board: 'careem', company: 'Careem' },
+  { board: 'motive', company: 'Motive' },
+  { board: 'raft', company: 'Raft' },
 ]
 
 const LEVER_BOARDS: Array<{ board: string; company: string }> = [
   { board: 'mistral', company: 'Mistral AI' },
+  { board: 'educative', company: 'Educative' },
 ]
 
 const RELEVANT =

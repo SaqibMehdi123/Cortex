@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getSessionUser, unauthorized } from '@/lib/auth-server'
 
-// GET /api/scholarships?level=&saved=1&q=&source= — the user's scholarship list
-// with filters + counts for the Career → Scholarships section.
+// GET /api/scholarships?level=&kind=&saved=1&q=&source= — the user's scholarship
+// list with filters + counts for the Career → Scholarships section.
 export async function GET(req: NextRequest) {
   try {
     const user = await getSessionUser()
@@ -11,17 +11,19 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url)
     const level = searchParams.get('level')
+    const kind = searchParams.get('kind')
     const saved = searchParams.get('saved')
     const q = searchParams.get('q')?.trim()
     const source = searchParams.get('source')
 
     const where: Record<string, unknown> = { userId: user.id }
     if (level && ['masters', 'phd', 'other'].includes(level)) where.level = level
+    if (kind && ['scholarship', 'exchange'].includes(kind)) where.kind = kind
     if (saved === '1' || saved === '0') where.saved = saved === '1'
     if (source && source !== 'all') where.source = source
     if (q) where.title = { contains: q }
 
-    const [items, total, byLevel, sources] = await Promise.all([
+    const [items, total, byLevel, byKind, sources] = await Promise.all([
       db.scholarship.findMany({
         where,
         orderBy: [{ saved: 'desc' }, { createdAt: 'desc' }],
@@ -29,6 +31,7 @@ export async function GET(req: NextRequest) {
       }),
       db.scholarship.count({ where: { userId: user.id } }),
       db.scholarship.groupBy({ by: ['level'], where: { userId: user.id }, _count: { _all: true } }),
+      db.scholarship.groupBy({ by: ['kind'], where: { userId: user.id }, _count: { _all: true } }),
       db.scholarship.groupBy({ by: ['source'], where: { userId: user.id }, _count: { _all: true } }),
     ])
 
@@ -36,6 +39,7 @@ export async function GET(req: NextRequest) {
       items,
       total,
       counts: Object.fromEntries(byLevel.map((r) => [r.level, r._count._all])),
+      kindCounts: Object.fromEntries(byKind.map((r) => [r.kind, r._count._all])),
       sources: sources
         .map((r) => ({ name: r.source, count: r._count._all }))
         .sort((a, b) => b.count - a.count),
