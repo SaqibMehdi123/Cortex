@@ -598,9 +598,7 @@ function DiscoverTab() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-xs text-muted-foreground">
-          Pulled live from official company ATS &amp; careers boards — Systems Limited, NETSOL, 10Pearls, Arbisoft, Folio3, Devsinc,
-          VentureDive, Techlogix, Careem, Motive, Educative and more — plus LinkedIn, RemoteOK &amp; Remotive feeds. Refreshes
-          automatically every few hours, or force a pull anytime.
+          Live from official company ATS &amp; careers boards plus RemoteOK &amp; Remotive — auto-refreshes every few hours.
         </p>
         <div className="flex items-center gap-2">
           {lastFetchedAt && !fetching && !autoFetching && <span className="hidden text-xs text-muted-foreground sm:inline">Updated {timeAgo(lastFetchedAt)}</span>}

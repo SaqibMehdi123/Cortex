@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import net from 'node:net'
 import { activeMailProvider, configuredFromEmail } from '@/lib/mailer'
 import { r2Configured, r2ConnectionCheck } from '@/lib/storage'
 
@@ -19,12 +20,14 @@ export const dynamic = 'force-dynamic'
 const noStore = { 'Cache-Control': 'no-store' }
 
 interface MailCheck {
-  provider: 'sendgrid' | 'smtp' | 'brevo' | null
+  provider: 'resend' | 'sendgrid' | 'smtp' | 'brevo' | null
   from: string | null
   keyValid: boolean | null
   senderFound: boolean | null
   senderConfirmed: boolean | null
   note: string | null
+  /** smtp mode only — did a real TCP connect to SMTP_HOST:PORT succeed? */
+  portReachable?: boolean | null
 }
 
 function maskEmail(email: string | null): string | null {
@@ -170,9 +173,87 @@ async function checkBrevo(): Promise<MailCheck> {
   }
 }
 
+/**
+ * LIVE SMTP reachability probe. Raw SMTP used to be reported as "ok" without
+ * any network test — while Vercel functions block outbound SMTP ports
+ * (25/587), so the morning briefing silently never sent. A TCP connect
+ * attempt makes that failure visible here instead of in a missing inbox.
+ */
+async function probeSmtpPort(host: string, port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = net.connect({ host, port })
+    const done = (ok: boolean) => {
+      socket.destroy()
+      resolve(ok)
+    }
+    socket.setTimeout(8_000)
+    socket.once('connect', () => done(true))
+    socket.once('timeout', () => done(false))
+    socket.once('error', () => done(false))
+  })
+}
+
+async function checkSmtp(): Promise<MailCheck> {
+  const base: MailCheck = {
+    provider: 'smtp',
+    from: maskEmail(configuredFromEmail()),
+    keyValid: null,
+    senderFound: null,
+    senderConfirmed: null,
+    note: null,
+    portReachable: null,
+  }
+  const host = (process.env.SMTP_HOST || '').trim()
+  const port = Number(process.env.SMTP_PORT || 587)
+  if (!host) return { ...base, note: 'SMTP_HOST not set' }
+
+  const reachable = await probeSmtpPort(host, port)
+  if (!reachable) {
+    return {
+      ...base,
+      portReachable: false,
+      note: `SMTP port ${port} is UNREACHABLE from this runtime — serverless platforms (Vercel) block outbound SMTP, so NO email can send via raw SMTP. Add an HTTP-API provider (RESEND_API_KEY or SENDGRID_API_KEY) — it sits above SMTP in the fallback chain and needs no redeploy of code, only the env var.`,
+    }
+  }
+  return {
+    ...base,
+    portReachable: true,
+    note: `port ${port} reachable — SMTP connection possible (delivery still depends on credentials/sender policy)`,
+  }
+}
+
+async function checkResend(): Promise<MailCheck> {
+  const key = (process.env.RESEND_API_KEY || '').trim()
+  const base: MailCheck = {
+    provider: 'resend',
+    from: maskEmail(process.env.RESEND_FROM || 'onboarding@resend.dev'),
+    keyValid: null,
+    senderFound: null,
+    senderConfirmed: null,
+    note: null,
+  }
+  if (!key) return { ...base, note: 'no provider configured' }
+
+  try {
+    // GET /domains is a free, read-only key-validity probe.
+    const res = await fetch('https://api.resend.com/domains', {
+      headers: { authorization: `Bearer ${key}`, accept: 'application/json' },
+      signal: AbortSignal.timeout(10_000),
+    })
+    if (res.status === 401 || res.status === 403)
+      return { ...base, keyValid: false, note: 'API key rejected by Resend — re-create it under resend.com → API Keys' }
+    if (!res.ok) return { ...base, keyValid: null, note: `domains check returned ${res.status}` }
+    return { ...base, keyValid: true, note: 'ok — HTTP API works from serverless; without a verified domain sends go from onboarding@resend.dev and deliver to the Resend account\'s own email only' }
+  } catch (e) {
+    return { ...base, keyValid: null, note: `resend unreachable: ${e instanceof Error ? e.message : 'network error'}` }
+  }
+}
+
 async function checkMail(): Promise<MailCheck> {
   const provider = activeMailProvider()
+  if (provider === 'resend') return checkResend()
   if (provider === 'sendgrid') return checkSendGrid()
+  if (provider === 'smtp') return checkSmtp()
   if (provider === 'brevo') return checkBrevo()
   return {
     provider,
@@ -180,7 +261,7 @@ async function checkMail(): Promise<MailCheck> {
     keyValid: null,
     senderFound: null,
     senderConfirmed: null,
-    note: provider === 'smtp' ? 'smtp mode — live check skipped' : 'no provider configured',
+    note: 'no provider configured',
   }
 }
 
@@ -264,9 +345,11 @@ export async function GET() {
               : `events feed is Brevo-only (active provider: ${mail.provider ?? 'none'})`,
         }
   const mailOk =
-    mail.provider === 'sendgrid' || mail.provider === 'brevo'
-      ? mail.keyValid === true && mail.senderConfirmed === true
+    mail.provider === 'resend' || mail.provider === 'sendgrid' || mail.provider === 'brevo'
+      ? mail.keyValid === true && mail.senderConfirmed !== false
       : mail.provider === 'smtp'
+        ? mail.portReachable === true
+        : false
   const storageOk = r2.configured ? r2.connectionOk === true : blob.tokenPresent ? blob.tokenValid === true : true
   return NextResponse.json(
     {

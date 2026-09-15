@@ -2,15 +2,22 @@
 //
 // Delivery channels, tried in this order — the first configured one sends,
 // and the next configured one is the automatic fallback if a send fails:
-//   1. SendGrid HTTPS API — set SENDGRID_API_KEY (free tier: 100 emails/day
+//   1. Resend HTTPS API    — set RESEND_API_KEY (HTTP API → immune to the
+//      SMTP port blocks that kill raw SMTP on serverless; without a verified
+//      domain Resend only delivers to the account's own email, which is
+//      exactly this app's self-notification use-case)
+//   2. SendGrid HTTPS API  — set SENDGRID_API_KEY (free tier: 100 emails/day
 //      to ANY recipient; only the sender address must be verified in the
 //      SendGrid dashboard — no custom domain, and crucially NO IP allow-list,
 //      which is exactly what killed Brevo on Vercel's rotating egress IPs)
-//   2. Raw SMTP           — set SMTP_HOST + SMTP_USER + SMTP_PASS
-//      (works with SMTP2GO, Postmark, Gmail App Password, any provider)
-//   3. Brevo HTTPS API    — set BREVO_API_KEY (legacy fallback only; Brevo's
+//   3. Raw SMTP           — set SMTP_HOST + SMTP_USER + SMTP_PASS
+//      (⚠️ legacy fallback only: Vercel functions BLOCK outbound SMTP ports
+//      25/587, so raw SMTP usually cannot send from serverless at all —
+//      keep an HTTP-API provider configured above it; /api/ops/health now
+//      live-probes the port so a blocked SMTP is visible instead of silent)
+//   4. Brevo HTTPS API    — set BREVO_API_KEY (legacy fallback only; Brevo's
 //      Authorised-IPs feature intermittently blocks serverless egress, so
-//      don't rely on it — remove the BREVO_* env vars once SendGrid works)
+//      don't rely on it — remove the BREVO_* env vars once a HTTP API works)
 //
 // If none is configured the email content is printed to the server log and
 // the caller receives { delivered: false, reason: 'not_configured' } — the
@@ -18,6 +25,12 @@
 // explicitly opts in with AUTH_DEV_CODE_FALLBACK=true (local development only).
 //
 // Environment (all optional):
+//   RESEND_API_KEY            key from resend.com → API Keys (re_…)
+//   RESEND_FROM               optional "Name <email>" override (needs a
+//                             verified domain); defaults to
+//                             onboarding@resend.dev — deliverable ONLY to the
+//                             Resend account's own email until a domain is
+//                             verified, which is fine for self-briefings
 //   SENDGRID_API_KEY          key from SendGrid → Settings → API Keys
 //                             (needs "Mail Send" permission; SG.xxxx…)
 //   SENDGRID_SENDER_EMAIL     the sender address verified under SendGrid →
@@ -31,12 +44,12 @@
 //   AUTH_DEV_CODE_FALLBACK    "true" → API responses may include devCode
 //                             when delivery is impossible (DEV ONLY)
 //
-// TEST HOOKS (never set in production): SENDGRID_API_BASE and BREVO_API_BASE
-// override https://api.sendgrid.com / https://api.brevo.com so tests can point
-// the HTTP clients at a local mock server.
+// TEST HOOKS (never set in production): SENDGRID_API_BASE, RESEND_API_BASE
+// and BREVO_API_BASE override https://api.sendgrid.com / https://api.resend.com /
+// https://api.brevo.com so tests can point the HTTP clients at a local mock server.
 
 export type MailReason = 'not_configured' | 'send_failed'
-export type MailProviderId = 'sendgrid' | 'smtp' | 'brevo'
+export type MailProviderId = 'resend' | 'sendgrid' | 'smtp' | 'brevo'
 
 export interface SendCodeResult {
   delivered: boolean // true = handed to a real mail provider
@@ -46,6 +59,7 @@ export interface SendCodeResult {
 /** Providers configured via env vars, in the order the mailer will try them. */
 export function configuredProviders(): MailProviderId[] {
   const list: MailProviderId[] = []
+  if ((process.env.RESEND_API_KEY || '').trim()) list.push('resend')
   if ((process.env.SENDGRID_API_KEY || '').trim()) list.push('sendgrid')
   if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) list.push('smtp')
   if ((process.env.BREVO_API_KEY || '').trim()) list.push('brevo')
@@ -151,6 +165,40 @@ function parseFrom(from: string): { name?: string; email: string } {
   return { email: from.trim() }
 }
 
+async function sendViaResend(to: string, from: string, subject: string, html: string): Promise<boolean> {
+  const apiKey = (process.env.RESEND_API_KEY || '').trim()
+  const base = process.env.RESEND_API_BASE || 'https://api.resend.com'
+  // Without a verified domain Resend requires its sandbox sender — which can
+  // only deliver to the Resend account's own email address. That is exactly
+  // this app's morning-briefing use-case (self-notifications), so defaulting
+  // to onboarding@resend.dev is correct; RESEND_FROM upgrades it once a
+  // domain is verified.
+  const f = parseFrom(process.env.RESEND_FROM || 'onboarding@resend.dev')
+  const res = await fetch(`${base}/emails`, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${apiKey}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: f.name ? `${f.name} <${f.email}>` : f.email,
+      to: [to],
+      subject,
+      html,
+      text: htmlToText(html),
+    }),
+    signal: AbortSignal.timeout(15_000),
+  })
+  if (res.status === 200) return true
+  const detail = await res.text().catch(() => '')
+  console.error(`Resend send failed (${res.status}):`, detail.slice(0, 400))
+  if (res.status === 401 || res.status === 403)
+    console.error('Resend: API key rejected — check RESEND_API_KEY (resend.com → API Keys).')
+  if (/domain|from/i.test(detail))
+    console.error('Resend: sender/recipient restriction — until you verify a domain, Resend delivers only to the account\'s own email from onboarding@resend.dev (set RESEND_FROM after verifying a domain).')
+  return false
+}
+
 async function sendViaSendGrid(to: string, from: string, subject: string, html: string): Promise<boolean> {
   const apiKey = (process.env.SENDGRID_API_KEY || '').trim()
   const base = process.env.SENDGRID_API_BASE || 'https://api.sendgrid.com'
@@ -230,6 +278,7 @@ async function sendViaSmtp(to: string, from: string, subject: string, html: stri
 }
 
 const senders: Record<MailProviderId, (to: string, from: string, subject: string, html: string) => Promise<boolean>> = {
+  resend: sendViaResend,
   sendgrid: sendViaSendGrid,
   smtp: sendViaSmtp,
   brevo: sendViaBrevo,

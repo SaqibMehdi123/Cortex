@@ -279,43 +279,48 @@ export function PlansView() {
         })}
       </div>
 
-      {/* ── Day agenda — individual tasks due on the selected day, with a
-          quick-add (+ → text + date/time, no plan attached). Plans
-          themselves are NOT repeated here (they live in the outline below,
-          exactly once) — only standalone tasks get a day listing. ── */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="flex items-center gap-2 text-sm">
-            <FaClock className="h-4 w-4 text-primary" />
-            Tasks for {dayLabel}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-1.5">
-          {dayTasks.loading ? (
-            <div className="space-y-2">{[1, 2].map((i) => <SkeletonCard key={i} className="h-10" />)}</div>
-          ) : (dayTasks.data?.tasks.filter((t) => !t.planId).length ?? 0) === 0 ? (
-            <p className="py-4 text-center text-sm text-muted-foreground">
-              No tasks for this day.
-            </p>
-          ) : (
-            dayTasks.data!.tasks.filter((t) => !t.planId).map((t) => (
-              <TaskRow key={t.id} task={t} onToggle={toggleTask} onSnooze={snoozeTask} onEdit={openEdit} draggable />
-            ))
-          )}
-          {/* Undated standalone tasks (e.g. quick-capture without a day) —
-              visible on today's agenda so they can't silently vanish; drag
-              one onto a day above to schedule it. */}
-          {selectedDay === todayISO() && (unassignedTasks.data?.tasks.filter((t) => !t.dueDate && t.status !== 'done').length ?? 0) > 0 && (
-            <div className="space-y-1.5 pt-1">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Unscheduled — no date yet</p>
-              {unassignedTasks.data!.tasks.filter((t) => !t.dueDate && t.status !== 'done').map((t) => (
+      {/* ── Day agenda (OUTLINE lens only) — individual tasks due on the
+          selected day, with a quick-add (+ → text + date/time, no plan
+          attached). Hidden on the kanban lens: those same standalone tasks
+          already sit on the board's columns, and listing them a second time
+          here made the kanban tab redundant. Plans themselves are NOT
+          repeated here either (they live in the outline below, exactly
+          once) — only standalone tasks get a day listing. ── */}
+      {mode === 'outline' && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <FaClock className="h-4 w-4 text-primary" />
+              Tasks for {dayLabel}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1.5">
+            {dayTasks.loading ? (
+              <div className="space-y-2">{[1, 2].map((i) => <SkeletonCard key={i} className="h-10" />)}</div>
+            ) : (dayTasks.data?.tasks.filter((t) => !t.planId).length ?? 0) === 0 ? (
+              <p className="py-4 text-center text-sm text-muted-foreground">
+                No tasks for this day.
+              </p>
+            ) : (
+              dayTasks.data!.tasks.filter((t) => !t.planId).map((t) => (
                 <TaskRow key={t.id} task={t} onToggle={toggleTask} onSnooze={snoozeTask} onEdit={openEdit} draggable />
-              ))}
-            </div>
-          )}
-          <DayQuickAdd selectedDay={selectedDay} onAdd={addDayTask} />
-        </CardContent>
-      </Card>
+              ))
+            )}
+            {/* Undated standalone tasks (e.g. quick-capture without a day) —
+                visible on today's agenda so they can't silently vanish; drag
+                one onto a day above to schedule it. */}
+            {selectedDay === todayISO() && (unassignedTasks.data?.tasks.filter((t) => !t.dueDate && t.status !== 'done').length ?? 0) > 0 && (
+              <div className="space-y-1.5 pt-1">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Unscheduled — no date yet</p>
+                {unassignedTasks.data!.tasks.filter((t) => !t.dueDate && t.status !== 'done').map((t) => (
+                  <TaskRow key={t.id} task={t} onToggle={toggleTask} onSnooze={snoozeTask} onEdit={openEdit} draggable />
+                ))}
+              </div>
+            )}
+            <DayQuickAdd selectedDay={selectedDay} onAdd={addDayTask} />
+          </CardContent>
+        </Card>
+      )}
 
       {/* ── Reminders — day-anchored nudges with optional repeats. Shown ONLY
           on the days they cover (one day, or several via "show for N days").

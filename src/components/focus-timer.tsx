@@ -112,7 +112,9 @@ export function FocusTimer() {
       <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) usePomodoro.getState().close() }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
+            {/* pr-8 reserves the ✕ zone — the absolute close button sits at
+                top-4 right-4, and a long task title used to run under it. */}
+            <DialogTitle className="flex items-center gap-2 pr-8">
               <FaStopwatch className="h-4 w-4 text-primary" /> Pomodoro
               {taskLink && (
                 <span className="ml-1 min-w-0 flex-1 truncate text-xs font-normal text-muted-foreground" title={taskLink.title}>
@@ -363,13 +365,13 @@ function DurationsPanel({ idle }: { idle: boolean }) {
     <div className="w-full space-y-3 border-t pt-3">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+        className="flex w-full flex-col items-start gap-1 text-left text-xs font-medium text-muted-foreground transition-colors hover:text-foreground sm:flex-row sm:items-center sm:justify-between"
         aria-expanded={open}
       >
         <span className="flex items-center gap-1.5">
           <FaGear className="h-3.5 w-3.5" /> Durations &amp; rules
         </span>
-        <span className="text-[10px]">{settings.workMin}m focus · {settings.shortMin}m / {settings.longMin}m breaks · long every {settings.roundsBeforeLong}</span>
+        <span className="whitespace-nowrap text-[10px]">{settings.workMin}m focus · {settings.shortMin}m / {settings.longMin}m breaks · long every {settings.roundsBeforeLong}</span>
       </button>
 
       {open && (
