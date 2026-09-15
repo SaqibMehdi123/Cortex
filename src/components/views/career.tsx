@@ -598,7 +598,7 @@ function DiscoverTab() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-xs text-muted-foreground">
-          Live from official company ATS &amp; careers boards plus RemoteOK &amp; Remotive — auto-refreshes every few hours.
+          Live from official company ATS &amp; careers boards plus RemoteOK &amp; Remotive · auto-refreshes every few hours.
         </p>
         <div className="flex items-center gap-2">
           {lastFetchedAt && !fetching && !autoFetching && <span className="hidden text-xs text-muted-foreground sm:inline">Updated {timeAgo(lastFetchedAt)}</span>}

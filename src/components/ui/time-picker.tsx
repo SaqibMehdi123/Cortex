@@ -136,9 +136,9 @@ export function TimePicker({
           disabled={disabled}
           aria-label={ariaLabel}
           className={cn(
-            'flex w-full items-center gap-1.5 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs transition-colors hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-50',
+            'flex h-9 w-full items-center gap-1.5 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs transition-colors hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-50',
             display ? 'text-foreground' : 'text-muted-foreground',
-            className ?? 'h-9',
+            className,
           )}
         >
           <FaClock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
