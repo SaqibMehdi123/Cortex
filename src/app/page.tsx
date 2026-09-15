@@ -38,7 +38,18 @@ const jsonLd = {
       slogan: SITE_TAGLINE,
       featureList: SITE_FEATURES,
       isAccessibleForFree: true,
-      offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+      // Both plans — lets Google show price context for the SoftwareApplication
+      offers: [
+        { '@type': 'Offer', name: 'Free', price: '0', priceCurrency: 'USD' },
+        {
+          '@type': 'Offer',
+          name: 'Pro',
+          price: '5',
+          priceCurrency: 'USD',
+          description:
+            'Unlimited AI Copilot, summaries, flashcards & mind maps; 500-document library; instant job-alert emails. Students 50% off.',
+        },
+      ],
     },
     {
       '@type': 'FAQPage',

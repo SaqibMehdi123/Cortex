@@ -13,7 +13,7 @@ const LINKS: { href: string; label: string }[] = [
   { href: '#platform', label: 'Platform' },
   { href: '#workflow', label: 'Workflow' },
   { href: '#copilot', label: 'Copilot' },
-  { href: '/pricing', label: 'Pricing' },
+  { href: '#pricing', label: 'Pricing' },
   { href: '#faq', label: 'FAQ' },
 ]
 

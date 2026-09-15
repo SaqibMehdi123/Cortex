@@ -6,8 +6,51 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { CortexMark } from '@/components/logo'
 import { Reveal, SectionHeader } from './landing'
+import { PricingCards } from '@/app/pricing/pricing-cards'
 import { FAQS } from '@/lib/faq'
 import { cn } from '@/lib/utils'
+
+/* ── Pricing — the free core, Pro for the metered AI ───────────── */
+// Reuses the exact card pair from /pricing (same checkout CTA behaviour:
+// logged-out → /signup, unconfigured providers → "launching soon" notice),
+// wrapped in the landing's section language so the page reads as one piece.
+
+export function PricingSection() {
+  return (
+    <section id="pricing" className="scroll-mt-20 py-24 sm:py-32">
+      <div className="mx-auto max-w-6xl px-5 sm:px-8">
+        <SectionHeader
+          index="04"
+          label="Pricing"
+          accent="var(--chart-3)"
+          title={
+            <>
+              Free where it matters.
+              <br />
+              <em className="font-display italic text-[var(--chart-3)]">Pro where it compounds.</em>
+            </>
+          }
+          lede="Tasks, plans, goals, the library, notes and every radar — free and unlimited, forever. Pro only lifts what costs real money to run. Students pay half."
+        />
+        <Reveal delay={80}>
+          <PricingCards />
+        </Reveal>
+        <Reveal delay={140}>
+          <p className="mt-6 text-center text-[13px] text-muted-foreground">
+            Need the full comparison, the student discount and payment options?{' '}
+            <Link
+              href="/pricing"
+              className="text-foreground underline underline-offset-4 hover:no-underline"
+            >
+              Open the pricing page
+            </Link>
+            .
+          </p>
+        </Reveal>
+      </div>
+    </section>
+  )
+}
 
 /* ── FAQ — hairline rows with rotating plus, no accordion chrome ──────── */
 // Q&A content lives in @/lib/faq (shared with the landing's FAQPage JSON-LD)
@@ -53,7 +96,7 @@ export function Faq() {
       <div className="mx-auto max-w-6xl px-5 sm:px-8">
         <div className="grid gap-12 lg:grid-cols-[380px_1fr] lg:gap-20">
           <SectionHeader
-            index="04"
+            index="05"
             label="FAQ"
             accent="var(--chart-4)"
             title={

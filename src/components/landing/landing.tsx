@@ -6,7 +6,7 @@ import { LandingNav } from './nav'
 import { LandingHero } from './hero'
 import { SourcesMarquee, PlatformBento, StatLine } from './features'
 import { Workflow, CopilotSection } from './flow'
-import { Faq, FinalCta, LandingFooter } from './closing'
+import { Faq, FinalCta, LandingFooter, PricingSection } from './closing'
 
 /**
  * Scroll-reveal wrapper — blurs content up the first time it enters the
@@ -136,6 +136,7 @@ export function Landing({ authed, firstName }: { authed: boolean; firstName: str
         <StatLine />
         <Workflow />
         <CopilotSection />
+        <PricingSection />
         <Faq />
         <FinalCta authed={authed} />
       </main>
