@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSessionUser, unauthorized } from '@/lib/auth-server'
 import { SITE_NAME, SUPPORT_EMAIL } from '@/lib/site'
+import { sendReceiptEmail } from '@/lib/receipt'
 
 // POST /api/billing/checkout — start a Pro subscription.
 //
@@ -135,6 +136,19 @@ export async function POST(req: NextRequest) {
     // Dev-only escape hatch: exercise the whole pricing → checkout UI flow
     // with no provider accounts. NEVER enable outside a local machine.
     if (process.env.BILLING_TEST_MODE === 'true') {
+      // Also email a clearly-marked SAMPLE receipt to the operator's own
+      // address — that sample is the "receipt customers receive" evidence
+      // payment providers ask for during onboarding, before any real order
+      // exists. No charge is made and no plan is changed.
+      void sendReceiptEmail({
+        to: user.email,
+        orderId: `test-${Date.now().toString(36)}`,
+        amountMinor: 150_000,
+        currency: 'PKR',
+        provider: 'test',
+        expiresOn: new Date(Date.now() + 31 * 86_400_000),
+        sample: true,
+      }).catch((e) => console.error('test-mode sample receipt failed', e))
       return NextResponse.json({ ok: true, provider: 'test', url: `${new URL(req.url).origin}/app?billing=test` })
     }
 

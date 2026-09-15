@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'node:crypto'
 import { db } from '@/lib/db'
+import { sendReceiptEmail } from '@/lib/receipt'
 
 // POST /api/billing/webhook/safepay — Safepay → Cortex (Pakistan payments).
 //
@@ -106,13 +107,26 @@ export async function POST(req: NextRequest) {
     })
 
     // Extend from the current expiry so a renewal never loses paid days.
-    const user = await db.user.findUnique({ where: { id: userId }, select: { planExpiresAt: true } })
+    const user = await db.user.findUnique({ where: { id: userId }, select: { planExpiresAt: true, email: true } })
     const from = user?.planExpiresAt && user.planExpiresAt.getTime() > Date.now() ? user.planExpiresAt : new Date()
     const planExpiresAt = new Date(from.getTime() + PRO_FALLBACK_DAYS * 86_400_000)
     await db.user.update({
       where: { id: userId },
       data: { plan: 'pro', planExpiresAt, billingProvider: 'safepay' },
     })
+
+    // Branded receipt to the buyer (fire after the plan is committed; a mail
+    // failure must never fail the webhook — it is logged inside the helper).
+    if (user?.email) {
+      await sendReceiptEmail({
+        to: user.email,
+        orderId: tracker,
+        amountMinor: typeof payload.amount === 'number' ? payload.amount : 150_000,
+        currency: payload.currency || 'PKR',
+        provider: 'safepay',
+        expiresOn: planExpiresAt,
+      })
+    }
 
     return NextResponse.json({ ok: true, handled: 'success' })
   } catch (e) {
