@@ -54,6 +54,10 @@ export type MailProviderId = 'resend' | 'sendgrid' | 'smtp' | 'brevo'
 export interface SendCodeResult {
   delivered: boolean // true = handed to a real mail provider
   reason?: MailReason
+  /** the provider that sent (or the last one that was tried) */
+  provider?: MailProviderId
+  /** underlying error text — surfaced by /api/ops/test-email for diagnosis */
+  detail?: string
 }
 
 /** Providers configured via env vars, in the order the mailer will try them. */
@@ -286,22 +290,29 @@ const senders: Record<MailProviderId, (to: string, from: string, subject: string
 
 /**
  * Provider fallback loop shared by every outgoing mail — the first configured
- * provider sends, and the next configured one takes over on failure.
+ * provider sends, and the next configured one takes over on failure. The
+ * returned provider/detail fields make failures diagnosable from the outside
+ * (ops test-email) instead of only in server logs.
  */
 async function deliver(to: string, subject: string, html: string): Promise<SendCodeResult> {
   const providers = configuredProviders()
   if (providers.length === 0) return { delivered: false, reason: 'not_configured' }
 
   const from = mailFrom()
+  let lastProvider: MailProviderId | undefined
+  let lastDetail: string | undefined
   for (const p of providers) {
+    lastProvider = p
     try {
-      if (await senders[p](to, from, subject, html)) return { delivered: true }
+      if (await senders[p](to, from, subject, html)) return { delivered: true, provider: p }
+      lastDetail = `${p} rejected the message (details in server logs)`
       console.error(`Mail provider "${p}" rejected the message — trying the next configured provider`)
     } catch (e) {
+      lastDetail = e instanceof Error ? e.message : String(e)
       console.error(`Mail provider "${p}" threw:`, e)
     }
   }
-  return { delivered: false, reason: 'send_failed' }
+  return { delivered: false, reason: 'send_failed', provider: lastProvider, detail: lastDetail }
 }
 
 export async function sendCodeEmail(
