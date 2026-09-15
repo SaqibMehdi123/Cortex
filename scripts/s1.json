@@ -1,0 +1,74 @@
+[
+  {
+    "url": "https://www.cortex.io",
+    "name": "Cortex Integrations: Sync and Analyze Your Data",
+    "snippet": "With Cortex, you can sync your data using any of our out-of-the-box integrations, or plug-in framework to connect to any homegrown tool.",
+    "host_name": "www.cortex.io",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://docs-cortex.paloaltonetworks.com",
+    "name": "Issue syncing | Cortex Documentation Portal",
+    "snippet": "Aug 17, 2026 — You can set up integrations that mirror Corte x issues with external applications, such as Atlassian Jira or ServiceNow. Read more",
+    "host_name": "docs-cortex.paloaltonetworks.com",
+    "rank": 1,
+    "date": "Aug 17, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://docs.rootly.com",
+    "name": "Cortex",
+    "snippet": "Connect Cortex to Rootly to sync catalog entities into Rootly services and surface Rootly incident data inside Cortex. Rootly automatically syncs with Cortex ...",
+    "host_name": "docs.rootly.com",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://github.com",
+    "name": "PaloAltoNetworks/cortex-cloud-asset-group-sync",
+    "snippet": "Asset Group Sync Automates the creation and update of Dynamic Asset Groups in Palo Alto Networks Cortex Cloud using the public API.",
+    "host_name": "github.com",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://xsoar.pan.dev",
+    "name": "Cortex XDR Incident Sync",
+    "snippet": "When an incident is updated in XDR, the XDRSyncScript will update the incident fields in Cortex XSOAR and rerun the current playbook. Do not use this playbook ... Read more",
+    "host_name": "xsoar.pan.dev",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://live.paloaltonetworks.com",
+    "name": "Directory Sync usage - LIVEcommunity - 376055",
+    "snippet": "Dec 23, 2020 — For Cortex XDR Prevent environments, Directory Sync allows the ability to leverage AD OU's and groups to assign policy. This may or may not help ... Read more",
+    "host_name": "live.paloaltonetworks.com",
+    "rank": 5,
+    "date": "Dec 23, 2020",
+    "favicon": ""
+  },
+  {
+    "url": "https://cortex.eco",
+    "name": "Apps — Sync Your Clouds into the Knowledge Graph - Cortex",
+    "snippet": "Install apps into your own Cortex with one click from the public registry at registry. cortex .eco — sync Google Drive, OneDrive, SharePoint, Dropbox, ...",
+    "host_name": "cortex.eco",
+    "rank": 6,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://getcortex.org",
+    "name": "Git sync - Cortex",
+    "snippet": "Setting it up ... Settings → Brain → Git sync . Sign in with GitHub and either pick an empty repository or have Cortex create one. One click, no tokens to paste. Read more",
+    "host_name": "getcortex.org",
+    "rank": 7,
+    "date": "",
+    "favicon": ""
+  }
+]

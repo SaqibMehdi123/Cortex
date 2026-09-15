@@ -1,0 +1,38 @@
+[
+  {
+    "url": "https://github.com",
+    "name": "Cortex",
+    "snippet": "Cortex is a universal context engine that compiles a single .cortex/ source into native config files for 9 AI coding tools — so every tool gets the same rules, ... Read more",
+    "host_name": "github.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://vercel.com",
+    "name": "AI apps and agents - Vercel",
+    "snippet": "Everything you need to build, run, and govern frontier agents. From the framework to model routing, secure execution, and identity.",
+    "host_name": "vercel.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://launchdarkly.com",
+    "name": "Vercel Marketplace | LaunchDarkly | Documentation",
+    "snippet": "This topic explains how to install and use the Vercel Marketplace integration to create a LaunchDarkly account and connect it to your Vercel project.",
+    "host_name": "launchdarkly.com",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.cortex.io",
+    "name": "Cortex Integrations: Sync and Analyze Your Data",
+    "snippet": "With Cortex , you can sync your data using any of our out-of-the-box integrations, or plug-in framework to connect to any homegrown tool.",
+    "host_name": "www.cortex.io",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  }
+]
