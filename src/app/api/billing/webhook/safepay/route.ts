@@ -17,10 +17,12 @@ import { sendReceiptEmail } from '@/lib/receipt'
 // documented `hash = HMAC-SHA256(secret, `${t}.${tracker}`)` shape; a mismatch
 // is logged loudly but DOES NOT upgrade anyone — fail-closed.
 //
-// Success path: mark the Payment row paid and extend the user's plan by 31
-// days from the current expiry (Safepay local payments are typically one-off
+// Success path: mark the Payment row paid and extend the user's plan from
+// the current expiry — by 31 days for monthly trackers, 365 days for annual
+// ones (the checkout embeds a "-y-" marker in the tracker for annual:
+// cortex-<id>-y-<ts>). Safepay local payments are typically one-off
 // purchases rather than auto-renewing subscriptions; re-subscription happens
-// when the buyer returns to /pricing).
+// when the buyer returns to /pricing.
 
 export const dynamic = 'force-dynamic'
 
@@ -107,9 +109,12 @@ export async function POST(req: NextRequest) {
     })
 
     // Extend from the current expiry so a renewal never loses paid days.
+    // Annual purchases (tracker carries the "-y-" marker from checkout)
+    // buy a full year; everything else is the monthly 31-day span.
+    const annual = /cortex-[a-z0-9]+-y-/.test(tracker)
     const user = await db.user.findUnique({ where: { id: userId }, select: { planExpiresAt: true, email: true } })
     const from = user?.planExpiresAt && user.planExpiresAt.getTime() > Date.now() ? user.planExpiresAt : new Date()
-    const planExpiresAt = new Date(from.getTime() + PRO_FALLBACK_DAYS * 86_400_000)
+    const planExpiresAt = new Date(from.getTime() + (annual ? 365 : PRO_FALLBACK_DAYS) * 86_400_000)
     await db.user.update({
       where: { id: userId },
       data: { plan: 'pro', planExpiresAt, billingProvider: 'safepay' },

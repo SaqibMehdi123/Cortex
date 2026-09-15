@@ -49,6 +49,14 @@ const jsonLd = {
           description:
             'Unlimited AI Copilot, summaries, flashcards & mind maps; 500-document library; instant job-alert emails. Students 50% off.',
         },
+        {
+          '@type': 'Offer',
+          name: 'Pro Annual',
+          price: '50',
+          priceCurrency: 'USD',
+          description:
+            'The Pro plan billed once a year — two months free versus monthly ($4.17/mo effective). Students $25/yr after verification.',
+        },
       ],
     },
     {

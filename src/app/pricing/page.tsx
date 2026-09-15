@@ -11,12 +11,12 @@ import { PricingCards } from './pricing-cards'
 export const metadata: Metadata = {
   title: 'Pricing',
   description:
-    'Cortex is free for all core planning and knowledge work. Pro adds unlimited AI — copilot, summaries, flashcards and mind maps — bigger PDF storage and instant job alerts for $5/month.',
+    'Cortex is free for all core planning and knowledge work. Pro adds unlimited AI — copilot, summaries, flashcards and mind maps — bigger PDF storage and instant job alerts for $5/month or $50/year.',
   alternates: { canonical: `${SITE_URL}/pricing` },
   openGraph: {
     title: 'Pricing · Cortex',
     description:
-      'Free forever for planning and reading. Pro: unlimited AI, 500+ PDF library, instant job alerts — $5/month.',
+      'Free forever for planning and reading. Pro: unlimited AI, 500+ PDF library, instant job alerts — $5/month or $50/year.',
     url: `${SITE_URL}/pricing`,
     type: 'website',
   },
@@ -65,7 +65,7 @@ export default function PricingPage() {
               },
               {
                 t: 'Cancel anytime',
-                d: 'Subscriptions renew monthly and stop the moment you cancel. First purchase carries a 14-day no-questions-asked refund.',
+                d: 'Pick monthly or yearly billing — subscriptions renew at that pace and stop the moment you cancel. First purchase carries a 14-day no-questions-asked refund.',
               },
               {
                 t: 'Local & global payments',

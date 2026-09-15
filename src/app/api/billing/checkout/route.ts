@@ -12,15 +12,22 @@ import { sendReceiptEmail } from '@/lib/receipt'
 //     and compliance; payouts to Pakistan via Payoneer).
 //
 // Configuration (all in Vercel env):
-//   LEMONSQUEEZY_API_KEY        re-… api key from Lemon Squeezy → Settings → API
-//   LEMONSQUEEZY_STORE_ID       numeric store id (from the store URL/dashboard)
-//   LEMONSQUEEZY_VARIANT_ID     the "Cortex Pro monthly" variant id — checkout
-//                               is created against THIS, so the price you set
-//                               in the LS dashboard is what the buyer sees
-//   SAFEPAY_SECRET_KEY          from Safepay dashboard (sandbox or live)
-//   SAFEPAY_MODE                "sandbox" (default) | "live"
-//   BILLING_TEST_MODE           "true" → skip providers and return a fake
-//                               checkout url (LOCAL DEV ONLY)
+//   LEMONSQUEEZY_API_KEY              re-… api key from Lemon Squeezy → Settings → API
+//   LEMONSQUEEZY_STORE_ID             numeric store id (from the store URL/dashboard)
+//   LEMONSQUEEZY_VARIANT_ID           the "Cortex Pro monthly" variant id — checkout
+//                                     is created against THIS, so the price you set
+//                                     in the LS dashboard is what the buyer sees
+//   LEMONSQUEEZY_ANNUAL_VARIANT_ID    the "Cortex Pro annual" variant id ($50/yr);
+//                                     absent → annual requests get a friendly
+//                                     501 annual_not_available (monthly still works)
+//   SAFEPAY_SECRET_KEY                from Safepay dashboard (sandbox or live)
+//   SAFEPAY_MODE                      "sandbox" (default) | "live"
+//   BILLING_TEST_MODE                 "true" → skip providers and return a fake
+//                                     checkout url (LOCAL DEV ONLY)
+//
+// Billing interval: the body may carry interval = "monthly" | "annual"
+// (default monthly). Safepay trackers embed the interval as a "-y-" marker
+// for the webhook (cortex-<id>-y-<ts> = annual → 365d).
 //
 // When a provider is not configured the route answers 501 with
 // { error: 'billing_not_configured' } — the pricing page turns that into a
@@ -29,7 +36,8 @@ import { sendReceiptEmail } from '@/lib/receipt'
 export const dynamic = 'force-dynamic'
 
 interface CheckoutBody {
-  plan?: string // reserved for future tiers (pro_yearly, pro_student…)
+  plan?: string // reserved for future tiers (pro_student…)
+  interval?: 'monthly' | 'annual'
 }
 
 function billingConfigured(provider: 'lemonsqueezy' | 'safepay'): boolean {
@@ -43,7 +51,12 @@ function billingConfigured(provider: 'lemonsqueezy' | 'safepay'): boolean {
   return Boolean((process.env.SAFEPAY_SECRET_KEY || '').trim())
 }
 
-async function createLemonSqueezyCheckout(userId: string, email: string, name: string): Promise<string> {
+async function createLemonSqueezyCheckout(
+  userId: string,
+  email: string,
+  name: string,
+  variantId: string
+): Promise<string> {
   const base = process.env.LEMONSQUEEZY_API_BASE || 'https://api.lemonsqueezy.com'
   const res = await fetch(`${base}/v1/checkouts`, {
     method: 'POST',
@@ -68,7 +81,7 @@ async function createLemonSqueezyCheckout(userId: string, email: string, name: s
         },
         relationships: {
           store: { data: { type: 'stores', id: String(process.env.LEMONSQUEEZY_STORE_ID) } },
-          variant: { data: { type: 'variants', id: String(process.env.LEMONSQUEEZY_VARIANT_ID) } },
+          variant: { data: { type: 'variants', id: String(variantId) } },
         },
       },
     }),
@@ -88,10 +101,17 @@ async function createLemonSqueezyCheckout(userId: string, email: string, name: s
 // Safepay creates a "tracker" the buyer is redirected to. Endpoint shape per
 // Safepay's docs (https://docs.getsafepay.com) — verify the exact field names
 // against your dashboard's API reference when you enable the live mode.
-async function createSafepayPayment(userId: string, email: string): Promise<string> {
+async function createSafepayPayment(
+  userId: string,
+  email: string,
+  interval: 'monthly' | 'annual'
+): Promise<string> {
   const mode = (process.env.SAFEPAY_MODE || 'sandbox').toLowerCase() === 'live' ? 'www' : 'sandbox'
   const base = process.env.SAFEPAY_API_BASE || `https://${mode}.api.getsafepay.com`
-  const tracker = `cortex-${userId.slice(-8)}-${Date.now().toString(36)}`
+  // Annual trackers carry a "-y-" marker — the webhook reads it to extend
+  // the plan by 365d instead of 31d (see /api/billing/webhook/safepay).
+  const annual = interval === 'annual'
+  const tracker = `cortex-${userId.slice(-8)}${annual ? '-y' : ''}-${Date.now().toString(36)}`
   const res = await fetch(`${base}/payment/v1`, {
     method: 'POST',
     headers: {
@@ -104,7 +124,7 @@ async function createSafepayPayment(userId: string, email: string): Promise<stri
       client: { email },
       style: 'plan',
       currency: 'PKR',
-      amount: 150000, // PKR 1,500 ≈ $5 — keep in sync with the pricing page
+      amount: annual ? 1_500_000 : 150_000, // PKR 15,000/yr (2 months free) · PKR 1,500/mo ≈ $5 — keep in sync with the pricing page
       environment: mode === 'www' ? 'live' : 'sandbox',
     }),
     signal: AbortSignal.timeout(15_000),
@@ -143,7 +163,7 @@ export async function POST(req: NextRequest) {
       void sendReceiptEmail({
         to: user.email,
         orderId: `test-${Date.now().toString(36)}`,
-        amountMinor: 150_000,
+        amountMinor: body.interval === 'annual' ? 1_500_000 : 150_000,
         currency: 'PKR',
         provider: 'test',
         expiresOn: new Date(Date.now() + 31 * 86_400_000),
@@ -152,19 +172,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, provider: 'test', url: `${new URL(req.url).origin}/app?billing=test` })
     }
 
+    const interval: 'monthly' | 'annual' = body.interval === 'annual' ? 'annual' : 'monthly'
+
     // Geo routing: Vercel injects the visitor's country on every request.
     const country = (req.headers.get('x-vercel-ip-country') || '').toUpperCase()
-    const provider: 'lemonsqueezy' | 'safepay' = country === 'PK' ? 'safepay' : 'lemonsqueezy'
+    const preferred: 'lemonsqueezy' | 'safepay' = country === 'PK' ? 'safepay' : 'lemonsqueezy'
+
+    // Resolve the provider — the other one may still be configured, try it
+    // before giving up.
+    const provider: 'lemonsqueezy' | 'safepay' = billingConfigured(preferred)
+      ? preferred
+      : billingConfigured(preferred === 'safepay' ? 'lemonsqueezy' : 'safepay')
+        ? (preferred === 'safepay' ? 'lemonsqueezy' : 'safepay')
+        : preferred
 
     if (!billingConfigured(provider)) {
-      // The other provider may still be configured — try it before giving up.
-      const fallback = provider === 'safepay' ? 'lemonsqueezy' : 'safepay'
-      if (billingConfigured(fallback)) {
-        const url = fallback === 'lemonsqueezy'
-          ? await createLemonSqueezyCheckout(user.id, user.email, user.name)
-          : await createSafepayPayment(user.id, user.email)
-        return NextResponse.json({ ok: true, provider: fallback, url })
-      }
       return NextResponse.json(
         {
           error: 'billing_not_configured',
@@ -174,10 +196,30 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const url = provider === 'lemonsqueezy'
-      ? await createLemonSqueezyCheckout(user.id, user.email, user.name)
-      : await createSafepayPayment(user.id, user.email)
-    return NextResponse.json({ ok: true, provider, url })
+    if (provider === 'lemonsqueezy') {
+      const variantId = (
+        (interval === 'annual' ? process.env.LEMONSQUEEZY_ANNUAL_VARIANT_ID : process.env.LEMONSQUEEZY_VARIANT_ID) || ''
+      ).trim()
+      if (!variantId) {
+        // Never silently charge the monthly variant for an annual request —
+        // fail with a message the pricing page can render as a friendly line.
+        return NextResponse.json(
+          {
+            error: interval === 'annual' ? 'annual_not_available' : 'billing_not_configured',
+            detail:
+              interval === 'annual'
+                ? 'Annual billing is launching soon — Monthly is ready now.'
+                : `Payments are launching soon. Questions? ${SUPPORT_EMAIL}`,
+          },
+          { status: 501 }
+        )
+      }
+      const url = await createLemonSqueezyCheckout(user.id, user.email, user.name, variantId)
+      return NextResponse.json({ ok: true, provider, interval, url })
+    }
+
+    const url = await createSafepayPayment(user.id, user.email, interval)
+    return NextResponse.json({ ok: true, provider, interval, url })
   } catch (e) {
     console.error('POST /api/billing/checkout error', e)
     const detail = e instanceof Error ? e.message : 'checkout_failed'
