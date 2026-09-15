@@ -1267,7 +1267,9 @@ function KanbanBoard({ plans, individual, cutoffMs, day, onToggle, onEditTask, o
   // has passed. Unscheduled tasks are always current, future ones upcoming.
   // The outline view above remains the complete archive either way.
   const kanbanVisible = (t: Task) => {
-    if (t.status === 'done' && t.completedAt) return new Date(t.completedAt).getTime() >= cutoffMs
+    // done tasks without a completion timestamp (legacy rows) are treated as
+    // stale — the outline keeps the full archive.
+    if (t.status === 'done') return t.completedAt ? new Date(t.completedAt).getTime() >= cutoffMs : false
     return !t.dueDate || new Date(t.dueDate).getTime() >= cutoffMs
   }
   const allTasks = useMemo(() => {
