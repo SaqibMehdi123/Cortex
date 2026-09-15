@@ -7,7 +7,7 @@
  * tags — search engines must always see one stable origin.
  * When a custom domain goes live later, change ONLY this constant.
  */
-export const SITE_URL = 'https://cortex-sync.vercel.app'
+export const SITE_URL = 'https://cortex.scrutinies.dev'
 export const SITE_NAME = 'Cortex'
 export const SITE_TAGLINE = 'Knowledge work, without the chaos.'
 

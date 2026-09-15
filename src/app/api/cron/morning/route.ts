@@ -7,8 +7,8 @@ import { sendEmail } from '@/lib/mailer'
 // Called by the Vercel cron defined in vercel.json ("0 4 * * *" = 09:00
 // Asia/Karachi) and safe to curl by hand for testing:
 //
-//   curl "https://cortex-sync.vercel.app/api/cron/morning?key=$CRON_SECRET"
-//   curl "https://cortex-sync.vercel.app/api/cron/morning?key=$CRON_SECRET&dryRun=1"
+//   curl "https://cortex.scrutinies.dev/api/cron/morning?key=$CRON_SECRET"
+//   curl "https://cortex.scrutinies.dev/api/cron/morning?key=$CRON_SECRET&dryRun=1"
 //   curl "…&user=you@example.com"          ← restrict to one account
 //
 // Auth: CRON_SECRET (Vercel injects "Authorization: Bearer $CRON_SECRET" when
