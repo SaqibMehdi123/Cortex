@@ -1,0 +1,29 @@
+[
+  {
+    "url": "https://play.google.com/store/apps/details?id=com.john4445.methode_J_2&hl=en_US",
+    "name": "Engram : spaced learning app",
+    "snippet": "This application lets you apply the D method (spaced repetition). The D method consists of revising lessons according to a timetable that spaces lessons out ... Read more",
+    "host_name": "play.google.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://apps.apple.com",
+    "name": "engram - App Store - Apple",
+    "snippet": "This open source software application is designed to help people track and remember important things in their lives . engram is available anywhere your ... Read more",
+    "host_name": "apps.apple.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://chromewebstore.google.com/detail/engram/bbbphblhdlagfijgdadhpdapnibmnpcj?hl=en",
+    "name": "Engram | Architecting Cognition",
+    "snippet": "Engram is an applied AI research lab focused on architecting cognition . We build systems that augment human intelligence by combining memory, reasoning, ...",
+    "host_name": "chromewebstore.google.com",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  }
+]
