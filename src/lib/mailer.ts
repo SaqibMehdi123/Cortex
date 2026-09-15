@@ -26,20 +26,21 @@
 //
 // Environment (all optional):
 //   RESEND_API_KEY            key from resend.com → API Keys (re_…)
-//   RESEND_FROM               optional "Name <email>" override (needs a
-//                             verified domain); defaults to
-//                             onboarding@resend.dev — deliverable ONLY to the
-//                             Resend account's own email until a domain is
-//                             verified, which is fine for self-briefings
 //   SENDGRID_API_KEY          key from SendGrid → Settings → API Keys
 //                             (needs "Mail Send" permission; SG.xxxx…)
 //   SENDGRID_SENDER_EMAIL     the sender address verified under SendGrid →
 //                             Settings → Sender Authentication
 //   MAIL_FROM                 full RFC form override, e.g.
 //                             "Cortex <hello@scrutinies.dev>" (display name
-//                             defaults to "Cortex" when not set) — this is the
-//                             production sender once the scrutinies.dev domain
-//                             mailboxes exist (Cloudflare Email Routing)
+//                             defaults to "Cortex" when not set). ⚠️ This
+//                             changes the From for EVERY provider including
+//                             the SMTP fallback — to brand Resend mail as
+//                             hello@scrutinies.dev set RESEND_FROM instead and
+//                             leave MAIL_FROM unset (see EMAIL-SETUP.md)
+//   RESEND_FROM               RFC form From used by the Resend sender only,
+//                             e.g. "Cortex <hello@scrutinies.dev>" (needs the
+//                             domain verified in Resend; defaults to
+//                             onboarding@resend.dev)
 //   SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_SECURE ("true" for 465)
 //   BREVO_API_KEY             legacy — see above
 //   BREVO_SENDER_EMAIL        legacy sender address (BREVO mode)
@@ -105,7 +106,7 @@ export function mailFrom(): string {
 
 /**
  * Reply-To on every outgoing message — support answers land in a real inbox
- * (support@scrutinies.dev via Cloudflare Email Routing). Override with
+ * (support@scrutinies.dev via name.com Email Forwarding). Override with
  * MAIL_REPLY_TO if support should point elsewhere; "reply" behaviour differs
  * per provider, so it is passed explicitly to each sender.
  */

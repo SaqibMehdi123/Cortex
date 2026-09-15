@@ -13,10 +13,10 @@ export const SITE_TAGLINE = 'Knowledge work, without the chaos.'
 
 /**
  * Brand mailboxes on the scrutinies.dev domain. Outgoing mail (verification
- * codes, briefings) is sent FROM hello@ (set MAIL_FROM in Vercel once the
- * Cloudflare Email Routing address exists); anything users are told to write
- * to points at support@. Both must exist as Cloudflare Email Routing
- * destinations so replies land in a real inbox.
+ * codes, briefings) is sent FROM hello@ (set RESEND_FROM in Vercel once the
+ * Resend domain is verified — see EMAIL-SETUP.md); anything users are told
+ * to write to points at support@. Both exist as name.com Email Forwarding
+ * destinations (→ owner's Gmail) so replies land in a real inbox.
  */
 export const CONTACT_EMAIL = 'hello@scrutinies.dev'
 export const SUPPORT_EMAIL = 'support@scrutinies.dev'
