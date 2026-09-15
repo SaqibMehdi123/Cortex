@@ -54,6 +54,8 @@ export const config = {
     // everything except Next internals, static assets, and the crawler/social
     // surface (robots, sitemap, PWA manifest, OG image) — those MUST be
     // reachable without a session or link previews and indexing break.
-    '/((?!_next/static|_next/image|favicon.ico|icon.svg|robots.txt|logo.svg|sitemap.xml|manifest.webmanifest|opengraph-image|twitter-image|apple-icon|pdf.worker).*)',
+    // [0-9a-f]{32,64}.txt = IndexNow key files (Bing/DuckDuckGo fetch them
+    // unauthenticated to validate instant-ping submissions).
+    '/((?!_next/static|_next/image|favicon.ico|icon.svg|robots.txt|logo.svg|sitemap.xml|manifest.webmanifest|opengraph-image|twitter-image|apple-icon|pdf.worker|[0-9a-f]{32,64}\\.txt).*)',
   ],
 }
