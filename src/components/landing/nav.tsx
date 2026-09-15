@@ -9,10 +9,11 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/co
 import { useTheme } from 'next-themes'
 import { cn } from '@/lib/utils'
 
-const LINKS = [
+const LINKS: { href: string; label: string }[] = [
   { href: '#platform', label: 'Platform' },
   { href: '#workflow', label: 'Workflow' },
   { href: '#copilot', label: 'Copilot' },
+  { href: '/pricing', label: 'Pricing' },
   { href: '#faq', label: 'FAQ' },
 ]
 
@@ -71,15 +72,25 @@ export function LandingNav({ authed }: { authed: boolean }) {
         </Link>
 
         <div className="hidden items-center gap-0.5 md:flex">
-          {LINKS.map((l) => (
-            <a
-              key={l.href}
-              href={l.href}
-              className="rounded-md px-3 py-1.5 text-[13.5px] text-muted-foreground transition-colors hover:text-foreground"
-            >
-              {l.label}
-            </a>
-          ))}
+          {LINKS.map((l) =>
+            l.href.startsWith('#') ? (
+              <a
+                key={l.href}
+                href={l.href}
+                className="rounded-md px-3 py-1.5 text-[13.5px] text-muted-foreground transition-colors hover:text-foreground"
+              >
+                {l.label}
+              </a>
+            ) : (
+              <Link
+                key={l.href}
+                href={l.href}
+                className="rounded-md px-3 py-1.5 text-[13.5px] text-muted-foreground transition-colors hover:text-foreground"
+              >
+                {l.label}
+              </Link>
+            )
+          )}
         </div>
 
         <div className="flex items-center gap-1.5">
@@ -124,16 +135,27 @@ export function LandingNav({ authed }: { authed: boolean }) {
                 </SheetTitle>
               </SheetHeader>
               <div className="flex flex-col gap-0.5 px-4 pb-6">
-                {LINKS.map((l) => (
-                  <a
-                    key={l.href}
-                    href={l.href}
-                    onClick={() => setOpen(false)}
-                    className="rounded-md px-3 py-2.5 text-[15px] text-foreground transition-colors hover:bg-muted"
-                  >
-                    {l.label}
-                  </a>
-                ))}
+                {LINKS.map((l) =>
+                  l.href.startsWith('#') ? (
+                    <a
+                      key={l.href}
+                      href={l.href}
+                      onClick={() => setOpen(false)}
+                      className="rounded-md px-3 py-2.5 text-[15px] text-foreground transition-colors hover:bg-muted"
+                    >
+                      {l.label}
+                    </a>
+                  ) : (
+                    <Link
+                      key={l.href}
+                      href={l.href}
+                      onClick={() => setOpen(false)}
+                      className="rounded-md px-3 py-2.5 text-[15px] text-foreground transition-colors hover:bg-muted"
+                    >
+                      {l.label}
+                    </Link>
+                  )
+                )}
                 <div className="mt-3 flex flex-col gap-2 border-t border-border pt-4">
                   {authed ? (
                     <Button asChild className="w-full rounded-lg">

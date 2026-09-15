@@ -109,12 +109,19 @@ export function FinalCta({ authed }: { authed: boolean }) {
             Set it up once. Let it compound for years.
           </p>
         </Reveal>
-        <Reveal delay={180} className="mt-9">
+        <Reveal delay={180} className="mt-9 flex flex-col items-center gap-2.5 sm:flex-row sm:gap-3">
           <Button asChild className="sheen h-12 rounded-lg px-7 text-[15px]">
             <Link href={authed ? '/app' : '/signup'}>
               {authed ? 'Open Cortex' : 'Start for free'}
               <FaArrowRight className="ml-1 h-4 w-4" />
             </Link>
+          </Button>
+          <Button
+            asChild
+            variant="ghost"
+            className="h-12 rounded-lg px-5 text-[15px] text-muted-foreground hover:text-foreground"
+          >
+            <Link href="/pricing">See pricing</Link>
           </Button>
         </Reveal>
       </div>

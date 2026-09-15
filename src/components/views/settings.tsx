@@ -1,8 +1,9 @@
 'use client'
 
-import { FaAt, FaBell, FaCalendarPlus, FaChrome, FaCopy, FaDesktop, FaDownload, FaEnvelope, FaFileCode, FaFileLines, FaInbox, FaInfo, FaKey, FaMoon, FaPaperPlane, FaPalette, FaRightFromBracket, FaRotate, FaShieldHalved, FaSpinner, FaSun, FaUser } from 'react-icons/fa6'
+import { FaAt, FaBell, FaCalendarPlus, FaChrome, FaCopy, FaCrown, FaDesktop, FaDownload, FaEnvelope, FaFileCode, FaFileLines, FaInbox, FaInfo, FaKey, FaMoon, FaPaperPlane, FaPalette, FaRightFromBracket, FaRotate, FaShieldHalved, FaSpinner, FaSun, FaUser } from 'react-icons/fa6'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { api } from '@/lib/client'
 import { useApi } from '@/lib/client'
 import { useMounted } from '@/components/shared'
@@ -22,11 +23,19 @@ interface SettingsData {
   digestTime: string
 }
 
+interface BillingStatus {
+  plan: 'free' | 'pro'
+  pro: boolean
+  planExpiresAt: string | null
+  billingProvider: string | null
+}
+
 export function SettingsView() {
   const { toast } = useToast()
   const { theme, setTheme } = useTheme()
   const { data } = useApi<{ setting: SettingsData }>('/api/settings')
   const { data: me } = useApi<{ user: { id: string; name: string; email: string } } | null>('/api/auth/me')
+  const { data: billing } = useApi<BillingStatus | null>('/api/billing/status')
   const mounted = useMounted()
 
   async function save(patch: Record<string, string>) {
@@ -45,6 +54,7 @@ export function SettingsView() {
       </div>
 
       {me?.user && <AccountCard user={me.user} />}
+      <PlanCard billing={billing} />
       <ProfileCard data={data?.setting} save={save} />
       <AppearanceCard mounted={mounted} theme={theme ?? 'system'} setTheme={setTheme} save={save} />
       <GoogleCard />
@@ -71,6 +81,45 @@ export function SettingsView() {
         <p>Cortex syncs across your laptop and phone with the same account. Offline edits queue locally and resolve on reconnect — nothing is lost silently.</p>
       </div>
     </div>
+  )
+}
+
+function PlanCard({ billing }: { billing?: BillingStatus | null }) {
+  const pro = billing?.pro === true
+  const expiry = billing?.planExpiresAt
+    ? new Date(billing.planExpiresAt).toLocaleDateString(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      })
+    : null
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-sm">
+          <FaCrown className="h-4 w-4 text-primary" /> Plan
+          <span className={cn('ml-1 rounded-full border px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.14em]', pro ? 'border-primary/40 bg-primary/10 text-primary' : 'text-muted-foreground')}>
+            {pro ? 'Pro' : 'Free'}
+          </span>
+        </CardTitle>
+        <CardDescription>
+          {pro
+            ? `Pro is active${expiry ? ` — renews/holds until ${expiry}` : ''}. Thank you for backing an independent workspace.`
+            : 'You are on Free — the whole workspace, unlimited, forever.'}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-[13px] leading-relaxed text-muted-foreground">
+          {pro
+            ? 'Everything is unlimited on your plan. Billing details and the plan comparison live on the pricing page.'
+            : 'Pro only lifts what costs money to run: unlimited AI Copilot, summaries, cards & mind maps, and a 500-document library.'}
+        </p>
+        <Button asChild variant={pro ? 'outline' : 'default'} className={cn('shrink-0', !pro && 'sheen')}>
+          <Link href="/pricing">{pro ? 'View pricing' : 'See pricing & upgrade'}</Link>
+        </Button>
+      </CardContent>
+    </Card>
   )
 }
 
