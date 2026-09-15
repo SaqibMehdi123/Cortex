@@ -92,7 +92,7 @@ export function Faq() {
   const [open, setOpen] = useState(0)
 
   return (
-    <section id="faq" className="scroll-mt-20 py-24 sm:py-32">
+    <section id="faq" className="scroll-mt-20 border-t border-border/70 py-24 sm:py-32">
       <div className="mx-auto max-w-6xl px-5 sm:px-8">
         <div className="grid gap-12 lg:grid-cols-[380px_1fr] lg:gap-20">
           <SectionHeader

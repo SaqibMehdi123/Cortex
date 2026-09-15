@@ -36,8 +36,11 @@ const PRO_FEATURES: string[] = [
 ]
 
 function FeatureList({ items }: { items: string[] }) {
+  // flex-1 lets the list absorb the card's leftover height, which pins the
+  // CTA below it to the card's bottom edge — so both buttons sit on the same
+  // baseline even though the Free list is longer than Pro's.
   return (
-    <ul className="mt-5 flex flex-col gap-2.5">
+    <ul className="mt-5 flex flex-1 flex-col gap-2.5">
       {items.map((f) => (
         <li key={f} className="flex items-start gap-2.5 text-[13.5px] leading-relaxed text-foreground/85">
           <FaCheck aria-hidden className="mt-[3px] h-3.5 w-3.5 shrink-0 text-primary" />
@@ -82,7 +85,7 @@ export function PricingCards() {
     <div className="mt-12">
       <div className="grid gap-5 lg:grid-cols-2">
         {/* Free */}
-        <div className="rounded-2xl border border-border bg-card p-6 sm:p-8">
+        <div className="flex flex-col rounded-2xl border border-border bg-card p-6 sm:p-8">
           <div className="flex items-center justify-between">
             <h2 className="font-display text-[20px] font-medium tracking-[-0.015em]">Free</h2>
             <span className="rounded-full border border-border px-3 py-1 font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
@@ -103,7 +106,7 @@ export function PricingCards() {
         </div>
 
         {/* Pro */}
-        <div className="relative rounded-2xl border border-primary/40 bg-card p-6 shadow-soft sm:p-8">
+        <div className="relative flex flex-col rounded-2xl border border-primary/40 bg-card p-6 shadow-soft sm:p-8">
           <div className="flex items-center justify-between">
             <h2 className="font-display text-[20px] font-medium tracking-[-0.015em]">Pro</h2>
             <span className="rounded-full bg-primary px-3 py-1 font-mono text-[10px] uppercase tracking-[0.16em] text-primary-foreground">
