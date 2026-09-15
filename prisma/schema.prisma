@@ -414,6 +414,11 @@ model User {
   lastPapersFetchAt DateTime? // same hybrid auto-sync contract, for the papers feed
   lastJobsFetchAt DateTime? // same hybrid auto-sync contract, for the jobs discover board
   lastScholarshipsFetchAt DateTime? // same hybrid auto-sync contract, for masters/PhD scholarships
+  // ── Billing (skeleton) ──
+  plan          String   @default("free") // free | pro — source of truth for entitlements
+  planExpiresAt DateTime? // when Pro access ends; null on free. Non-null + future = active Pro
+  billingProvider String? // lemonsqueezy | safepay — who last processed a payment
+  providerCustomerId String? // LS customer id / Safepay payer reference — links webhooks back to the account
   createdAt     DateTime @default(now())
 
   documents         Document[]
@@ -439,6 +444,8 @@ model User {
   setting           Setting?
   verificationCodes VerificationCode[]
   scholarships      Scholarship[]
+  payments          Payment[]
+  dailyUsages       DailyUsage[]
 }
 
 // 6-digit verification codes (email verification & password reset).
@@ -471,4 +478,41 @@ model Setting {
   googleAuth  String? // JSON {access_token, refresh_token, expiry_date, scope}
   googleEmail String?
   updatedAt   DateTime @updatedAt
+}
+
+// ─── Billing (skeleton) ────────────────────────────────────────────────
+
+// One row per payment event we accepted from a provider webhook. provider+
+// providerInvoiceId is the idempotency key — providers retry webhooks.
+model Payment {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider          String // lemonsqueezy | safepay
+  providerInvoiceId String // LS order/subscription id · Safepay tracker
+  status            String   @default("paid") // paid | failed | refunded
+  amountCents       Int?
+  currency          String? // "USD" | "PKR" …
+  plan              String   @default("pro")
+  createdAt         DateTime @default(now())
+
+  @@unique([provider, providerInvoiceId])
+  @@index([userId])
+}
+
+// Free-plan usage counters for metered AI features. One row per
+// (user, window-start, feature); `count` increments per use. Nothing here is
+// user-facing content — pure enforcement data, kept so limits survive
+// parallel requests and server restarts.
+model DailyUsage {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  feature   String // copilot | summary | cards | mindmap
+  day       DateTime // window start: UTC midnight for daily features, 1st-of-month 00:00 for monthly
+  count     Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, day, feature])
+  @@index([userId, feature])
 }

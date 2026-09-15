@@ -7,7 +7,7 @@ import { SESSION_COOKIE, verifySessionToken } from '@/lib/auth'
 // Excluded: the auth pages themselves, the auth endpoints, the Google OAuth
 // integration routes (their callback must work independently), and static files.
 
-const PUBLIC_PAGES = new Set(['/', '/login', '/signup', '/verify', '/forgot-password'])
+const PUBLIC_PAGES = new Set(['/', '/login', '/signup', '/verify', '/forgot-password', '/privacy', '/terms', '/refund', '/pricing'])
 const PUBLIC_APIS = [
   '/api/auth/register',
   '/api/auth/login',
@@ -27,6 +27,10 @@ const PUBLIC_APIS = [
   // CRON_SECRET inside the route (src/app/api/cron/morning), so the session
   // gate must not intercept it
   '/api/cron/morning',
+  // daily feed sync (scholarships & exchange programmes) — same CRON_SECRET contract
+  '/api/cron/feeds',
+  // payment webhooks authenticate via provider signatures, not sessions
+  '/api/billing/webhook',
 ]
 
 export async function middleware(req: NextRequest) {

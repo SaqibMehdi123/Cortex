@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { createAI } from '@/lib/ai'
 import { getSessionUser, unauthorized } from '@/lib/auth-server'
+import { guardUsage, isActivePro, limitMessage, usageFields } from '@/lib/entitlements'
 
 // Long AI generations must not hit the default serverless timeout (Vercel Hobby caps at 60 s).
 export const maxDuration = 60
@@ -19,6 +20,15 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     const content = document.content?.slice(0, 18000)
     if (!content) {
       return NextResponse.json({ error: 'This document has no text content to summarize yet.' }, { status: 422 })
+    }
+
+    // Free plan: 5 AI summaries/month.
+    const verdict = await guardUsage(user.id, 'summary', isActivePro(user))
+    if (!verdict.allowed) {
+      return NextResponse.json(
+        { error: limitMessage('summary', verdict.limit), ...usageFields('summary', verdict) },
+        { status: 402 }
+      )
     }
 
     const zai = await createAI()

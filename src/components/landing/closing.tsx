@@ -131,6 +131,7 @@ const FOOTER_COLS = [
       { label: 'Platform', href: '#platform' },
       { label: 'Workflow', href: '#workflow' },
       { label: 'Copilot', href: '#copilot' },
+      { label: 'Pricing', href: '/pricing' },
       { label: 'FAQ', href: '#faq' },
     ],
   },
@@ -140,6 +141,14 @@ const FOOTER_COLS = [
       { label: 'Open app', href: '/app' },
       { label: 'Sign in', href: '/login' },
       { label: 'Create account', href: '/signup' },
+    ],
+  },
+  {
+    label: 'Legal',
+    links: [
+      { label: 'Privacy Policy', href: '/privacy' },
+      { label: 'Terms of Service', href: '/terms' },
+      { label: 'Refund Policy', href: '/refund' },
     ],
   },
 ]
@@ -159,7 +168,7 @@ export function LandingFooter() {
             Read, plan, learn and land the job — one workspace that keeps up with your field.
           </p>
         </div>
-        <nav aria-label="Footer" className="flex gap-16 sm:gap-20">
+        <nav aria-label="Footer" className="flex flex-wrap gap-12 sm:gap-16 lg:gap-20">
           {FOOTER_COLS.map((col) => (
             <div key={col.label}>
               <h3 className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">

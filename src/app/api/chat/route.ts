@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { usedCitationNumbers } from '@/lib/citations'
 import { createAI } from '@/lib/ai'
 import { getSessionUser, unauthorized } from '@/lib/auth-server'
+import { guardUsage, isActivePro, limitMessage, usageFields } from '@/lib/entitlements'
 
 // Long AI generations must not hit the default serverless timeout (Vercel Hobby caps at 60 s).
 export const maxDuration = 60
@@ -46,6 +47,15 @@ export async function POST(req: NextRequest) {
 
     if (!message || typeof message !== 'string' || !message.trim()) {
       return NextResponse.json({ error: 'Message is required' }, { status: 400 })
+    }
+
+    // Doc Q&A shares the copilot free pool (15 messages/day).
+    const verdict = await guardUsage(user.id, 'copilot', isActivePro(user))
+    if (!verdict.allowed) {
+      return NextResponse.json(
+        { error: limitMessage('copilot', verdict.limit), ...usageFields('copilot', verdict) },
+        { status: 402 }
+      )
     }
 
     const document = documentId ? await db.document.findFirst({ where: { id: documentId, userId: user.id } }) : null

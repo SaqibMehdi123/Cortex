@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { createAI } from '@/lib/ai'
 import { getSessionUser, unauthorized } from '@/lib/auth-server'
+import { guardUsage, isActivePro, limitMessage, usageFields } from '@/lib/entitlements'
 
 // Long AI generations must not hit the default serverless timeout (Vercel Hobby caps at 60 s).
 export const maxDuration = 60
@@ -49,6 +50,15 @@ export async function POST(req: NextRequest) {
     const { front, back, documentId, highlightId, generate } = body
 
     if (generate && highlightId) {
+      // Free plan: 2 AI-generated flashcards/month (manual cards are free).
+      const verdict = await guardUsage(user.id, 'cards', isActivePro(user))
+      if (!verdict.allowed) {
+        return NextResponse.json(
+          { error: limitMessage('cards', verdict.limit), ...usageFields('cards', verdict) },
+          { status: 402 }
+        )
+      }
+
       const highlight = await db.highlight.findFirst({
         where: { id: highlightId, userId: user.id },
         include: { document: { select: { title: true } } },

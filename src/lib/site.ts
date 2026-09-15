@@ -11,6 +11,16 @@ export const SITE_URL = 'https://cortex.scrutinies.dev'
 export const SITE_NAME = 'Cortex'
 export const SITE_TAGLINE = 'Knowledge work, without the chaos.'
 
+/**
+ * Brand mailboxes on the scrutinies.dev domain. Outgoing mail (verification
+ * codes, briefings) is sent FROM hello@ (set MAIL_FROM in Vercel once the
+ * Cloudflare Email Routing address exists); anything users are told to write
+ * to points at support@. Both must exist as Cloudflare Email Routing
+ * destinations so replies land in a real inbox.
+ */
+export const CONTACT_EMAIL = 'hello@scrutinies.dev'
+export const SUPPORT_EMAIL = 'support@scrutinies.dev'
+
 export const SITE_DESCRIPTION =
   'Cortex is your AI second brain: reading, notes, plans and goals in one fast workspace — with an AI radar over 97+ sources, flashcards, mindmaps and a copilot.'
 

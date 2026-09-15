@@ -103,6 +103,12 @@ export default function SignupPage() {
             <p className="text-center text-[11px] text-muted-foreground">
               We'll email you a 6-digit code to verify your address — no spam, ever.
             </p>
+            <p className="text-center text-[11px] text-muted-foreground">
+              By creating an account you agree to our{' '}
+              <Link href="/terms" className="underline underline-offset-2 hover:text-foreground">Terms</Link>
+              {' '}and{' '}
+              <Link href="/privacy" className="underline underline-offset-2 hover:text-foreground">Privacy Policy</Link>.
+            </p>
           </form>
         </div>
 

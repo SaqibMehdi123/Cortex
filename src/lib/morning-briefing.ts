@@ -24,7 +24,7 @@
 // import — so scripts/verify-morning-notification.ts can unit-check the
 // windows, formatting, auth matrix and email template without a database.
 
-import { SITE_NAME, SITE_URL } from './site'
+import { SITE_NAME, SITE_URL, SUPPORT_EMAIL } from './site'
 import { recurrenceLabel, reminderActiveOn } from './reminder-span'
 
 const DAY_MS = 86_400_000
@@ -112,6 +112,9 @@ export function authorizeMorningCron(p: CronAuthInput): { ok: boolean; status: n
   if (p.vercelCronHeader) return { ok: true, status: 200, reason: 'vercel_header_fallback' }
   return { ok: false, status: 401, reason: 'no_secret_configured' }
 }
+
+/** Same CRON_SECRET contract, shared by the daily feed sync (/api/cron/feeds). */
+export const authorizeCron = authorizeMorningCron
 
 // ── Briefing shape ───────────────────────────────────────────────────────
 
@@ -228,7 +231,8 @@ export function briefingEmailHtml(b: Omit<Briefing, 'subject' | 'html' | 'text'>
   </div>
   <p class="foot" style="max-width:480px;margin:12px auto 0;font-size:11px;line-height:1.6;color:#a1a1aa;text-align:center;">
     Sent every morning while you have deadlines or reminders coming up.
-    <a href="${SITE_URL}/app" style="color:#a1a1aa;">Manage your agenda</a>.
+    <a href="${SITE_URL}/app" style="color:#a1a1aa;">Manage your agenda</a>.<br>
+    Questions? Just reply, or write to <a href="mailto:${SUPPORT_EMAIL}" style="color:#a1a1aa;">${SUPPORT_EMAIL}</a>.
   </p>
 </body></html>`
 }
@@ -256,6 +260,7 @@ export function briefingEmailText(b: Omit<Briefing, 'subject' | 'html' | 'text'>
     lines.push('')
   }
   lines.push(`Open Cortex: ${SITE_URL}/app`)
+  lines.push(`Questions or need help? support@scrutinies.dev`)
   return lines.join('\n')
 }
 

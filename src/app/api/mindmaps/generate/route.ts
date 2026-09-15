@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { createAI } from '@/lib/ai'
 import { getSessionUser, unauthorized } from '@/lib/auth-server'
+import { guardUsage, isActivePro, limitMessage, usageFields } from '@/lib/entitlements'
 
 // Long AI generations must not hit the default serverless timeout (Vercel Hobby caps at 60 s).
 export const maxDuration = 60
@@ -50,6 +51,15 @@ export async function POST(req: NextRequest) {
       material = `Topic to brainstorm: ${topic.trim()}`
     } else {
       return NextResponse.json({ error: 'Provide a documentId, topic, or source' }, { status: 400 })
+    }
+
+    // Free plan: 2 AI mind maps/month.
+    const verdict = await guardUsage(user.id, 'mindmap', isActivePro(user))
+    if (!verdict.allowed) {
+      return NextResponse.json(
+        { error: limitMessage('mindmap', verdict.limit), ...usageFields('mindmap', verdict) },
+        { status: 402 }
+      )
     }
 
     const zai = await createAI()

@@ -5,13 +5,17 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { SESSION_COOKIE, verifySessionToken } from '@/lib/auth'
 
-export async function getSessionUser(): Promise<{ id: string; name: string; email: string } | null> {
+export async function getSessionUser(): Promise<
+  { id: string; name: string; email: string; plan: string; planExpiresAt: Date | null } | null
+> {
   const store = await cookies()
   const session = await verifySessionToken(store.get(SESSION_COOKIE)?.value)
   if (!session) return null
   return db.user.findUnique({
     where: { id: session.userId },
-    select: { id: true, name: true, email: true },
+    // plan/planExpiresAt feed the billing entitlements (src/lib/entitlements) —
+    // every session-scoped route can resolve the plan with zero extra queries.
+    select: { id: true, name: true, email: true, plan: true, planExpiresAt: true },
   })
 }
 

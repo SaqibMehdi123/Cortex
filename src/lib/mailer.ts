@@ -36,8 +36,10 @@
 //   SENDGRID_SENDER_EMAIL     the sender address verified under SendGrid →
 //                             Settings → Sender Authentication
 //   MAIL_FROM                 full RFC form override, e.g.
-//                             "Cortex <you@example.com>" (display name
-//                             defaults to "Cortex" when not set)
+//                             "Cortex <hello@scrutinies.dev>" (display name
+//                             defaults to "Cortex" when not set) — this is the
+//                             production sender once the scrutinies.dev domain
+//                             mailboxes exist (Cloudflare Email Routing)
 //   SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_SECURE ("true" for 465)
 //   BREVO_API_KEY             legacy — see above
 //   BREVO_SENDER_EMAIL        legacy sender address (BREVO mode)
@@ -47,6 +49,8 @@
 // TEST HOOKS (never set in production): SENDGRID_API_BASE, RESEND_API_BASE
 // and BREVO_API_BASE override https://api.sendgrid.com / https://api.resend.com /
 // https://api.brevo.com so tests can point the HTTP clients at a local mock server.
+
+import { SUPPORT_EMAIL } from '@/lib/site'
 
 export type MailReason = 'not_configured' | 'send_failed'
 export type MailProviderId = 'resend' | 'sendgrid' | 'smtp' | 'brevo'
@@ -96,7 +100,17 @@ export function configuredFromEmail(): string | null {
 export function mailFrom(): string {
   if (process.env.MAIL_FROM) return process.env.MAIL_FROM
   const email = configuredFromEmail()
-  return email ? `Cortex <${email}>` : 'Cortex <no-reply@unconfigured.local>'
+  return email ? `Cortex <${email}>` : `Cortex <no-reply@unconfigured.local>`
+}
+
+/**
+ * Reply-To on every outgoing message — support answers land in a real inbox
+ * (support@scrutinies.dev via Cloudflare Email Routing). Override with
+ * MAIL_REPLY_TO if support should point elsewhere; "reply" behaviour differs
+ * per provider, so it is passed explicitly to each sender.
+ */
+export function mailReplyTo(): string {
+  return (process.env.MAIL_REPLY_TO || SUPPORT_EMAIL).trim()
 }
 
 /** Explicit operator opt-in to show codes in the UI (local dev only). */
@@ -132,7 +146,7 @@ const codeEmailHtml = (name: string, code: string, kind: 'verify' | 'reset'): st
     <h1 style="margin:0 0 12px;font-size:18px;color:#18181b;">${heading}</h1>
     <p style="margin:0 0 20px;font-size:14px;line-height:1.6;color:#52525b;">${intro}</p>
     <p style="margin:0 0 20px;font-size:34px;font-weight:700;letter-spacing:0.35em;color:#18181b;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;">${code}</p>
-    <p style="margin:0;font-size:12px;line-height:1.6;color:#a1a1aa;">This code expires in 10 minutes and can be used once. If you didn't request it, you can safely ignore this email.</p>
+    <p style="margin:0;margin-top:20px;padding-top:14px;border-top:1px solid #e4e4e7;font-size:12px;line-height:1.6;color:#a1a1aa;">This code expires in 10 minutes and can be used once. If you didn't request it, you can safely ignore this email.<br>Need help? <a href="mailto:${SUPPORT_EMAIL}" style="color:#71717a;text-decoration:underline;">${SUPPORT_EMAIL}</a></p>
   </div>
 </body></html>`
 }
@@ -169,7 +183,7 @@ function parseFrom(from: string): { name?: string; email: string } {
   return { email: from.trim() }
 }
 
-async function sendViaResend(to: string, from: string, subject: string, html: string): Promise<boolean> {
+async function sendViaResend(to: string, from: string, replyTo: string, subject: string, html: string): Promise<boolean> {
   const apiKey = (process.env.RESEND_API_KEY || '').trim()
   const base = process.env.RESEND_API_BASE || 'https://api.resend.com'
   // Without a verified domain Resend requires its sandbox sender — which can
@@ -186,6 +200,7 @@ async function sendViaResend(to: string, from: string, subject: string, html: st
     },
     body: JSON.stringify({
       from: f.name ? `${f.name} <${f.email}>` : f.email,
+      reply_to: replyTo,
       to: [to],
       subject,
       html,
@@ -203,7 +218,7 @@ async function sendViaResend(to: string, from: string, subject: string, html: st
   return false
 }
 
-async function sendViaSendGrid(to: string, from: string, subject: string, html: string): Promise<boolean> {
+async function sendViaSendGrid(to: string, from: string, replyTo: string, subject: string, html: string): Promise<boolean> {
   const apiKey = (process.env.SENDGRID_API_KEY || '').trim()
   const base = process.env.SENDGRID_API_BASE || 'https://api.sendgrid.com'
   const f = parseFrom(from)
@@ -216,6 +231,7 @@ async function sendViaSendGrid(to: string, from: string, subject: string, html: 
     body: JSON.stringify({
       personalizations: [{ to: [{ email: to }] }],
       from: f.name ? { email: f.email, name: f.name } : { email: f.email },
+      reply_to: { email: replyTo },
       subject,
       content: [
         { type: 'text/plain', value: htmlToText(html) },
@@ -235,7 +251,7 @@ async function sendViaSendGrid(to: string, from: string, subject: string, html: 
   return false
 }
 
-async function sendViaBrevo(to: string, from: string, subject: string, html: string): Promise<boolean> {
+async function sendViaBrevo(to: string, from: string, replyTo: string, subject: string, html: string): Promise<boolean> {
   const apiKey = (process.env.BREVO_API_KEY || '').trim()
   const base = process.env.BREVO_API_BASE || 'https://api.brevo.com'
   const res = await fetch(`${base}/v3/smtp/email`, {
@@ -247,6 +263,7 @@ async function sendViaBrevo(to: string, from: string, subject: string, html: str
     },
     body: JSON.stringify({
       sender: parseFrom(from),
+      replyTo: { email: replyTo },
       to: [{ email: to }],
       subject,
       htmlContent: html,
@@ -264,7 +281,7 @@ async function sendViaBrevo(to: string, from: string, subject: string, html: str
   return true
 }
 
-async function sendViaSmtp(to: string, from: string, subject: string, html: string): Promise<boolean> {
+async function sendViaSmtp(to: string, from: string, replyTo: string, subject: string, html: string): Promise<boolean> {
   // Dynamic import keeps nodemailer out of any edge/bundled path.
   const nodemailer = await import('nodemailer')
   const port = Number(process.env.SMTP_PORT || 587)
@@ -277,11 +294,11 @@ async function sendViaSmtp(to: string, from: string, subject: string, html: stri
     greetingTimeout: 15_000,
     socketTimeout: 20_000,
   })
-  await transporter.sendMail({ from, to, subject, html })
+  await transporter.sendMail({ from, to, replyTo, subject, html })
   return true
 }
 
-const senders: Record<MailProviderId, (to: string, from: string, subject: string, html: string) => Promise<boolean>> = {
+const senders: Record<MailProviderId, (to: string, from: string, replyTo: string, subject: string, html: string) => Promise<boolean>> = {
   resend: sendViaResend,
   sendgrid: sendViaSendGrid,
   smtp: sendViaSmtp,
@@ -299,12 +316,13 @@ async function deliver(to: string, subject: string, html: string): Promise<SendC
   if (providers.length === 0) return { delivered: false, reason: 'not_configured' }
 
   const from = mailFrom()
+  const replyTo = mailReplyTo()
   let lastProvider: MailProviderId | undefined
   let lastDetail: string | undefined
   for (const p of providers) {
     lastProvider = p
     try {
-      if (await senders[p](to, from, subject, html)) return { delivered: true, provider: p }
+      if (await senders[p](to, from, replyTo, subject, html)) return { delivered: true, provider: p }
       lastDetail = `${p} rejected the message (details in server logs)`
       console.error(`Mail provider "${p}" rejected the message — trying the next configured provider`)
     } catch (e) {
