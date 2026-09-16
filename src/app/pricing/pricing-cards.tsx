@@ -187,7 +187,7 @@ export function PricingCards() {
           <div
             role="group"
             aria-label="Billing interval"
-            className="mt-5 inline-flex w-fit rounded-full border border-border bg-background/60 p-1"
+            className="mt-5 inline-flex w-fit self-center rounded-full border border-border bg-background/60 p-1"
           >
             {(['monthly', 'annual'] as const).map((iv) => (
               <button
