@@ -41,8 +41,17 @@ function buildTree(plans: FlatPlan[]): PlanWithChildren[] {
       roots.push(node)
     }
   }
+  // Date-wise ordering (not alphabetical): dated sub-plans run earliest →
+  // latest by startDate, endDate breaks near-ties, undated ones trail in
+  // creation order (the query already returns createdAt asc and Array.sort
+  // is stable, so equal keys keep their natural order).
+  const byDate = (aD: Date | null, bD: Date | null) => {
+    const aT = aD ? aD.getTime() : Number.POSITIVE_INFINITY
+    const bT = bD ? bD.getTime() : Number.POSITIVE_INFINITY
+    return aT === bT ? 0 : aT < bT ? -1 : 1
+  }
   const sortRec = (nodes: PlanWithChildren[]) => {
-    nodes.sort((a, b) => a.timeframe.localeCompare(b.timeframe) || a.title.localeCompare(b.title))
+    nodes.sort((a, b) => byDate(a.startDate, b.startDate) || byDate(a.endDate, b.endDate))
     nodes.forEach((n) => sortRec(n.children))
   }
   sortRec(roots)
