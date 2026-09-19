@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTheme } from 'next-themes'
 import { api } from '@/lib/client'
+import { useIdleLogout } from '@/hooks/use-idle-logout'
 import type { DashboardData } from '@/lib/types'
 import { recurrenceLabel } from '@/lib/reminder-span'
 import { hasTimePart } from '@/lib/plan-span'
@@ -28,6 +29,10 @@ const MORE_ITEMS: { key: ViewKey; label: string; icon: React.ReactNode }[] = [
 ]
 
 export function AppShell({ children }: { children: React.ReactNode }) {
+  // /app is middleware-gated behind a valid session, so arming the idle
+  // guard unconditionally here is safe — every render of this shell implies
+  // a signed-in user. 30 idle minutes → warning toast → auto sign-out.
+  useIdleLogout()
   const view = useUI((s) => s.view)
   const setView = useUI((s) => s.setView)
   const sidebarCollapsed = useUI((s) => s.sidebarCollapsed)

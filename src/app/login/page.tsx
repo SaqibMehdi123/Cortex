@@ -68,6 +68,12 @@ function LoginForm() {
           <h1 className="font-display text-xl">Welcome back</h1>
           <p className="mt-0.5 text-xs text-muted-foreground">Sign in to your workspace.</p>
 
+          {params.get('reason') === 'idle' && (
+            <p className="mt-4 rounded-lg border bg-secondary/40 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+              You were signed out automatically after 30 minutes of inactivity. Everything you saved is safe — just sign back in.
+            </p>
+          )}
+
           <form onSubmit={submit} className="mt-5 space-y-4">
             <div>
               <Label htmlFor="email">Email</Label>
