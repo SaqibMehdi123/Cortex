@@ -1,29 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSessionUser, unauthorized } from '@/lib/auth-server'
-import { SITE_NAME, SUPPORT_EMAIL } from '@/lib/site'
+import { SITE_NAME, SITE_URL, SUPPORT_EMAIL } from '@/lib/site'
 import { sendReceiptEmail } from '@/lib/receipt'
 
 // POST /api/billing/checkout — start a Pro subscription.
 //
-// Routing:
-//   • Pakistan visitors (Vercel geo header x-vercel-ip-country = "PK")
-//     → Safepay (cards, JazzCash, Easypaisa, bank — PKR).
-//   • Everyone else → Lemon Squeezy (Merchant of Record — they handle tax
-//     and compliance; payouts to Pakistan via Payoneer).
+// Routing (first CONFIGURED provider in the geo's priority list wins):
+//   • Pakistan visitors (Vercel geo header x-vercel-ip-country = "PK"):
+//     Safepay (cards, JazzCash, Easypaisa, bank — PKR) → Polar → Lemon Squeezy.
+//   • Everyone else: Polar (Merchant of Record — handles VAT/sales tax,
+//     payouts to Pakistan supported; primary since the LS application was
+//     rejected) → Lemon Squeezy (kept in case the store is ever approved
+//     later) → Safepay.
 //
 // Configuration (all in Vercel env):
-//   LEMONSQUEEZY_API_KEY              re-… api key from Lemon Squeezy → Settings → API
-//   LEMONSQUEEZY_STORE_ID             numeric store id (from the store URL/dashboard)
-//   LEMONSQUEEZY_VARIANT_ID           the "Cortex Pro monthly" variant id — checkout
-//                                     is created against THIS, so the price you set
-//                                     in the LS dashboard is what the buyer sees
-//   LEMONSQUEEZY_ANNUAL_VARIANT_ID    the "Cortex Pro annual" variant id ($50/yr);
-//                                     absent → annual requests get a friendly
-//                                     501 annual_not_available (monthly still works)
-//   SAFEPAY_SECRET_KEY                from Safepay dashboard (sandbox or live)
-//   SAFEPAY_MODE                      "sandbox" (default) | "live"
-//   BILLING_TEST_MODE                 "true" → skip providers and return a fake
-//                                     checkout url (LOCAL DEV ONLY)
+//   POLAR_ACCESS_TOKEN               access token from polar.sh → Settings → API
+//                                    (scope: checkouts:write)
+//   POLAR_PRODUCT_ID_MONTHLY         "Cortex Pro — monthly" product id ($5/mo) —
+//                                    the dashboard price is what the buyer sees
+//   POLAR_PRODUCT_ID_ANNUAL          "Cortex Pro — annual" product id ($50/yr);
+//                                    absent → annual requests get a friendly
+//                                    501 annual_not_available (monthly still works)
+//   POLAR_MODE                       "live" (default) | "sandbox" — sandbox needs
+//                                    a separate sandbox org + its own token
+//   LEMONSQUEEZY_API_KEY             re-… api key from Lemon Squeezy → Settings → API
+//   LEMONSQUEEZY_STORE_ID            numeric store id (from the store URL/dashboard)
+//   LEMONSQUEEZY_VARIANT_ID          the "Cortex Pro monthly" variant id — checkout
+//                                    is created against THIS, so the price you set
+//                                    in the LS dashboard is what the buyer sees
+//   LEMONSQUEEZY_ANNUAL_VARIANT_ID   the "Cortex Pro annual" variant id ($50/yr)
+//   SAFEPAY_SECRET_KEY               from Safepay dashboard (sandbox or live)
+//   SAFEPAY_MODE                     "sandbox" (default) | "live"
+//   BILLING_TEST_MODE                "true" → skip providers and return a fake
+//                                    checkout url (LOCAL DEV ONLY)
 //
 // Billing interval: the body may carry interval = "monthly" | "annual"
 // (default monthly). Safepay trackers embed the interval as a "-y-" marker
@@ -40,7 +49,15 @@ interface CheckoutBody {
   interval?: 'monthly' | 'annual'
 }
 
-function billingConfigured(provider: 'lemonsqueezy' | 'safepay'): boolean {
+type BillingProvider = 'polar' | 'lemonsqueezy' | 'safepay'
+
+function billingConfigured(provider: BillingProvider): boolean {
+  if (provider === 'polar') {
+    return Boolean(
+      (process.env.POLAR_ACCESS_TOKEN || '').trim() &&
+        (process.env.POLAR_PRODUCT_ID_MONTHLY || '').trim()
+    )
+  }
   if (provider === 'lemonsqueezy') {
     return Boolean(
       (process.env.LEMONSQUEEZY_API_KEY || '').trim() &&
@@ -95,6 +112,49 @@ async function createLemonSqueezyCheckout(
   const json = (await res.json()) as { data?: { attributes?: { url?: string } } }
   const url = json.data?.attributes?.url
   if (!url) throw new Error('lemonsqueezy_no_url')
+  return url
+}
+
+// Polar — Merchant of Record (like LS: they invoice the buyer, remit sales
+// tax/VAT and pay us out; see POLAR-SETUP.md). A checkout session is created
+// against a PRODUCT (the dashboard price is the single source of truth).
+// metadata.userId + customer_email let the webhook bind the payment back to
+// the account even if metadata is ever missing.
+async function createPolarCheckout(
+  userId: string,
+  email: string,
+  name: string,
+  productId: string,
+  interval: 'monthly' | 'annual'
+): Promise<string> {
+  const base =
+    (process.env.POLAR_MODE || 'live').toLowerCase() === 'sandbox'
+      ? 'https://sandbox-api.polar.sh'
+      : 'https://api.polar.sh'
+  const res = await fetch(`${base}/v1/checkouts`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${(process.env.POLAR_ACCESS_TOKEN || '').trim()}`,
+    },
+    body: JSON.stringify({
+      products: [productId],
+      customer_email: email,
+      customer_name: name || undefined,
+      success_url: `${SITE_URL}/app?billing=success`,
+      // Propagated to the order + subscription → webhook identity + interval.
+      metadata: { userId, interval },
+    }),
+    signal: AbortSignal.timeout(15_000),
+  })
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '')
+    console.error(`Polar checkout failed (${res.status}):`, detail.slice(0, 400))
+    throw new Error('polar_checkout_failed')
+  }
+  const json = (await res.json()) as { url?: string }
+  const url = json.url
+  if (!url) throw new Error('polar_no_url')
   return url
 }
 
@@ -175,18 +235,13 @@ export async function POST(req: NextRequest) {
     const interval: 'monthly' | 'annual' = body.interval === 'annual' ? 'annual' : 'monthly'
 
     // Geo routing: Vercel injects the visitor's country on every request.
+    // Each geo has a priority list; the first CONFIGURED provider serves it.
     const country = (req.headers.get('x-vercel-ip-country') || '').toUpperCase()
-    const preferred: 'lemonsqueezy' | 'safepay' = country === 'PK' ? 'safepay' : 'lemonsqueezy'
+    const priority: BillingProvider[] =
+      country === 'PK' ? ['safepay', 'polar', 'lemonsqueezy'] : ['polar', 'lemonsqueezy', 'safepay']
+    const provider = priority.find((p) => billingConfigured(p))
 
-    // Resolve the provider — the other one may still be configured, try it
-    // before giving up.
-    const provider: 'lemonsqueezy' | 'safepay' = billingConfigured(preferred)
-      ? preferred
-      : billingConfigured(preferred === 'safepay' ? 'lemonsqueezy' : 'safepay')
-        ? (preferred === 'safepay' ? 'lemonsqueezy' : 'safepay')
-        : preferred
-
-    if (!billingConfigured(provider)) {
+    if (!provider) {
       return NextResponse.json(
         {
           error: 'billing_not_configured',
@@ -194,6 +249,28 @@ export async function POST(req: NextRequest) {
         },
         { status: 501 }
       )
+    }
+
+    if (provider === 'polar') {
+      const productId = (
+        (interval === 'annual' ? process.env.POLAR_PRODUCT_ID_ANNUAL : process.env.POLAR_PRODUCT_ID_MONTHLY) || ''
+      ).trim()
+      if (!productId) {
+        // Never silently charge the monthly product for an annual request —
+        // fail with a message the pricing page can render as a friendly line.
+        return NextResponse.json(
+          {
+            error: interval === 'annual' ? 'annual_not_available' : 'billing_not_configured',
+            detail:
+              interval === 'annual'
+                ? 'Annual billing is launching soon — Monthly is ready now.'
+                : `Payments are launching soon. Questions? ${SUPPORT_EMAIL}`,
+          },
+          { status: 501 }
+        )
+      }
+      const url = await createPolarCheckout(user.id, user.email, user.name, productId, interval)
+      return NextResponse.json({ ok: true, provider, interval, url })
     }
 
     if (provider === 'lemonsqueezy') {

@@ -3,8 +3,9 @@
 // Goes through the same provider chain as every other Cortex mail
 // (Resend first — see src/lib/mailer.ts). Callers:
 //   - /api/billing/webhook/safepay        → REAL receipt on a successful PKR
-//     payment. (Lemon Squeezy, as Merchant of Record, emails its own
-//     invoice for international orders — we deliberately do not duplicate.)
+//     payment. (Polar and Lemon Squeezy, as Merchants of Record, email their
+//     own invoice for international orders — we deliberately do not
+//     duplicate.)
 //   - /api/billing/checkout + BILLING_TEST_MODE=true → a clearly-marked
 //     SAMPLE receipt to the operator's own address. That sample is the
 //     receipt-template evidence payment providers ask for during onboarding
@@ -31,6 +32,7 @@ export interface ReceiptInput {
 
 const PROVIDER_LABEL: Record<string, string> = {
   safepay: 'Safepay — card, JazzCash, Easypaisa or bank transfer',
+  polar: 'Polar — card, Apple Pay or Google Pay',
   lemonsqueezy: 'Lemon Squeezy — card or PayPal',
   test: 'Test mode — no payment was taken',
 }

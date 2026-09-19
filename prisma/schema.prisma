@@ -417,8 +417,8 @@ model User {
   // ── Billing (skeleton) ──
   plan          String   @default("free") // free | pro — source of truth for entitlements
   planExpiresAt DateTime? // when Pro access ends; null on free. Non-null + future = active Pro
-  billingProvider String? // lemonsqueezy | safepay — who last processed a payment
-  providerCustomerId String? // LS customer id / Safepay payer reference — links webhooks back to the account
+  billingProvider String? // polar | lemonsqueezy | safepay — who last processed a payment
+  providerCustomerId String? // Polar/LS customer id / Safepay payer reference — links webhooks back to the account
   createdAt     DateTime @default(now())
 
   documents         Document[]
@@ -488,8 +488,8 @@ model Payment {
   id                String   @id @default(cuid())
   userId            String
   user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  provider          String // lemonsqueezy | safepay
-  providerInvoiceId String // LS order/subscription id · Safepay tracker
+  provider          String // polar | lemonsqueezy | safepay
+  providerInvoiceId String // Polar/LS order id · Safepay tracker
   status            String   @default("paid") // paid | failed | refunded
   amountCents       Int?
   currency          String? // "USD" | "PKR" …
