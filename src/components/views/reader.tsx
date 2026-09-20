@@ -1,12 +1,13 @@
 'use client'
 
-import { FaArrowLeft, FaBookOpen, FaCircleCheck, FaDownload, FaFileLines, FaHighlighter, FaLayerGroup, FaNoteSticky, FaPaperPlane, FaQuoteLeft, FaShareNodes, FaSpinner, FaTableColumns, FaTrashCan, FaTurnDown, FaUpRightFromSquare, FaWandMagicSparkles, FaXmark } from 'react-icons/fa6'
+import { FaArrowLeft, FaBookOpen, FaCheck, FaCircleCheck, FaDownload, FaFileLines, FaHighlighter, FaLayerGroup, FaNoteSticky, FaPaperPlane, FaPenToSquare, FaQuoteLeft, FaShareNodes, FaSpinner, FaTableColumns, FaTrashCan, FaTurnDown, FaUpRightFromSquare, FaWandMagicSparkles, FaXmark } from 'react-icons/fa6'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { api } from '@/lib/client'
 import type { DocumentItem, Highlight, ChatMessage, Citation } from '@/lib/types'
 import { useUI } from '@/lib/nav-config'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Progress } from '@/components/ui/progress'
 import { Slider } from '@/components/ui/slider'
@@ -138,6 +139,12 @@ export function ReaderView() {
   const [flashcardBusy, setFlashcardBusy] = useState(false)
   const [manualProgress, setManualProgress] = useState(0)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  // Inline editing of the document's title + text — only for documents whose
+  // body is user-typed/pasted text (not uploaded PDFs, not URL imports).
+  const [editing, setEditing] = useState(false)
+  const [editTitle, setEditTitle] = useState('')
+  const [editBody, setEditBody] = useState('')
+  const [savingEdit, setSavingEdit] = useState(false)
 
   const contentRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -172,12 +179,17 @@ export function ReaderView() {
   }, [readerMindmapTrigger, setReaderMindmapOpen])
 
   const isPdf = !!doc?.filePath
+  // Editable = a text document the user created by pasting (no stored PDF
+  // file, no URL source). Covers the Text import option and legacy manual
+  // entries (empty bodies — editing is also how they get their content).
+  const canEdit = !!doc && !isPdf && !doc.source && !editing
 
   // Load document + chat
   useEffect(() => {
     if (!readerDocId) return
     setLoading(true)
     setMode('original')
+    setEditing(false)
     setPanelTab('summary')
     sessionStart.current = Date.now()
     lastLogged.current = Date.now()
@@ -240,7 +252,7 @@ export function ReaderView() {
 
   // Scroll-driven progress (text mode only — page-based PDF scroll is tracked by the pdf.js viewer)
   const onScroll = useCallback(() => {
-    if (mode !== 'text') return
+    if (mode !== 'text' || editing) return // the edit form is not a reading position
     const el = scrollRef.current
     if (!el || !doc) return
     const pct = Math.min(100, Math.round((el.scrollTop / Math.max(1, el.scrollHeight - el.clientHeight)) * 100))
@@ -413,6 +425,7 @@ export function ReaderView() {
   useEffect(() => {
     if (!doc) return
     if (isPdf && mode === 'original') return // the pdf viewer restores its own page
+    if (editing) return // never yank the edit form to the saved position
     const sig = `${doc.id}:${mode}`
     if (restoredTextRef.current === sig) return
     restoredTextRef.current = sig
@@ -433,7 +446,7 @@ export function ReaderView() {
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
-  }, [doc, mode, isPdf])
+  }, [doc, mode, isPdf, editing])
 
   // Selection handling (text mode / extracted text)
   useEffect(() => {
@@ -552,6 +565,30 @@ export function ReaderView() {
       }
     }
     return text
+  }
+
+  // ── Inline editing (pasted/text documents) ────────────────────
+  function startEdit() {
+    if (!doc) return
+    setEditTitle(doc.title)
+    setEditBody(doc.content ?? '')
+    setEditing(true)
+  }
+
+  async function saveEdit() {
+    if (!doc) return
+    const title = editTitle.trim() || doc.title
+    setSavingEdit(true)
+    try {
+      await api.patch(`/api/documents/${doc.id}`, { title, content: editBody })
+      setDoc({ ...doc, title, content: editBody })
+      setEditing(false)
+      toast({ title: 'Changes saved' })
+    } catch {
+      toast({ title: 'Could not save changes', variant: 'destructive' })
+    } finally {
+      setSavingEdit(false)
+    }
   }
 
   async function summarize() {
@@ -882,6 +919,18 @@ export function ReaderView() {
 
         {doc && (
           <>
+            {canEdit && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1.5 text-xs"
+                onClick={startEdit}
+                aria-label="Edit this document"
+                title="Edit title & text"
+              >
+                <FaPenToSquare className="h-3.5 w-3.5" /> Edit
+              </Button>
+            )}
             <Button variant="outline" size="sm" className="hidden h-8 gap-1.5 text-xs sm:flex" onClick={toggleFinished}>
               <FaCircleCheck className={cn('h-3.5 w-3.5', doc.status === 'finished' && 'text-success')} />
               {doc.status === 'finished' ? 'Reopen' : 'Finish'}
@@ -957,16 +1006,53 @@ export function ReaderView() {
             /* Text reading column (articles, extracted text, pasted content) */
             <div ref={scrollRef} onScroll={onScroll} className="scroll-thin min-h-0 flex-1 overflow-y-auto pr-1">
               <div className="mx-auto max-w-[680px] px-1 py-4 sm:px-2">
-              <div ref={contentRef} className="reading-prose">
-                {doc && renderContent()}
-              </div>
-                <div className="mt-6 flex items-center justify-between gap-2 border-t pt-3 text-xs text-muted-foreground">
-                  <span>— end of document —</span>
-                  <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs sm:hidden" onClick={toggleFinished}>
-                    <FaCircleCheck className={cn('h-3.5 w-3.5', doc?.status === 'finished' && 'text-success')} />
-                    {doc?.status === 'finished' ? 'Reopen' : 'Finish'}
-                  </Button>
-                </div>
+                {editing ? (
+                  /* Edit form — replaces the reading column until saved/cancelled */
+                  <div className="space-y-3">
+                    <Input
+                      value={editTitle}
+                      onChange={(e) => setEditTitle(e.target.value)}
+                      placeholder="Title"
+                      aria-label="Document title"
+                      className="bg-card text-base font-semibold"
+                      maxLength={300}
+                    />
+                    <Textarea
+                      value={editBody}
+                      onChange={(e) => setEditBody(e.target.value)}
+                      placeholder="Write or paste the document text…"
+                      aria-label="Document text"
+                      className="min-h-[55vh] bg-card leading-relaxed"
+                    />
+                    <div className="flex items-center justify-end gap-2">
+                      <p className="mr-auto text-xs text-muted-foreground">{editBody.trim() ? `${editBody.trim().split(/\s+/).length} words` : 'Empty'}</p>
+                      <Button variant="ghost" size="sm" onClick={() => setEditing(false)} disabled={savingEdit}>Cancel</Button>
+                      <Button size="sm" className="h-8 gap-1.5 text-xs" onClick={saveEdit} disabled={savingEdit || !editTitle.trim()}>
+                        {savingEdit ? <FaSpinner className="h-3.5 w-3.5 animate-spin" /> : <FaCheck className="h-3.5 w-3.5" />} Save changes
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div ref={contentRef} className="reading-prose">
+                      {doc && renderContent()}
+                    </div>
+                    {/* End cap — centered, quietly decorated (the old left-aligned
+                        "end of document" line is gone) */}
+                    <div className="mt-8 flex flex-col items-center gap-3 text-muted-foreground">
+                      <span className="flex items-center gap-3 text-[11px] font-medium uppercase tracking-[0.22em]">
+                        <span aria-hidden className="h-px w-10 bg-border" />
+                        <FaBookOpen aria-hidden className="h-3 w-3" />
+                        You’ve reached the end
+                        <span aria-hidden className="h-px w-10 bg-border" />
+                      </span>
+                      <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs sm:hidden" onClick={toggleFinished}>
+                        <FaCircleCheck className={cn('h-3.5 w-3.5', doc?.status === 'finished' && 'text-success')} />
+                        {doc?.status === 'finished' ? 'Reopen' : 'Finish'}
+                      </Button>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           )}

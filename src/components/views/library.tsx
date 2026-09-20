@@ -1,6 +1,6 @@
 'use client'
 
-import { FaBookOpen, FaBorderAll, FaCheck, FaEllipsis, FaFileArrowUp, FaFileLines, FaLayerGroup, FaLink, FaList, FaMagnifyingGlass, FaNoteSticky, FaPaste, FaPlus, FaRegBookmark, FaSpinner, FaTrashCan, FaXmark } from 'react-icons/fa6'
+import { FaBookOpen, FaBorderAll, FaCheck, FaEllipsis, FaFileArrowUp, FaFileLines, FaLayerGroup, FaLink, FaList, FaMagnifyingGlass, FaNoteSticky, FaPaste, FaPenToSquare, FaPlus, FaRegBookmark, FaSpinner, FaTrashCan, FaXmark } from 'react-icons/fa6'
 import { useMemo, useState, useEffect, useCallback } from 'react'
 import { api, fmtDate } from '@/lib/client'
 import type { DocumentItem, Note, ShelfItem } from '@/lib/types'
@@ -61,6 +61,11 @@ export function LibraryView() {
   const [importOpen, setImportOpen] = useState(false)
   const [notes, setNotes] = useState<Note[] | null>(null)
   const [viewNote, setViewNote] = useState<Note | null>(null)
+  // Inline note editing — the viewer dialog doubles as the editor.
+  const [editingNote, setEditingNote] = useState(false)
+  const [noteEditTitle, setNoteEditTitle] = useState('')
+  const [noteEditBody, setNoteEditBody] = useState('')
+  const [noteSaving, setNoteSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState<DocumentItem | null>(null)
 
   // Shelves — named groups on the bookcase; a book sits on at most one.
@@ -102,6 +107,27 @@ export function LibraryView() {
       setNotes(d.notes)
     } catch {
       toast({ title: 'Failed to load notes', variant: 'destructive' })
+    }
+  }
+
+  // Persist an edited note (title optional — empty clears it back to the
+  // "Note"/"Voice memo" fallback) and keep every open copy in sync.
+  async function saveNoteEdit() {
+    if (!viewNote) return
+    setNoteSaving(true)
+    try {
+      const { note } = await api.patch<{ note: Note }>(`/api/notes/${viewNote.id}`, {
+        title: noteEditTitle.trim() || null,
+        content: noteEditBody,
+      })
+      setNotes((prev) => (prev ? prev.map((x) => (x.id === note.id ? note : x)) : prev))
+      setViewNote(note)
+      setEditingNote(false)
+      toast({ title: 'Note saved' })
+    } catch {
+      toast({ title: 'Could not save note', variant: 'destructive' })
+    } finally {
+      setNoteSaving(false)
     }
   }
 
@@ -673,43 +699,85 @@ export function LibraryView() {
       />
 
       {/* Note viewer — notes used to be unopenable (cards had no click target,
-          content truncated at five lines). Click a card to read the full note. */}
-      <Dialog open={!!viewNote} onOpenChange={(v) => !v && setViewNote(null)}>
+          content truncated at five lines). Click a card to read the full note;
+          Edit swaps the dialog into an editor and PATCHes the change. */}
+      <Dialog open={!!viewNote} onOpenChange={(v) => { if (!v) { setViewNote(null); setEditingNote(false) } }}>
         <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="pr-6">{viewNote?.title ?? (viewNote?.source === 'voice' ? 'Voice memo' : 'Note')}</DialogTitle>
-            <DialogDescription>
-              {viewNote?.source === 'voice' ? 'Captured by voice' : 'Quick capture'}
-              {viewNote ? ` · ${fmtDate(viewNote.createdAt, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}` : ''}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="max-h-[55vh] overflow-y-auto whitespace-pre-wrap text-sm leading-relaxed">{viewNote?.content}</div>
-          <div className="flex justify-end gap-2">
-            <Button
-              variant="ghost"
-              onClick={() => {
-                if (viewNote) {
-                  navigator.clipboard?.writeText(viewNote.content).then(
-                    () => toast({ title: 'Copied' }),
-                    () => toast({ title: 'Copy failed', variant: 'destructive' })
-                  )
-                }
-              }}
-            >
-              Copy text
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={async () => {
-                if (!viewNote) return
-                await api.del(`/api/notes/${viewNote.id}`)
-                setNotes((prev) => (prev ? prev.filter((x) => x.id !== viewNote.id) : prev))
-                setViewNote(null)
-              }}
-            >
-              Delete
-            </Button>
-          </div>
+          {editingNote ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>Edit note</DialogTitle>
+                <DialogDescription>Change the title or the text — saving replaces what's stored.</DialogDescription>
+              </DialogHeader>
+              <Input
+                value={noteEditTitle}
+                onChange={(e) => setNoteEditTitle(e.target.value)}
+                placeholder="Title (optional)"
+                aria-label="Note title"
+                maxLength={200}
+              />
+              <Textarea
+                value={noteEditBody}
+                onChange={(e) => setNoteEditBody(e.target.value)}
+                className="min-h-[220px]"
+                aria-label="Note text"
+              />
+              <div className="flex justify-end gap-2">
+                <Button variant="ghost" onClick={() => setEditingNote(false)} disabled={noteSaving}>Cancel</Button>
+                <Button onClick={saveNoteEdit} disabled={noteSaving || !noteEditBody.trim()}>
+                  {noteSaving ? <FaSpinner className="h-4 w-4 animate-spin" /> : <FaCheck className="h-4 w-4" />} Save note
+                </Button>
+              </div>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle className="pr-6">{viewNote?.title ?? (viewNote?.source === 'voice' ? 'Voice memo' : 'Note')}</DialogTitle>
+                <DialogDescription>
+                  {viewNote?.source === 'voice' ? 'Captured by voice' : 'Quick capture'}
+                  {viewNote ? ` · ${fmtDate(viewNote.createdAt, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}` : ''}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="max-h-[55vh] overflow-y-auto whitespace-pre-wrap text-sm leading-relaxed">{viewNote?.content}</div>
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    if (viewNote) {
+                      navigator.clipboard?.writeText(viewNote.content).then(
+                        () => toast({ title: 'Copied' }),
+                        () => toast({ title: 'Copy failed', variant: 'destructive' })
+                      )
+                    }
+                  }}
+                >
+                  Copy text
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    if (!viewNote) return
+                    setNoteEditTitle(viewNote.title ?? '')
+                    setNoteEditBody(viewNote.content)
+                    setEditingNote(true)
+                  }}
+                >
+                  <FaPenToSquare className="h-4 w-4" /> Edit
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={async () => {
+                    if (!viewNote) return
+                    await api.del(`/api/notes/${viewNote.id}`)
+                    setNotes((prev) => (prev ? prev.filter((x) => x.id !== viewNote.id) : prev))
+                    setViewNote(null)
+                  }}
+                >
+                  Delete
+                </Button>
+              </div>
+            </>
+          )}
         </DialogContent>
       </Dialog>
 
@@ -796,7 +864,7 @@ function ImportDialog({ open, onOpenChange, onImported, shelves, onShelfCreated 
   shelves: ShelfItem[]
   onShelfCreated: (s: ShelfItem) => void
 }) {
-  const [mode, setMode] = useState<'pdf' | 'url' | 'paste' | 'manual'>('pdf')
+  const [mode, setMode] = useState<'pdf' | 'url' | 'paste'>('pdf')
   const [url, setUrl] = useState('')
   const [title, setTitle] = useState('')
   const [author, setAuthor] = useState('')
@@ -1129,10 +1197,6 @@ function ImportDialog({ open, onOpenChange, onImported, shelves, onShelfCreated 
         if (!content.trim()) throw new Error('Paste some content')
         const d = await api.post<{ document: { id: string } }>('/api/documents', { title, author, type, tags, content, status: 'reading' })
         shelfName = await assignToShelf(d.document.id)
-      } else {
-        if (!title.trim()) throw new Error('Give it a title')
-        const d = await api.post<{ document: { id: string } }>('/api/documents', { title, author, type, tags, status: 'reading' })
-        shelfName = await assignToShelf(d.document.id)
       }
       setUrl(''); setTitle(''); setAuthor(''); setTags(''); setContent(''); setFile(null)
       setShelfChoice('none'); setCreatingShelf(false); setNewShelfName('')
@@ -1154,11 +1218,10 @@ function ImportDialog({ open, onOpenChange, onImported, shelves, onShelfCreated 
           <DialogDescription>Bring in anything — PDFs, articles, raw text or books.</DialogDescription>
         </DialogHeader>
         <Tabs value={mode} onValueChange={(v) => setMode(v as typeof mode)}>
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="pdf" className="gap-1.5"><FaFileArrowUp className="h-3.5 w-3.5" /> PDF</TabsTrigger>
             <TabsTrigger value="url" className="gap-1.5"><FaLink className="h-3.5 w-3.5" /> URL</TabsTrigger>
             <TabsTrigger value="paste" className="gap-1.5"><FaPaste className="h-3.5 w-3.5" /> Text</TabsTrigger>
-            <TabsTrigger value="manual" className="gap-1.5"><FaFileLines className="h-3.5 w-3.5" /> Manual</TabsTrigger>
           </TabsList>
         </Tabs>
         <div className="space-y-3">
@@ -1213,11 +1276,7 @@ function ImportDialog({ open, onOpenChange, onImported, shelves, onShelfCreated 
           ) : (
             <>
               <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title" aria-label="Title" />
-              {mode === 'paste' ? (
-                <Textarea value={content} onChange={(e) => setContent(e.target.value)} placeholder="Paste the full text here — the AI will use it to answer questions." className="min-h-[140px]" aria-label="Content" />
-              ) : (
-                <p className="text-xs text-muted-foreground">You can paste the content later from the reader to enable AI Q&amp;A.</p>
-              )}
+              <Textarea value={content} onChange={(e) => setContent(e.target.value)} placeholder="Paste the full text here — the AI will use it to answer questions." className="min-h-[140px]" aria-label="Content" />
             </>
           )}
           {mode === 'url' && (
