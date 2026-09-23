@@ -1,0 +1,18 @@
+{
+  "name": "pg-embed",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "embedded-postgres": "^18.4.0-beta.17"
+  },
+  "trustedDependencies": [
+    "@embedded-postgres/linux-x64"
+  ]
+}
