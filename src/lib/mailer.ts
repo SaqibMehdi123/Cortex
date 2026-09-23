@@ -61,7 +61,7 @@ export interface SendCodeResult {
   reason?: MailReason
   /** the provider that sent (or the last one that was tried) */
   provider?: MailProviderId
-  /** underlying error text — surfaced by /api/ops/test-email for diagnosis */
+  /** underlying error text — surfaced by /api/ops/health's mail section */
   detail?: string
 }
 
@@ -310,7 +310,7 @@ const senders: Record<MailProviderId, (to: string, from: string, replyTo: string
  * Provider fallback loop shared by every outgoing mail — the first configured
  * provider sends, and the next configured one takes over on failure. The
  * returned provider/detail fields make failures diagnosable from the outside
- * (ops test-email) instead of only in server logs.
+ * (ops health mail section) instead of only in server logs.
  */
 async function deliver(to: string, subject: string, html: string): Promise<SendCodeResult> {
   const providers = configuredProviders()

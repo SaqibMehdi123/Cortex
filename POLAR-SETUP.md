@@ -110,6 +110,13 @@ POLAR_MODE                 = live                  (step 6 may set sandbox first
 Then **Deployments → latest → ⋯ → Redeploy** — env changes only apply to
 deployments made after they are saved.
 
+**After the redeploy, verify without touching the checkout:** open
+`https://cortex.scrutinies.dev/api/ops/health` and read the `billing` section.
+`polarConfigured: true` + `tokenValid: true` + `monthlyProductFound: true`
+means a real visitor clicking Upgrade will reach a real Polar checkout. The
+probe tells you exactly which piece is missing (token rejected → wrong org or
+revoked; product id not found → product not created in *this* org/mode).
+
 ## 6. Test the whole loop (sandbox first)
 
 1. In **sandbox.polar.sh** (the separate sandbox org): repeat steps 2–4 —

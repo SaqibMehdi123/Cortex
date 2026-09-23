@@ -384,8 +384,68 @@ async function checkAI() {
   }
 }
 
+/** Public-safe billing check: WHICH providers are configured (booleans only —
+ *  no ids, tokens, or store numbers). When a Polar token exists, probes
+ *  GET /v1/products to prove the token works AND that the configured product
+ *  ids actually belong to that org/mode — a wrong product id otherwise only
+ *  surfaces as an opaque "checkout failed" at click time. */
+async function checkBilling() {
+  const token = (process.env.POLAR_ACCESS_TOKEN || '').trim()
+  const monthlyId = (process.env.POLAR_PRODUCT_ID_MONTHLY || '').trim()
+  const annualId = (process.env.POLAR_PRODUCT_ID_ANNUAL || '').trim()
+  const polarConfigured = Boolean(token && monthlyId)
+  const lemonsqueezyConfigured = Boolean(
+    (process.env.LEMONSQUEEZY_API_KEY || '').trim() &&
+      (process.env.LEMONSQUEEZY_STORE_ID || '').trim() &&
+      (process.env.LEMONSQUEEZY_VARIANT_ID || '').trim()
+  )
+  const safepayConfigured = Boolean((process.env.SAFEPAY_SECRET_KEY || '').trim())
+  const base = {
+    polarConfigured,
+    polarMonthlyProductSet: Boolean(monthlyId),
+    polarAnnualProductSet: Boolean(annualId),
+    lemonsqueezyConfigured,
+    safepayConfigured,
+    checkoutReady: polarConfigured || lemonsqueezyConfigured || safepayConfigured,
+    tokenValid: null as boolean | null,
+    monthlyProductFound: null as boolean | null,
+    annualProductFound: null as boolean | null,
+    note: '',
+  }
+  if (!base.checkoutReady) {
+    return { ...base, note: 'no payment provider configured — Upgrade shows "launching soon" (Polar needs POLAR_ACCESS_TOKEN + POLAR_PRODUCT_ID_MONTHLY at minimum)' }
+  }
+  if (!token) {
+    return { ...base, note: 'checkout will use the first configured non-Polar provider for the visitor\'s geo' }
+  }
+  const sandbox = (process.env.POLAR_MODE || 'live').toLowerCase() === 'sandbox'
+  try {
+    const res = await fetch(`${sandbox ? 'https://sandbox-api.polar.sh' : 'https://api.polar.sh'}/v1/products?limit=100`, {
+      headers: { authorization: `Bearer ${token}`, accept: 'application/json' },
+      signal: AbortSignal.timeout(10_000),
+    })
+    if (res.status === 401 || res.status === 403) {
+      return { ...base, tokenValid: false, note: `Polar access token REJECTED on the ${sandbox ? 'sandbox' : 'live'} API — the token was likely created in the other org (check POLAR_MODE) or was revoked; regenerate under polar.sh → Settings → API` }
+    }
+    if (!res.ok) {
+      return { ...base, tokenValid: null, note: `Polar products check returned ${res.status}` }
+    }
+    const data = (await res.json()) as { items?: Array<{ id?: string }> }
+    const ids = new Set((data.items ?? []).map((p) => p.id || ''))
+    const foundMonthly = monthlyId ? ids.has(monthlyId) : null
+    const foundAnnual = annualId ? ids.has(annualId) : null
+    let note = `ok — token accepted on the ${sandbox ? 'sandbox' : 'live'} API`
+    if (foundMonthly === false || foundAnnual === false) {
+      note = `token accepted, but ${foundMonthly === false ? 'POLAR_PRODUCT_ID_MONTHLY ' : ''}${foundAnnual === false ? (foundMonthly === false ? 'and ' : '') + 'POLAR_PRODUCT_ID_ANNUAL ' : ''}do(es) NOT exist in this ${sandbox ? 'sandbox' : 'live'} org — create the product(s) in polar.sh's ${sandbox ? 'sandbox' : 'live'} dashboard and copy the right ids (or fix POLAR_MODE)`
+    }
+    return { ...base, tokenValid: true, monthlyProductFound: foundMonthly, annualProductFound: foundAnnual, note }
+  } catch (e) {
+    return { ...base, tokenValid: null, note: `Polar unreachable: ${e instanceof Error ? e.message : 'network error'}` }
+  }
+}
+
 export async function GET() {
-  const [mail, blob, r2, ai] = await Promise.all([checkMail(), checkBlob(), checkR2(), checkAI()])
+  const [mail, blob, r2, ai, billing] = await Promise.all([checkMail(), checkBlob(), checkR2(), checkAI(), checkBilling()])
   const brevoEvents =
     mail.provider === 'brevo' && (process.env.BREVO_API_KEY || '').trim() && mail.keyValid
       ? await checkBrevoEvents((process.env.BREVO_API_KEY || '').trim())
@@ -411,6 +471,7 @@ export async function GET() {
       blob,
       r2,
       ai,
+      billing,
       checkedAt: new Date().toISOString(),
     },
     { headers: noStore }

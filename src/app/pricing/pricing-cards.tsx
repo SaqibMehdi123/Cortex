@@ -121,7 +121,10 @@ export function PricingCards() {
         return
       }
       if (status === 501 && message.includes('annual_not_available')) {
-        setNotice('Annual billing is launching soon — Monthly is ready right now.')
+        // Annual isn't live on the active provider yet — flip the toggle to
+        // Monthly so the very next click checks out instead of failing twice.
+        setCycle('monthly')
+        setNotice('Annual billing is launching soon — switched you to Monthly, which is ready right now.')
       } else if (status === 501 || message.includes('billing_not_configured')) {
         setNotice('Payments are launching soon — you are on the Free plan and nothing is charged.')
       } else {

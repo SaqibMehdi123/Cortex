@@ -1,6 +1,6 @@
 'use client'
 
-import { FaAt, FaBell, FaCalendarPlus, FaChrome, FaCopy, FaCrown, FaDesktop, FaDownload, FaEnvelope, FaFileCode, FaFileLines, FaGraduationCap, FaInbox, FaInfo, FaKey, FaMoon, FaPaperPlane, FaPalette, FaRightFromBracket, FaRotate, FaShieldHalved, FaSpinner, FaSun, FaUser } from 'react-icons/fa6'
+import { FaAt, FaBell, FaCalendarPlus, FaChrome, FaCopy, FaCrown, FaDesktop, FaDownload, FaEnvelope, FaFileCode, FaFileLines, FaGraduationCap, FaInbox, FaInfo, FaKey, FaMoon, FaPalette, FaRightFromBracket, FaRotate, FaShieldHalved, FaSpinner, FaSun, FaUser } from 'react-icons/fa6'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -255,31 +255,7 @@ function AppearanceCard({
   )
 }
 
-type TestEmailResult = {
-  delivered: boolean
-  provider: string | null
-  reason: string | null
-  detail: string | null
-  error?: string
-}
-
 function DigestCard({ email }: { email?: string }) {
-  const [testing, setTesting] = useState(false)
-  const [result, setResult] = useState<TestEmailResult | null>(null)
-
-  async function sendTest() {
-    setTesting(true)
-    setResult(null)
-    try {
-      const r = await api.post<TestEmailResult>('/api/ops/test-email')
-      setResult(r)
-    } catch (e) {
-      setResult({ delivered: false, provider: null, reason: null, detail: e instanceof Error ? e.message : 'Request failed', error: 'request' })
-    } finally {
-      setTesting(false)
-    }
-  }
-
   return (
     <Card>
       <CardHeader>
@@ -295,21 +271,7 @@ function DigestCard({ email }: { email?: string }) {
           <span className="shrink-0 text-muted-foreground">Sent to</span>
           <span className="truncate font-medium" title={email}>{email ?? 'your account email'}</span>
         </div>
-        <div className="flex flex-wrap items-center gap-2 border-t pt-3">
-          <Button variant="outline" size="sm" onClick={sendTest} disabled={testing}>
-            {testing ? <FaSpinner className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <FaPaperPlane className="mr-1.5 h-3.5 w-3.5" />}
-            {testing ? 'Sending…' : 'Send test email'}
-          </Button>
-          <span className="text-xs text-muted-foreground">verifies the same mail chain the 9 AM briefing uses</span>
-        </div>
-        {result && (
-          <p className={cn('rounded-lg border px-3 py-2 text-xs leading-relaxed', result.delivered ? 'border-success/40 bg-success/10 text-success' : 'border-destructive/40 bg-destructive/10 text-destructive')}>
-            {result.delivered
-              ? `Sent via ${result.provider ?? 'mail'} — check your inbox (and the spam folder) for a “Cortex test email”.`
-              : `Could NOT send (${result.provider ?? result.reason ?? 'no provider'})${result.detail ? `: ${result.detail}` : '.'} — this is why the 9 AM briefing may not arrive. Contact support@scrutinies.dev if this keeps happening.`}
-          </p>
-        )}
-        <p className="text-xs text-muted-foreground">
+        <p className="border-t pt-3 text-xs text-muted-foreground">
           Only sent when something is actually on your agenda — no empty pings.
         </p>
       </CardContent>
