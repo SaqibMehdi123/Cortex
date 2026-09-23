@@ -611,13 +611,17 @@ function PapersTab() {
 // ═══════════════════════════════ SHELL ══════════════════════════════════
 
 export function NewsView() {
+  // Controlled by the shared UI store — the sidebar dropdown / More sheet can
+  // deep-link straight to Papers without landing on News first.
+  const tab = useUI((s) => s.newsTab)
+  const setTab = useUI((s) => s.setNewsTab)
   return (
     <div className="anim-fade-up space-y-5 pb-8">
       <PageHeader
         title="News & Papers"
         description="Real stories from labs & newsletters, plus fresh research from Hugging Face and arXiv."
       />
-      <Tabs defaultValue="news">
+      <Tabs value={tab} onValueChange={(v) => setTab(v as 'news' | 'papers')}>
         <TabsList>
           <TabsTrigger value="news" className="gap-1.5"><FaNewspaper className="h-3.5 w-3.5" /> News</TabsTrigger>
           <TabsTrigger value="papers" className="gap-1.5"><FaFlask className="h-3.5 w-3.5" /> Papers</TabsTrigger>

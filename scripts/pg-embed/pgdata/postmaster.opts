@@ -1,1 +1,0 @@
-/home/z/my-project/scripts/pg-embed/node_modules/@embedded-postgres/linux-x64/native/bin/postgres "-D" "/home/z/my-project/scripts/pg-embed/pgdata" "-p" "5433"

@@ -190,7 +190,10 @@ function CompanyLogo({ company, url, logoUrl }: { company: string; url: string; 
 }
 
 export function CareerView() {
-  const [tab, setTab] = useState<'pipeline' | 'discover' | 'scholarships'>('pipeline')
+  // Tab lives in the shared UI store so the sidebar dropdown, the mobile
+  // More sheet and the command bar can jump straight to any sub-page.
+  const tab = useUI((s) => s.careerTab)
+  const setTab = useUI((s) => s.setCareerTab)
 
   return (
     <div className="anim-fade-up space-y-4 pb-8">

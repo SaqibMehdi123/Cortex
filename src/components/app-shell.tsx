@@ -1,8 +1,8 @@
 'use client'
 
-import { FaBell, FaBolt, FaBullseye, FaChartLine, FaCircleCheck, FaClock, FaCrown, FaGear, FaIndent, FaLayerGroup, FaMagnifyingGlass, FaMoon, FaOutdent, FaPlus, FaRightFromBracket, FaShareNodes, FaSpinner, FaSun, FaTriangleExclamation, FaWandMagicSparkles, FaXmark } from 'react-icons/fa6'
+import { FaBell, FaBullseye, FaChartLine, FaChevronDown, FaCircleCheck, FaClock, FaCrown, FaGear, FaIndent, FaLayerGroup, FaMagnifyingGlass, FaMoon, FaOutdent, FaPlus, FaRightFromBracket, FaShareNodes, FaSpinner, FaSun, FaTriangleExclamation, FaWandMagicSparkles, FaXmark } from 'react-icons/fa6'
 import { cn } from '@/lib/utils'
-import { useUI, type ViewKey, NAV_ITEMS, MOBILE_TABS, NAV_GROUP_LABELS } from '@/lib/nav-config'
+import { useUI, type ViewKey, type NavChild, NAV_ITEMS, MOBILE_TABS, NAV_GROUP_LABELS } from '@/lib/nav-config'
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTheme } from 'next-themes'
@@ -18,15 +18,22 @@ import {
   Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetTrigger,
   Popover, PopoverContent, PopoverTrigger,
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger,
 } from '@/components/ui'
 
 const MORE_ITEMS: { key: ViewKey; label: string; icon: React.ReactNode }[] = [
   { key: 'goals', label: 'Goals', icon: <FaBullseye className="h-5 w-5" /> },
-  { key: 'career', label: 'Career', icon: <FaBolt className="h-5 w-5" /> },
   { key: 'mindmap', label: 'Mindmaps', icon: <FaShareNodes className="h-5 w-5" /> },
   { key: 'flashcards', label: 'Flashcards', icon: <FaLayerGroup className="h-5 w-5" /> },
   { key: 'analytics', label: 'Analytics', icon: <FaChartLine className="h-5 w-5" /> },
   { key: 'settings', label: 'Settings', icon: <FaGear className="h-5 w-5" /> },
+]
+
+// Career & News & Papers get their own labeled rows in the More sheet so a
+// phone user can jump straight to Discover / Scholarships / Papers too.
+const MOBILE_SUB_SECTIONS: { view: ViewKey; label: string; children: NavChild[] }[] = [
+  { view: 'career', label: 'Career', children: NAV_ITEMS.find((i) => i.key === 'career')?.children ?? [] },
+  { view: 'news', label: 'News & Papers', children: NAV_ITEMS.find((i) => i.key === 'news')?.children ?? [] },
 ]
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -46,6 +53,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const setReaderMindmapOpen = useUI((s) => s.setReaderMindmapOpen)
   const mobileMoreOpen = useUI((s) => s.mobileMoreOpen)
   const setMobileMoreOpen = useUI((s) => s.setMobileMoreOpen)
+  const setCareerTab = useUI((s) => s.setCareerTab)
+  const setNewsTab = useUI((s) => s.setNewsTab)
+  const careerTab = useUI((s) => s.careerTab)
+  const newsTab = useUI((s) => s.newsTab)
   const [mobileNotifOpen, setMobileNotifOpen] = useState(false)
   const { resolvedTheme, setTheme } = useTheme()
   const [online, setOnline] = useState(true)
@@ -177,35 +188,39 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     </p>
                   )}
                   {collapsed && group !== 'workspace' && <div className="mx-2 mb-2 border-t" />}
-                  {items.map((item) => (
-                    <Tooltip key={item.key}>
-                      <TooltipTrigger asChild>
-                        <button
-                          onClick={() => setView(item.key)}
-                          aria-current={view === item.key ? 'page' : undefined}
-                          className={cn(
-                            'group relative flex min-h-[36px] w-full items-center gap-2.5 rounded-lg px-3 py-1.5 text-[13px] font-medium transition-all duration-150',
-                            collapsed && 'justify-center px-0',
-                            view === item.key
-                              ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                          )}
-                        >
-                          {view === item.key && (
-                            <span className="absolute left-0 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-full bg-primary" aria-hidden />
-                          )}
-                          <span className={cn(view === item.key && 'text-primary')}>{item.icon}</span>
-                          {!collapsed && item.label}
-                          {!collapsed && item.key === 'flashcards' && dueFlashcards > 0 && (
-                            <span className="ml-auto rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground">
-                              {dueFlashcards}
-                            </span>
-                          )}
-                        </button>
-                      </TooltipTrigger>
-                      {collapsed && <TooltipContent side="right">{item.label}</TooltipContent>}
-                    </Tooltip>
-                  ))}
+                  {items.map((item) =>
+                    item.children ? (
+                      <NavDropdown key={item.key} item={item} collapsed={collapsed} active={view === item.key} />
+                    ) : (
+                      <Tooltip key={item.key}>
+                        <TooltipTrigger asChild>
+                          <button
+                            onClick={() => setView(item.key)}
+                            aria-current={view === item.key ? 'page' : undefined}
+                            className={cn(
+                              'group relative flex min-h-[36px] w-full items-center gap-2.5 rounded-lg px-3 py-1.5 text-[13px] font-medium transition-all duration-150',
+                              collapsed && 'justify-center px-0',
+                              view === item.key
+                                ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                            )}
+                          >
+                            {view === item.key && (
+                              <span className="absolute left-0 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-full bg-primary" aria-hidden />
+                            )}
+                            <span className={cn(view === item.key && 'text-primary')}>{item.icon}</span>
+                            {!collapsed && item.label}
+                            {!collapsed && item.key === 'flashcards' && dueFlashcards > 0 && (
+                              <span className="ml-auto rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground">
+                                {dueFlashcards}
+                              </span>
+                            )}
+                          </button>
+                        </TooltipTrigger>
+                        {collapsed && <TooltipContent side="right">{item.label}</TooltipContent>}
+                      </Tooltip>
+                    )
+                  )}
                 </div>
               )
             })}
@@ -255,16 +270,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               )}
             </button>
 
-            <div className={cn('flex min-h-[32px] items-center gap-2.5 rounded-lg px-3 py-1.5 text-xs text-muted-foreground', collapsed && 'justify-center px-0')} aria-live="polite">
-              {!online ? (
-                <FaTriangleExclamation className="h-4 w-4 text-warning" aria-label="Offline" />
-              ) : synced ? (
-                <FaCircleCheck className="h-4 w-4 text-success" aria-label="Synced" />
-              ) : (
-                <FaSpinner className="h-4 w-4 animate-pulse text-warning" aria-label="Syncing" />
-              )}
-              {!collapsed && <span>{!online ? 'Offline mode' : synced ? 'All synced' : 'Syncing…'}</span>}
-            </div>
+            <SidebarSyncRow collapsed={collapsed} online={online} synced={synced} />
 
             <UserChip collapsed={collapsed} />
           </div>
@@ -273,7 +279,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {/* ── Main content ── */}
         <main
           className={cn(
-            'px-4 pb-28 pt-16 sm:px-6 lg:px-8 lg:pb-12 lg:pt-8 transition-[margin,padding] duration-200',
+            'overflow-x-clip px-4 pb-28 pt-16 sm:px-6 lg:px-8 lg:pb-12 lg:pt-8 transition-[margin,padding] duration-200',
             collapsed ? 'lg:ml-16' : 'lg:ml-[232px]',
             copilotOpen && 'xl:mr-[380px]'
           )}
@@ -364,19 +370,48 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                         <FaXmark className="h-4.5 w-4.5" />
                       </SheetClose>
                     </SheetHeader>
-                    <div className="grid grid-cols-3 gap-3">
-                      {MORE_ITEMS.map((item) => (
-                        <button
-                          key={item.key}
-                          onClick={() => setView(item.key)}
-                          className={cn(
-                            'flex min-h-[76px] flex-col items-center justify-center gap-2 rounded-xl border bg-card p-3 text-xs font-medium transition-colors active:bg-muted',
-                            view === item.key && 'border-primary/50 bg-sidebar-accent text-sidebar-accent-foreground'
-                          )}
-                        >
-                          {item.icon}
-                          {item.label}
-                        </button>
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-3 gap-3">
+                        {MORE_ITEMS.map((item) => (
+                          <button
+                            key={item.key}
+                            onClick={() => setView(item.key)}
+                            className={cn(
+                              'flex min-h-[76px] flex-col items-center justify-center gap-2 rounded-xl border bg-card p-3 text-xs font-medium transition-colors active:bg-muted',
+                              view === item.key && 'border-primary/50 bg-sidebar-accent text-sidebar-accent-foreground'
+                            )}
+                          >
+                            {item.icon}
+                            {item.label}
+                          </button>
+                        ))}
+                      </div>
+                      {MOBILE_SUB_SECTIONS.map((section) => (
+                        <div key={section.view} className="space-y-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/70">{section.label}</p>
+                          <div className={cn('grid gap-2', section.children.length > 2 ? 'grid-cols-3' : 'grid-cols-2')}>
+                            {section.children.map((child) => {
+                              const active = view === section.view && (section.view === 'career' ? careerTab === child.tab : newsTab === child.tab)
+                              return (
+                                <button
+                                  key={child.tab}
+                                  onClick={() => {
+                                    if (section.view === 'career') setCareerTab(child.tab as 'pipeline' | 'discover' | 'scholarships')
+                                    if (section.view === 'news') setNewsTab(child.tab as 'news' | 'papers')
+                                    setView(section.view)
+                                  }}
+                                  className={cn(
+                                    'flex min-h-[52px] items-center justify-center gap-1.5 rounded-xl border bg-card px-2 text-xs font-medium transition-colors active:bg-muted',
+                                    active && 'border-primary/50 bg-sidebar-accent text-sidebar-accent-foreground'
+                                  )}
+                                >
+                                  {child.icon}
+                                  {child.label}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </div>
                       ))}
                     </div>
                   </SheetContent>
@@ -572,7 +607,121 @@ function NotificationPanel({ data, failed, onRetry, onNavigate }: { data: Dashbo
   )
 }
 
-// ─── Signed-in account chip (sidebar bottom) ─────────────────────────
+/* ── Sidebar nav dropdown (Career / News & Papers) ──
+   The trigger no longer navigates — it opens a menu whose entries jump
+   straight to the sub-page (Pipeline, Discover, Scholarships, News, Papers),
+   so the user never has to open the view first and then pick a tab. */
+function NavDropdown({ item, collapsed, active }: { item: (typeof NAV_ITEMS)[number]; collapsed: boolean; active: boolean }) {
+  const setView = useUI((s) => s.setView)
+  const setCareerTab = useUI((s) => s.setCareerTab)
+  const setNewsTab = useUI((s) => s.setNewsTab)
+
+  const openChild = (child: NavChild) => {
+    if (item.key === 'career') setCareerTab(child.tab as 'pipeline' | 'discover' | 'scholarships')
+    if (item.key === 'news') setNewsTab(child.tab as 'news' | 'papers')
+    setView(item.key)
+  }
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          aria-current={active ? 'page' : undefined}
+          aria-haspopup="menu"
+          className={cn(
+            'group relative flex min-h-[36px] w-full items-center gap-2.5 rounded-lg px-3 py-1.5 text-[13px] font-medium transition-all duration-150 outline-none',
+            collapsed && 'justify-center px-0',
+            active
+              ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+          )}
+        >
+          {active && (
+            <span className="absolute left-0 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-full bg-primary" aria-hidden />
+          )}
+          <span className={cn(active && 'text-primary')}>{item.icon}</span>
+          {!collapsed && <span className="flex-1 text-left">{item.label}</span>}
+          {!collapsed ? (
+            <FaChevronDown className="h-3 w-3 shrink-0 opacity-50 transition-transform group-data-[state=open]:rotate-180" />
+          ) : (
+            <span className="sr-only">{item.label} menu</span>
+          )}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side={collapsed ? 'right' : 'bottom'} align={collapsed ? 'start' : 'start'} sideOffset={4} className="w-48">
+        <DropdownMenuLabel className="text-xs text-muted-foreground">{item.label}</DropdownMenuLabel>
+        {item.children?.map((child) => (
+          <DropdownMenuItem key={child.tab} onSelect={() => openChild(child)} className="gap-2.5 text-[13px]">
+            <span className="text-primary">{child.icon}</span>
+            {child.label}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+// ─── Sidebar sync row: offline/syncing stay functional; the resting
+// ─── "All synced" slot becomes a plan-aware chip — Free users get an
+// ─── Upgrade capsule, Pro users get a subtle Pro badge ───────────────
+
+function SidebarSyncRow({ collapsed, online, synced }: { collapsed: boolean; online: boolean; synced: boolean }) {
+  const router = useRouter()
+  // Shares the module-level cache with UserChip / Settings → Plan — one
+  // fetch, consistent plan everywhere. data===null → unknown (still loading
+  // or status endpoint unavailable) → keep the plain "All synced" indicator.
+  const { data: billing } = useApi<{ pro?: boolean } | null>('/api/billing/status')
+  const pro = billing?.pro === true
+  const proKnown = billing != null
+
+  const base = cn(
+    'flex min-h-[32px] items-center gap-2.5 rounded-lg px-3 py-1.5 text-xs text-muted-foreground',
+    collapsed && 'justify-center px-0'
+  )
+
+  // Offline / syncing / unknown plan → the functional sync indicator
+  if (!online || !synced || !proKnown) {
+    return (
+      <div className={base} aria-live="polite">
+        {!online ? (
+          <FaTriangleExclamation className="h-4 w-4 text-warning" aria-label="Offline" />
+        ) : synced ? (
+          <FaCircleCheck className="h-4 w-4 text-success" aria-label="Synced" />
+        ) : (
+          <FaSpinner className="h-4 w-4 animate-pulse text-warning" aria-label="Syncing" />
+        )}
+        {!collapsed && <span>{!online ? 'Offline mode' : synced ? 'All synced' : 'Syncing…'}</span>}
+      </div>
+    )
+  }
+
+  if (pro) {
+    // Pro: a quiet crown badge — confirms the plan without shouting
+    return (
+      <button onClick={() => router.push('/pricing')} className={cn(base, 'text-muted-foreground transition-colors hover:bg-muted hover:text-foreground')} title="Cortex Pro is active">
+        <FaCrown className="h-4 w-4 text-primary" aria-label="Pro" />
+        {!collapsed && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-primary">
+            Pro plan
+          </span>
+        )}
+      </button>
+    )
+  }
+
+  // Free: the resting slot becomes an Upgrade capsule
+  return (
+    <button
+      onClick={() => router.push('/pricing')}
+      className={cn(collapsed ? 'flex min-h-[32px] items-center justify-center px-0 py-1.5' : 'flex min-h-[32px] items-center gap-1.5 self-start rounded-full bg-primary px-3 py-1 text-[11px] font-semibold text-primary-foreground shadow-sm transition-transform hover:scale-[1.03] active:scale-95')}
+      title="Upgrade to Cortex Pro"
+      aria-label="Upgrade to Cortex Pro"
+    >
+      <FaCrown className="h-3.5 w-3.5" />
+      {!collapsed && 'Upgrade'}
+    </button>
+  )
+}
 
 function UserChip({ collapsed }: { collapsed: boolean }) {
   const router = useRouter()

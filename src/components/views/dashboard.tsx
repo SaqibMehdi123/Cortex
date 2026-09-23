@@ -193,7 +193,7 @@ export function DashboardView() {
             {g.icon}
             {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
           </div>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight">
+          <h1 className="mt-1 break-words text-2xl font-bold tracking-tight">
             {g.text}, {data.greetingName}
           </h1>
         </div>
@@ -248,8 +248,8 @@ export function DashboardView() {
             <button key={gr.id} onClick={() => setView('goals')} className="flex w-full items-start gap-2 rounded-lg bg-danger/5 p-3 text-left transition-colors hover:bg-danger/10">
               <FaTriangleExclamation className="mt-0.5 h-4 w-4 shrink-0 text-danger" />
               <div className="min-w-0">
-                <p className="text-xs font-medium text-danger">At-risk goal: {gr.title}</p>
-                <p className="text-xs text-muted-foreground">{gr.reason}</p>
+                <p className="break-words text-xs font-medium text-danger">At-risk goal: {gr.title}</p>
+                <p className="break-words text-xs text-muted-foreground">{gr.reason}</p>
               </div>
             </button>
           ))}
@@ -443,7 +443,7 @@ export function DashboardView() {
                     <span className="font-semibold text-foreground">{n.source ?? 'Web'}</span>
                     <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide">{n.category}</span>
                   </div>
-                  <p className="mt-1 line-clamp-1 text-sm font-medium group-hover:text-primary">{n.title}</p>
+                  <p className="mt-1 line-clamp-1 text-sm font-medium [overflow-wrap:anywhere] group-hover:text-primary">{n.title}</p>
                   {n.summary && (
                     <div className="mt-1.5 space-y-1">
                       {n.summary
@@ -454,7 +454,7 @@ export function DashboardView() {
                         .map((line, i) => (
                           <p key={i} className="flex items-start gap-1.5 text-xs leading-relaxed text-muted-foreground">
                             <span className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-muted-foreground/40" />
-                            <span className="line-clamp-1">{line}</span>
+                            <span className="line-clamp-1 [overflow-wrap:anywhere]">{line}</span>
                           </p>
                         ))}
                     </div>
@@ -486,7 +486,7 @@ export function DashboardView() {
                   />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{d.title}</p>
-                    <p className="text-xs text-muted-foreground">{d.subtitle ?? (d.kind === 'task' ? 'Task' : d.kind === 'goal' ? 'Goal' : 'Application')}</p>
+                    <p className="break-words text-xs text-muted-foreground">{d.subtitle ?? (d.kind === 'task' ? 'Task' : d.kind === 'goal' ? 'Goal' : 'Application')}</p>
                   </div>
                   <Badge variant="outline" className={cn('shrink-0 text-[10px]', d.daysLeft < 0 && 'border-danger/50 text-danger', d.daysLeft >= 0 && d.daysLeft <= 2 && 'border-warning/50 text-warning')}>
                     {d.daysLeft < 0 ? `${-d.daysLeft}d overdue` : d.daysLeft === 0 ? 'Due today' : `${d.daysLeft}d`}

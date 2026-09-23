@@ -4,8 +4,15 @@ import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import type { ViewKey } from './nav-config'
 
+export type CareerTab = 'pipeline' | 'discover' | 'scholarships'
+export type NewsTab = 'news' | 'papers'
+
 interface UIState {
   view: ViewKey
+  /** which sub-page of the Career view is open (sidebar dropdown jumps straight here) */
+  careerTab: CareerTab
+  /** which sub-page of the News & Papers view is open */
+  newsTab: NewsTab
   readerDocId: string | null
   copilotOpen: boolean
   captureOpen: boolean
@@ -25,6 +32,8 @@ interface UIState {
   /** true once the persisted slice (view / readerDocId) has been restored on this tab */
   hydrated: boolean
   setView: (v: ViewKey) => void
+  setCareerTab: (t: CareerTab) => void
+  setNewsTab: (t: NewsTab) => void
   openReader: (docId: string) => void
   closeReader: () => void
   setCopilotOpen: (open: boolean) => void
@@ -47,6 +56,8 @@ export const useUI = create<UIState>()(
   persist(
     (set) => ({
       view: 'dashboard',
+      careerTab: 'pipeline',
+      newsTab: 'news',
       readerDocId: null,
       copilotOpen: false,
       captureOpen: false,
@@ -60,6 +71,8 @@ export const useUI = create<UIState>()(
       readerMindmapOpen: false,
       hydrated: false,
       setView: (v) => set({ view: v, mobileMoreOpen: false, readerDocId: null, readerChatOpen: false, readerMindmapOpen: false }),
+      setCareerTab: (t) => set({ careerTab: t }),
+      setNewsTab: (t) => set({ newsTab: t }),
       openReader: (docId) => set({ readerDocId: docId }),
       closeReader: () => set({ readerDocId: null, readerChatOpen: false, readerMindmapOpen: false }),
       setCopilotOpen: (open) => set({ copilotOpen: open }),

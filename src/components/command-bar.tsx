@@ -15,6 +15,8 @@ export function CommandBar() {
   const commandOpen = useUI((s) => s.commandOpen)
   const setCommandOpen = useUI((s) => s.setCommandOpen)
   const setView = useUI((s) => s.setView)
+  const setCareerTab = useUI((s) => s.setCareerTab)
+  const setNewsTab = useUI((s) => s.setNewsTab)
   const setCaptureOpen = useUI((s) => s.setCaptureOpen)
   const openReader = useUI((s) => s.openReader)
   const { resolvedTheme, setTheme } = useTheme()
@@ -120,6 +122,22 @@ export function CommandBar() {
                   {item.icon} {item.label}
                 </CommandItem>
               ))}
+              {/* sub-pages behind the dropdown nav items — jump straight there */}
+              {NAV_ITEMS.filter((item) => item.children).flatMap((item) =>
+                (item.children ?? []).map((child) => (
+                  <CommandItem
+                    key={`${item.key}-${child.tab}`}
+                    onSelect={() => {
+                      setCommandOpen(false)
+                      if (item.key === 'career') setCareerTab(child.tab as 'pipeline' | 'discover' | 'scholarships')
+                      if (item.key === 'news') setNewsTab(child.tab as 'news' | 'papers')
+                      setView(item.key)
+                    }}
+                  >
+                    {child.icon} {item.label} · {child.label}
+                  </CommandItem>
+                ))
+              )}
             </CommandGroup>
           </>
         )}

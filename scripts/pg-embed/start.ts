@@ -1,6 +1,7 @@
 // Local throwaway Postgres for sandbox e2e testing (no root needed).
 // Starts on 127.0.0.1:5433 with user postgres / postgres, db cortex.
 import EmbeddedPostgres from 'embedded-postgres'
+import fs from 'node:fs'
 
 const pg = new EmbeddedPostgres({
   databaseDir: '/home/z/my-project/scripts/pg-embed/pgdata',
@@ -11,7 +12,10 @@ const pg = new EmbeddedPostgres({
 })
 
 async function main() {
-  await pg.initialise()
+  // skip initialise() when the cluster already exists (restart case)
+  if (!fs.existsSync('/home/z/my-project/scripts/pg-embed/pgdata/PG_VERSION')) {
+    await pg.initialise()
+  }
   await pg.start()
   try {
     await pg.createDatabase('cortex')
