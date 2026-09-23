@@ -59,10 +59,14 @@ export async function middleware(req: NextRequest) {
 export const config = {
   matcher: [
     // everything except Next internals, static assets, and the crawler/social
-    // surface (robots, sitemap, PWA manifest, OG image) — those MUST be
-    // reachable without a session or link previews and indexing break.
+    // surface (robots, sitemap, PWA manifest + its PNG icons, OG image) — those
+    // MUST be reachable without a session or link previews, crawlers and the
+    // Android install prompt break.
     // [0-9a-f]{32,64}.txt = IndexNow key files (Bing/DuckDuckGo fetch them
     // unauthenticated to validate instant-ping submissions).
-    '/((?!_next/static|_next/image|favicon.ico|icon.svg|robots.txt|logo.svg|sitemap.xml|manifest.webmanifest|opengraph-image|twitter-image|apple-icon|pdf.worker|[0-9a-f]{32,64}\\.txt).*)',
+    // The trailing file-extension rule covers every public/ asset (PNG icons,
+    // svg logos, worker files…) without enumerating each one — no protected
+    // route ends with these extensions (document files live under /api/…).
+    '/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|manifest.webmanifest|opengraph-image|twitter-image|apple-icon|pdf.worker|[0-9a-f]{32,64}\\.txt|.*\\.(?:png|jpe?g|gif|webp|avif|svg|ico|txt|xml|webmanifest)$).*)',
   ],
 }
