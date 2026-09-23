@@ -3,9 +3,12 @@
 // serverless platforms (Vercel, Netlify) cannot provide.
 //
 // Works with any provider that speaks the /chat/completions shape:
-//   Groq (free)  → OPENAI_BASE_URL=https://api.groq.com/openai/v1
-//   OpenRouter   → OPENAI_BASE_URL=https://openrouter.ai/api/v1
-//   OpenAI       → just set OPENAI_API_KEY
+//   Google Gemini → OPENAI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai
+//                    OPENAI_API_KEY=<AI Studio key, AIza…>
+//                    AI_MODEL=gemini-2.5-flash
+//   Groq (free)   → OPENAI_BASE_URL=https://api.groq.com/openai/v1
+//   OpenRouter    → OPENAI_BASE_URL=https://openrouter.ai/api/v1
+//   OpenAI        → just set OPENAI_API_KEY
 //
 // createAI() intentionally mirrors the z-ai-web-dev-sdk call shape
 // (client.chat.completions.create) so every call site needed only a
