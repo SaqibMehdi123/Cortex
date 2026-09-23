@@ -77,11 +77,13 @@ export function EmptyState({
   title,
   description,
   action,
+  secondaryAction,
 }: {
   icon: ReactNode
   title: string
   description: string
   action?: { label: string; onClick: () => void }
+  secondaryAction?: { label: string; onClick: () => void }
 }) {
   return (
     <div className="anim-fade-up flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed bg-card/50 px-6 py-14 text-center">
@@ -92,10 +94,19 @@ export function EmptyState({
         <p className="font-display text-lg">{title}</p>
         <p className="mx-auto mt-1 max-w-sm text-sm leading-relaxed text-muted-foreground">{description}</p>
       </div>
-      {action && (
-        <Button size="sm" onClick={action.onClick} className="mt-1">
-          {action.label}
-        </Button>
+      {(action || secondaryAction) && (
+        <div className="mt-1 flex flex-col items-center gap-2 sm:flex-row">
+          {action && (
+            <Button size="sm" onClick={action.onClick}>
+              {action.label}
+            </Button>
+          )}
+          {secondaryAction && (
+            <Button size="sm" variant="outline" onClick={secondaryAction.onClick}>
+              {secondaryAction.label}
+            </Button>
+          )}
+        </div>
       )}
     </div>
   )

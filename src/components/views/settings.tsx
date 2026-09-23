@@ -64,7 +64,7 @@ export function SettingsView() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-sm"><FaDownload className="h-4 w-4 text-primary" /> Your data, your rules</CardTitle>
-          <CardDescription>Privacy-first: export everything, anytime. Data lives in your own database.</CardDescription>
+          <CardDescription>Export everything, anytime.</CardDescription>
         </CardHeader>
         {/* stack on mobile — two labeled buttons side by side can't fit 390px */}
         <CardContent className="flex flex-col gap-2 sm:flex-row">
@@ -79,7 +79,7 @@ export function SettingsView() {
 
       <div className="flex items-start gap-2 rounded-xl border border-dashed p-4 text-xs text-muted-foreground">
         <FaInfo className="mt-0.5 h-4 w-4 shrink-0" />
-        <p>Cortex syncs across your laptop and phone with the same account. Offline edits queue locally and resolve on reconnect — nothing is lost silently.</p>
+        <p>Syncs across your devices — offline edits resolve on reconnect.</p>
       </div>
     </div>
   )
@@ -117,8 +117,8 @@ function PlanCard({ billing, loading }: { billing?: BillingStatus | null; loadin
           {!known
             ? 'Checking your plan…'
             : pro
-              ? `Pro is active${expiry ? ` — renews/holds until ${expiry}` : ''}. Thank you for backing an independent workspace.`
-              : 'You are on Free — the whole workspace, unlimited, forever.'}
+              ? `Pro is active${expiry ? ` — renews ${expiry}` : ''}.`
+              : "You're on Free — upgrade anytime for unlimited AI."}
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -126,8 +126,8 @@ function PlanCard({ billing, loading }: { billing?: BillingStatus | null; loadin
           {!known
             ? null
             : pro
-              ? 'Everything is unlimited on your plan. To cancel or manage billing, use the link in your receipt email — or contact support@scrutinies.dev.'
-              : 'Pro only lifts what costs money to run: unlimited AI Copilot, summaries, cards & mind maps, and a 500-document library.'}
+              ? 'Manage billing via the link in your receipt email, or contact support@scrutinies.dev.'
+              : 'Pro unlocks unlimited AI Copilot, summaries, cards & mind maps plus a 500-doc library.'}
         </p>
         {known && !pro && (
           <p className="flex items-center gap-1.5 text-[13px] text-muted-foreground sm:hidden">
@@ -236,7 +236,7 @@ function AppearanceCard({
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-sm"><FaPalette className="h-4 w-4 text-primary" /> Appearance</CardTitle>
-        <CardDescription>Follows your system preference by default. Dark mode is OLED-friendly.</CardDescription>
+        <CardDescription>Light, dark, or follow your system.</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-3 gap-2">
@@ -267,7 +267,7 @@ function DigestCard({ email }: { email?: string }) {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-sm"><FaBell className="h-4 w-4 text-primary" /> Morning notification</CardTitle>
-        <CardDescription>Your deadlines and reminders, in your inbox before the day starts.</CardDescription>
+        <CardDescription>Your day&rsquo;s deadlines, in your inbox each morning.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-2 text-sm">
         <div className="flex items-center justify-between gap-3">
@@ -279,7 +279,7 @@ function DigestCard({ email }: { email?: string }) {
           <span className="truncate font-medium" title={email}>{email ?? 'your account email'}</span>
         </div>
         <p className="border-t pt-3 text-xs text-muted-foreground">
-          Only sent when something is actually on your agenda — no empty pings.
+          Only sent when something is on your agenda.
         </p>
       </CardContent>
     </Card>
@@ -361,7 +361,7 @@ function GoogleCard() {
               <div className="text-xs leading-relaxed">
                 <p className="font-medium text-foreground">Google sync isn&apos;t set up yet</p>
                 <p className="mt-1 text-muted-foreground">
-                  Google Calendar &amp; Gmail import need OAuth credentials configured by the site operator. Contact support@scrutinies.dev if this should be enabled for your account.
+                  Calendar &amp; Gmail import need OAuth credentials configured by the site operator. Contact support@scrutinies.dev to enable it for your account.
                 </p>
                 <details className="mt-2">
                   <summary className="cursor-pointer select-none font-medium text-foreground">Self-hosting? Show the one-time setup steps</summary>
@@ -381,7 +381,7 @@ function GoogleCard() {
                 <FaCopy className="h-3.5 w-3.5" />
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground">Scopes requested: <span className="font-mono">gmail.readonly</span>, <span className="font-mono">calendar.readonly</span>, <span className="font-mono">calendar.events</span> — read-only mail, no deletion, no sending.</p>
+            <p className="text-xs text-muted-foreground">Read-only access — no mail deletion, no sending.</p>
           </div>
         ) : status.connected ? (
           /* ── Connected ── */
@@ -425,7 +425,7 @@ function GoogleCard() {
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              “Scan inbox” reads your 25 most recent inbox emails from the past 60 days and files career-relevant ones in Career. Re-running is safe — duplicates are skipped.
+              Reads your 25 most recent inbox emails from the past 60 days · duplicates are skipped automatically.
             </p>
           </div>
         ) : (
@@ -440,7 +440,7 @@ function GoogleCard() {
         )}
         <div className="flex items-center gap-2 border-t pt-3 text-xs text-muted-foreground">
           <FaEnvelope className="h-3.5 w-3.5" />
-          No OAuth? Paste any email into Career → Add application for AI classification.
+          No OAuth? Paste an email into Career → Add application.
         </div>
       </CardContent>
     </Card>

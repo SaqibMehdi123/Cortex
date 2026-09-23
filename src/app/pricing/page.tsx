@@ -55,9 +55,7 @@ export default async function PricingPage() {
             <em className="italic text-[var(--chart-1)]">Pro where it compounds.</em>
           </h1>
           <p className="mt-5 max-w-xl text-[16.5px] leading-relaxed text-muted-foreground">
-            Every core feature — tasks, plans, goals, reminders, library, notes, flashcards, the
-            news, papers, jobs and scholarship radars — is free and unlimited. Pro only lifts the
-            things that cost real money to run: AI usage and heavy storage.
+            Every core feature is free and unlimited — Pro only lifts what costs money to run: AI usage and heavy storage.
           </p>
 
           <PricingCards />
@@ -66,15 +64,15 @@ export default async function PricingPage() {
             {[
               {
                 t: 'Students pay half',
-                d: 'Enrolled students get Pro at 50% off. Write to support@scrutinies.dev from your account email with proof of enrolment and we will apply it manually within a day.',
+                d: 'Pro at 50% off with proof of enrolment — write to support@scrutinies.dev from your account email.',
               },
               {
                 t: 'Cancel anytime',
-                d: 'Pick monthly or yearly billing — subscriptions renew at that pace and stop the moment you cancel. First purchase carries a 14-day no-questions-asked refund.',
+                d: 'Monthly or yearly, stop whenever you like. First purchase includes a 14-day refund.',
               },
               {
                 t: 'Local & global payments',
-                d: 'Visitors from Pakistan pay in PKR via cards, JazzCash, Easypaisa or bank (Safepay). Everyone else checks out with card or PayPal via Lemon Squeezy.',
+                d: 'Pakistan: PKR via card, JazzCash, Easypaisa or bank. Elsewhere: card or PayPal.',
               },
             ].map((c) => (
               <div key={c.t}>

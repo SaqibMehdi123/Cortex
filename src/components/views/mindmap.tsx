@@ -1,12 +1,13 @@
 'use client'
 
-import { FaDownload, FaExpand, FaFileCode, FaMagnifyingGlassMinus, FaMagnifyingGlassPlus, FaPalette, FaPlus, FaShareNodes, FaSpinner, FaTrashCan, FaWandMagicSparkles, FaXmark } from 'react-icons/fa6'
+import { FaDownload, FaExpand, FaFileCode, FaMagnifyingGlassMinus, FaMagnifyingGlassPlus, FaPalette, FaPenNib, FaPlus, FaShareNodes, FaSpinner, FaTrashCan, FaWandMagicSparkles, FaXmark } from 'react-icons/fa6'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '@/lib/client'
 import type { Mindmap, MindmapNode } from '@/lib/types'
 import { useApi } from '@/lib/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -26,6 +27,7 @@ export function MindmapView() {
   const [nodes, setNodes] = useState<MindmapNode[]>([])
   const [selected, setSelected] = useState<string | null>(null)
   const [genOpen, setGenOpen] = useState(false)
+  const [createOpen, setCreateOpen] = useState(false)
   const [dirty, setDirty] = useState(false)
   const [zoom, setZoom] = useState(1)
   const [pan, setPan] = useState({ x: 40, y: 40 })
@@ -205,6 +207,25 @@ export function MindmapView() {
     }
   }
 
+  // double-click empty canvas → drop a new root-level node where you clicked
+  function onCanvasDoubleClick(e: React.MouseEvent) {
+    const t = e.target as Element
+    if (t.tagName !== 'svg' && !t.classList.contains('canvas-bg')) return
+    const id = `n-${Date.now()}`
+    updateNodes([
+      ...nodes,
+      {
+        id,
+        label: 'New idea',
+        x: (e.clientX - pan.x) / zoom - NODE_W / 2,
+        y: (e.clientY - pan.y) / zoom - NODE_H / 2,
+        parentId: null,
+        color: 'zinc',
+      },
+    ])
+    setSelected(id)
+  }
+
   // ── export ──
   function exportPNG() {
     const svg = svgRef.current
@@ -281,21 +302,23 @@ export function MindmapView() {
   if (!data || data.mindmaps.length === 0) {
     return (
       <div className="anim-fade-up space-y-4 pb-8">
-        <Header onCreate={() => setGenOpen(true)} hasMaps={false} />
+        <Header onCreate={() => setGenOpen(true)} onBlank={() => setCreateOpen(true)} hasMaps={false} />
         <EmptyState
           icon={<FaShareNodes className="h-5 w-5" />}
-          title="Generate your first mindmap"
-          description="Cortex can auto-generate a mindmap from any document in your library, from your notes, or from any topic you type."
+          title="Start your first mindmap"
+          description="Generate one with AI from a topic, a document or your notes — or start from a blank canvas and build it yourself."
           action={{ label: 'Generate with AI', onClick: () => setGenOpen(true) }}
+          secondaryAction={{ label: 'Custom map', onClick: () => setCreateOpen(true) }}
         />
         <GenerateDialog open={genOpen} onOpenChange={setGenOpen} onCreated={(id) => { reload(); setActiveId(id) }} />
+        <CreateDialog open={createOpen} onOpenChange={setCreateOpen} onCreated={(id) => { reload(); setActiveId(id) }} />
       </div>
     )
   }
 
   return (
     <div className="anim-fade-up space-y-3 pb-8">
-      <Header onCreate={() => setGenOpen(true)} hasMaps />
+      <Header onCreate={() => setGenOpen(true)} onBlank={() => setCreateOpen(true)} hasMaps />
 
       {/* map selector + toolbar */}
       <div className="flex flex-wrap items-center gap-2">
@@ -370,6 +393,7 @@ export function MindmapView() {
           onNodePointerUp()
         }}
         onWheel={onWheel}
+        onDoubleClick={onCanvasDoubleClick}
       >
         <svg
           ref={svgRef}
@@ -538,10 +562,11 @@ export function MindmapView() {
           </div>
         )}
 
-        <p className="pointer-events-none absolute right-3 top-3 text-right text-[10px] leading-tight text-muted-foreground">drag to pan<br />pinch or ⌘/Ctrl+scroll to zoom</p>
+        <p className="pointer-events-none absolute right-3 top-3 text-right text-[10px] leading-tight text-muted-foreground">drag to pan · pinch/⌘-scroll to zoom<br />double-click canvas to add a node</p>
       </div>
 
       <GenerateDialog open={genOpen} onOpenChange={setGenOpen} onCreated={(id) => { reload(); setActiveId(id); setTimeout(fitView, 400) }} />
+      <CreateDialog open={createOpen} onOpenChange={setCreateOpen} onCreated={(id) => { reload(); setActiveId(id); setTimeout(fitView, 400) }} />
 
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <AlertDialogContent>
@@ -582,19 +607,99 @@ export function MindmapView() {
   )
 }
 
-function Header({ onCreate, hasMaps }: { onCreate: () => void; hasMaps: boolean }) {
+function Header({ onCreate, onBlank, hasMaps }: { onCreate: () => void; onBlank: () => void; hasMaps: boolean }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Mindmaps</h1>
-        <p className="text-sm text-muted-foreground">Visual maps of your documents and topics.</p>
+        <p className="text-sm text-muted-foreground">Generate with AI, or build your own from scratch.</p>
       </div>
       {hasMaps && (
-        <Button onClick={onCreate}>
-          <FaWandMagicSparkles className="mr-1.5 h-4 w-4" /> Generate
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={onBlank}>
+            <FaPenNib className="mr-1.5 h-4 w-4" /> Custom map
+          </Button>
+          <Button onClick={onCreate}>
+            <FaWandMagicSparkles className="mr-1.5 h-4 w-4" /> Generate with AI
+          </Button>
+        </div>
       )}
     </div>
+  )
+}
+
+// blank-canvas creation — POST /api/mindmaps with a single root node; the
+// regular editor then handles everything (children, recolor, drag, layout)
+function CreateDialog({ open, onOpenChange, onCreated }: { open: boolean; onOpenChange: (v: boolean) => void; onCreated: (id: string) => void }) {
+  const [title, setTitle] = useState('')
+  const [rootLabel, setRootLabel] = useState('')
+  const [busy, setBusy] = useState(false)
+  const { toast } = useToast()
+
+  async function create() {
+    setBusy(true)
+    try {
+      const res = await api.post<{ mindmap: Mindmap }>('/api/mindmaps', {
+        title: title.trim() || 'Untitled map',
+        nodes: [
+          {
+            id: `n-${Date.now()}`,
+            label: rootLabel.trim() || 'Central idea',
+            x: 100,
+            y: 258,
+            parentId: null,
+            color: 'teal',
+          },
+        ],
+      })
+      toast({ title: 'Mindmap created', description: 'Select the node and press Child to grow your map.' })
+      onOpenChange(false)
+      setTitle('')
+      setRootLabel('')
+      onCreated(res.mindmap.id)
+    } catch (e) {
+      toast({ title: 'Could not create mindmap', description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Create a custom mindmap</DialogTitle>
+          <DialogDescription>Start from a blank canvas — add the central idea and build the branches yourself.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div>
+            <Label htmlFor="map-title">Map name</Label>
+            <Input id="map-title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Semester plan" className="mt-1" autoFocus />
+          </div>
+          <div>
+            <Label htmlFor="map-root">Central idea</Label>
+            <Input
+              id="map-root"
+              value={rootLabel}
+              onChange={(e) => setRootLabel(e.target.value)}
+              placeholder="e.g. Data Structures"
+              className="mt-1"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !busy) create()
+              }}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">You can rename, recolor, drag and connect nodes anytime — everything is editable on the canvas.</p>
+        </div>
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={busy}>Cancel</Button>
+          <Button onClick={create} disabled={busy}>
+            {busy ? <FaSpinner className="mr-1.5 h-4 w-4 animate-spin" /> : <FaPenNib className="mr-1.5 h-4 w-4" />}
+            Create map
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 

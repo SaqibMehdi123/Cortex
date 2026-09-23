@@ -21,26 +21,23 @@ import { cn } from '@/lib/utils'
 
 type Interval = 'monthly' | 'annual'
 
+// Card copy is deliberately terse — this page sells, it doesn't document.
+// The full feature matrix lives on the landing page and in the FAQ.
 const FREE_FEATURES: string[] = [
-  'Unlimited tasks, plans, kanban & Pomodoro',
-  'Goals, milestones, reminders & streaks',
-  'Library & notes — unlimited text, URLs and captures',
-  'News, papers, jobs, scholarships & exchange feeds',
-  'Daily 9 AM briefing email',
-  'Flashcards with SM-2 scheduling',
-  'AI Copilot — 15 messages/day',
-  'PDF library — 20 documents / 100 MB',
-  'AI summaries — 5/month · cards & mind maps — 2/month',
+  'Unlimited tasks, plans & Pomodoro',
+  'Goals, reminders & streaks',
+  'Unlimited library & notes',
+  'News, jobs & scholarships',
+  'AI Copilot — 15 msgs/day',
+  'AI summaries — 5 per month',
 ]
 
 const PRO_FEATURES: string[] = [
   'Everything in Free, unlimited',
-  'AI Copilot — unlimited (fair use ~500/day)',
-  'Unlimited AI summaries, cards & mind maps',
-  'PDF library — 500+ documents / 2 GB',
-  'Instant job-alert emails the moment a matching role drops',
-  'Priority support from a human at support@scrutinies.dev',
-  'Help fund an independent, ad-free workspace',
+  'Unlimited Copilot, summaries & mind maps',
+  'PDF library — 500 docs / 2 GB',
+  'Instant job-alert emails',
+  'Priority support from a real human',
 ]
 
 function FeatureList({ items, accent }: { items: string[]; accent: string }) {
@@ -178,19 +175,12 @@ export function PricingCards() {
           </p>
           <p className="mt-1.5 font-mono text-[11px] text-muted-foreground">no card required — ever</p>
 
-          <p className="mt-4 text-[13.5px] leading-relaxed text-muted-foreground">
-            The whole workspace, no time limit. Limits only apply to metered AI usage.
-          </p>
-
           <FeatureList items={FREE_FEATURES} accent="var(--muted-foreground)" />
 
           <div className="mt-7">
             <Button asChild variant="outline" className="w-full">
               <Link href="/signup">Start free</Link>
             </Button>
-            <p className="mt-2.5 text-center font-mono text-[10.5px] text-muted-foreground">
-              free forever · upgrade only if you outgrow it
-            </p>
           </div>
         </CardShell>
 
@@ -240,13 +230,7 @@ export function PricingCards() {
             </span>
           </p>
           <p className="mt-1.5 font-mono text-[11px] text-muted-foreground">
-            {cycle === 'annual'
-              ? '≈ PKR 15,000/yr (FX at checkout) · works out to $4.17/mo · students $25/yr'
-              : '≈ PKR 1,500/mo (FX at checkout) · students $2.50/mo'}
-          </p>
-
-          <p className="mt-4 text-[13.5px] leading-relaxed text-muted-foreground">
-            Unlimited AI on top of everything free. Students pay half — <a href="mailto:support@scrutinies.dev" className="underline underline-offset-2">email support@scrutinies.dev</a> with proof of enrolment to get 50% off.
+            {cycle === 'annual' ? '≈ PKR 15,000/yr · students 50% off' : '≈ PKR 1,500/mo · students 50% off'}
           </p>
 
           <FeatureList items={PRO_FEATURES} accent="var(--chart-3)" />
@@ -259,9 +243,6 @@ export function PricingCards() {
                   ? 'Upgrade to Pro — annual'
                   : 'Upgrade to Pro — monthly'}
             </Button>
-            <p className="mt-2.5 text-center font-mono text-[10.5px] text-muted-foreground">
-              {cycle === 'annual' ? 'billed once a year · cancel anytime' : 'billed monthly · cancel anytime'}
-            </p>
           </div>
         </CardShell>
       </div>
