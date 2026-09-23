@@ -43,6 +43,17 @@ export const api = {
 const apiCache = new Map<string, unknown>()
 const API_CACHE_MAX = 60
 
+/**
+ * Evict one cached URL (or the whole cache). Used when an outside event
+ * invalidates server state the UI has already fetched — e.g. returning from
+ * checkout with ?billing=success: the webhook may have flipped the plan, and
+ * a stale cached /api/billing/status would keep showing "Free".
+ */
+export function clearApiCache(url?: string) {
+  if (url) apiCache.delete(url)
+  else apiCache.clear()
+}
+
 function cacheGet<T>(url: string): T | undefined {
   return apiCache.get(url) as T | undefined
 }

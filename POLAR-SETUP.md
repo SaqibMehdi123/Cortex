@@ -32,8 +32,11 @@ Safepay → Polar → LS for PK visitors and Polar → LS → Safepay for everyo
 else; the first *configured* provider serves the checkout.
 
 ⚠️ Make sure `BILLING_TEST_MODE` is **NOT** set in Vercel (Production). It is
-a dev-only escape hatch that fakes checkouts; it must never exist in
-production env vars.
+a dev-only escape hatch that fakes checkouts (fake redirect + sample receipt
+email, no provider is ever called); it must never exist in production env
+vars. If Upgrade clicks ever "redirect back into the app and email a sample
+receipt", this flag is the first suspect — the health endpoint's `billing`
+section reports it as `testMode: true`.
 
 ---
 
@@ -88,8 +91,10 @@ In the live org → **Products → New product**, twice:
 
 What each does on our side: order paid / subscription active → user upgraded
 to `pro` with `planExpiresAt` = the subscription's `current_period_end`
-(a year for Annual — automatic), a `Payment` row is recorded, and Polar
-emails the buyer its own invoice. `subscription.canceled` keeps access until
+(a year for Annual — automatic), a `Payment` row is recorded, Polar emails
+the buyer its own tax invoice, and Cortex emails the buyer its branded
+"Pro is now active" receipt (once per order — retries are deduped against
+the Payment row). `subscription.canceled` keeps access until
 the period end. `subscription.revoked` drops the user to `free`.
 `order.refunded` is recorded for bookkeeping. Bad signatures are rejected
 with 401; the route also rejects replays older than 5 minutes.
@@ -166,7 +171,7 @@ revoked; product id not found → product not created in *this* org/mode).
 | Checkout 401/403 in Vercel logs | token from the sandbox org used against live API (or vice versa) → match `POLAR_MODE` with the org the token came from |
 | Purchase ok but no upgrade | webhook: URL typo, event not ticked, or `whsec_` mismatch → check the webhook delivery log; our route rejects bad signatures with 401 |
 | Webhook logged 401 after working before | secret rotated in Polar but not in Vercel (or the other way) → set the same value in both, Redeploy |
-| Two invoices to the buyer | expected — Polar sends its own MoR invoice; nothing is duplicated by Cortex |
+| Two invoices to the buyer | expected — Polar sends its own MoR invoice and Cortex sends one branded activation receipt per order (so the buyer also hears "Pro is active" from us) |
 
 ## Lemon Squeezy and Safepay, for later
 

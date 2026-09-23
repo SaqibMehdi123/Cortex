@@ -54,7 +54,7 @@ export function SettingsView() {
         <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
       </div>
 
-      {me?.user && <AccountCard user={me.user} />}
+      {me?.user && <AccountCard user={me.user} pro={billing?.pro === true} />}
       <PlanCard billing={billing} loading={billingLoading} />
       <ProfileCard data={data?.setting} save={save} />
       <AppearanceCard mounted={mounted} theme={theme ?? 'system'} setTheme={setTheme} save={save} />
@@ -144,7 +144,7 @@ function PlanCard({ billing, loading }: { billing?: BillingStatus | null; loadin
   )
 }
 
-function AccountCard({ user }: { user: { id: string; name: string; email: string } }) {
+function AccountCard({ user, pro }: { user: { id: string; name: string; email: string }; pro?: boolean }) {
   const router = useRouter()
   const { toast } = useToast()
   const [busy, setBusy] = useState(false)
@@ -173,7 +173,14 @@ function AccountCard({ user }: { user: { id: string; name: string; email: string
               {user.name.charAt(0).toUpperCase()}
             </span>
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold">{user.name}</p>
+              <p className="flex items-center gap-1.5 truncate text-sm font-semibold">
+                {user.name}
+                {pro && (
+                  <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-primary/10 px-1.5 py-px font-mono text-[9px] font-semibold uppercase tracking-[0.12em] text-primary" title="Cortex Pro">
+                    <FaCrown className="h-2 w-2" /> Pro
+                  </span>
+                )}
+              </p>
               <p className="flex items-center gap-1 truncate text-xs text-muted-foreground"><FaAt className="h-3 w-3" /> {user.email}</p>
             </div>
           </div>

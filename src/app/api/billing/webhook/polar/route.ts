@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'node:crypto'
 import { db } from '@/lib/db'
+import { sendReceiptEmail } from '@/lib/receipt'
 
 // POST /api/billing/webhook/polar — Polar → Cortex (Merchant of Record).
 //
@@ -29,8 +30,10 @@ import { db } from '@/lib/db'
 // order and the subscription; fallback = customer email lookup (covers
 // dashboard-created checkouts).
 //
-// Receipts: Polar, as Merchant of Record, emails its own invoice to the
-// buyer — we deliberately do not duplicate (same policy as Lemon Squeezy).
+// Receipts: Polar, as Merchant of Record, emails its own tax invoice to the
+// buyer (payment proof). Cortex ADDITIONALLY sends its branded "Pro is now
+// active" receipt on the FIRST order.paid for each order (deduped against
+// webhook retries via the Payment row) — activation proof, from us.
 
 export const dynamic = 'force-dynamic'
 
@@ -170,7 +173,16 @@ export async function POST(req: NextRequest) {
     }
 
     // Money trail lives on order events; subscription events only touch the plan.
+    // The Payment row doubles as the receipt dedupe key: Polar retries
+    // webhooks, and the buyer must get exactly ONE Cortex receipt per order
+    // (Polar's own MoR tax invoice is a separate, expected email).
+    let firstTimePaid = false
     if (isOrderPaid && data.id) {
+      const existing = await db.payment.findUnique({
+        where: { provider_providerInvoiceId: { provider: 'polar', providerInvoiceId: data.id } },
+        select: { id: true },
+      })
+      firstTimePaid = !existing
       await db.payment.upsert({
         where: { provider_providerInvoiceId: { provider: 'polar', providerInvoiceId: data.id } },
         create: {
@@ -197,7 +209,7 @@ export async function POST(req: NextRequest) {
     )
     const candidate = parsed && !isNaN(parsed.getTime()) && parsed.getTime() > Date.now() ? parsed : fallback
 
-    const current = await db.user.findUnique({ where: { id: userId }, select: { planExpiresAt: true } })
+    const current = await db.user.findUnique({ where: { id: userId }, select: { email: true, planExpiresAt: true } })
     const planExpiresAt =
       current?.planExpiresAt && current.planExpiresAt.getTime() > candidate.getTime()
         ? current.planExpiresAt
@@ -214,6 +226,21 @@ export async function POST(req: NextRequest) {
           : {}),
       },
     })
+
+    // Activation receipt — only on the first paid event for this order, and
+    // never let a mail failure fail the webhook (Polar would retry a 500 and
+    // re-process the whole handler).
+    if (isOrderPaid && firstTimePaid && data.id) {
+      void sendReceiptEmail({
+        to: current?.email || data.customer?.email || '',
+        orderId: data.id,
+        amountMinor: typeof data.amount === 'number' ? data.amount : null,
+        currency: data.currency || 'USD',
+        provider: 'polar',
+        plan: data.metadata?.interval === 'annual' ? 'Cortex Pro — annual' : 'Cortex Pro — monthly',
+        expiresOn: planExpiresAt,
+      }).catch((e) => console.error('polar webhook: activation receipt failed', e))
+    }
 
     return NextResponse.json({ ok: true, handled: event })
   } catch (e) {

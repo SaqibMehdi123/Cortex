@@ -19,11 +19,14 @@ import { AnalyticsView } from '@/components/views/analytics'
 import { SettingsView } from '@/components/views/settings'
 import { useUI, NAV_ITEMS } from '@/lib/nav-config'
 import { useViewScroll } from '@/hooks/use-view-scroll'
+import { useToast } from '@/hooks/use-toast'
+import { clearApiCache } from '@/lib/client'
 
 export default function Home() {
   const view = useUI((s) => s.view)
   const readerDocId = useUI((s) => s.readerDocId)
   const hydrated = useUI((s) => s.hydrated)
+  const { toast } = useToast()
 
   // Reload / revisit → reopen the same section (and the same book if one was
   // open). Manual rehydration keeps the SSR markup identical to the first
@@ -41,6 +44,33 @@ export default function Home() {
         useUI.setState({ hydrated: true })
       })
   }, [])
+
+  // Landing back from a payment provider's hosted checkout (success_url is
+  // set at checkout time). Without this the query param was simply ignored —
+  // the buyer landed on their last-viewed section with no confirmation at
+  // all, and a cached plan status kept saying "Free" until a full reload.
+  useEffect(() => {
+    const billing = new URLSearchParams(window.location.search).get('billing')
+    if (!billing) return
+    // the param has served its purpose — keep the URL clean on refresh
+    window.history.replaceState({}, '', window.location.pathname)
+    if (billing === 'success') {
+      // the webhook flips the plan server-side; drop the cached "Free" so
+      // Settings → Plan reflects the purchase on the very next look
+      clearApiCache('/api/billing/status')
+      toast({
+        title: 'Payment received — welcome to Pro',
+        description: 'Your plan is being activated right now. Open Settings → Plan in a moment to confirm.',
+      })
+    } else if (billing === 'test') {
+      toast({
+        title: 'Test checkout complete — no payment was taken',
+        description: 'BILLING_TEST_MODE is still enabled on this deployment. Remove it in Vercel and redeploy to take real payments.',
+      })
+    } else if (billing === 'canceled') {
+      toast({ title: 'Checkout canceled', description: 'You were not charged — no plan changes were made.' })
+    }
+  }, [toast])
 
   // Keep + restore each view's scroll position across reloads and tab switches
   useViewScroll(readerDocId ? `reader:${readerDocId}` : `view:${view}`)

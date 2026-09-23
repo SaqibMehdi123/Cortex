@@ -226,10 +226,20 @@ export async function POST(req: NextRequest) {
         amountMinor: body.interval === 'annual' ? 1_500_000 : 150_000,
         currency: 'PKR',
         provider: 'test',
+        plan: 'Cortex Pro — monthly',
         expiresOn: new Date(Date.now() + 31 * 86_400_000),
         sample: true,
       }).catch((e) => console.error('test-mode sample receipt failed', e))
-      return NextResponse.json({ ok: true, provider: 'test', url: `${new URL(req.url).origin}/app?billing=test` })
+      // `test: true` is how the pricing UI tells this apart from a real
+      // checkout: with test mode on, "Upgrade" MUST show a loud warning
+      // instead of silently faking a purchase (that is exactly how a stale
+      // BILLING_TEST_MODE in prod masqueraded as a completed checkout).
+      return NextResponse.json({
+        ok: true,
+        provider: 'test',
+        test: true,
+        url: `${new URL(req.url).origin}/app?billing=test`,
+      })
     }
 
     const interval: 'monthly' | 'annual' = body.interval === 'annual' ? 'annual' : 'monthly'

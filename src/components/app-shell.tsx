@@ -1,12 +1,12 @@
 'use client'
 
-import { FaBell, FaBolt, FaBullseye, FaChartLine, FaCircleCheck, FaClock, FaGear, FaIndent, FaLayerGroup, FaMagnifyingGlass, FaMoon, FaOutdent, FaPlus, FaRightFromBracket, FaShareNodes, FaSpinner, FaSun, FaTriangleExclamation, FaWandMagicSparkles, FaXmark } from 'react-icons/fa6'
+import { FaBell, FaBolt, FaBullseye, FaChartLine, FaCircleCheck, FaClock, FaCrown, FaGear, FaIndent, FaLayerGroup, FaMagnifyingGlass, FaMoon, FaOutdent, FaPlus, FaRightFromBracket, FaShareNodes, FaSpinner, FaSun, FaTriangleExclamation, FaWandMagicSparkles, FaXmark } from 'react-icons/fa6'
 import { cn } from '@/lib/utils'
 import { useUI, type ViewKey, NAV_ITEMS, MOBILE_TABS, NAV_GROUP_LABELS } from '@/lib/nav-config'
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTheme } from 'next-themes'
-import { api } from '@/lib/client'
+import { api, useApi } from '@/lib/client'
 import { useIdleLogout } from '@/hooks/use-idle-logout'
 import { Button } from '@/components/ui/button'
 import type { DashboardData } from '@/lib/types'
@@ -579,6 +579,11 @@ function UserChip({ collapsed }: { collapsed: boolean }) {
   const setView = useUI((s) => s.setView)
   const [user, setUser] = useState<{ name: string; email: string } | null>(null)
   const [busy, setBusy] = useState(false)
+  // Shares the module-level cache with Settings → Plan — one fetch, consistent
+  // badge everywhere. Only a TRUE pro flag renders the crown (an in-flight or
+  // failed status check never badges a paying user down, it just hides it).
+  const { data: billing } = useApi<{ pro?: boolean } | null>('/api/billing/status')
+  const pro = billing?.pro === true
 
   useEffect(() => {
     let cancelled = false
@@ -633,13 +638,25 @@ function UserChip({ collapsed }: { collapsed: boolean }) {
       )}
       title={collapsed ? `${user.name} — sign out` : undefined}
     >
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground" aria-hidden>
+      <span className={cn('relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground')} aria-hidden>
         {initial}
+        {collapsed && pro && (
+          <span className="absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full border border-background bg-primary text-primary-foreground" title="Cortex Pro">
+            <FaCrown className="h-2 w-2" />
+          </span>
+        )}
       </span>
       {!collapsed && (
         <>
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-xs font-semibold">{user.name}</span>
+            <span className="flex items-center gap-1.5">
+              <span className="truncate text-xs font-semibold">{user.name}</span>
+              {pro && (
+                <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-primary/10 px-1.5 py-px font-mono text-[8.5px] font-semibold uppercase tracking-[0.12em] text-primary" title="Cortex Pro">
+                  <FaCrown className="h-2 w-2" /> Pro
+                </span>
+              )}
+            </span>
             <span className="block truncate text-[10px] text-muted-foreground">{user.email}</span>
           </span>
           <button

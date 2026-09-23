@@ -140,13 +140,26 @@ const codeEmailHtml = (name: string, code: string, kind: 'verify' | 'reset'): st
     kind === 'verify'
       ? `Hi ${name || 'there'} — welcome to Cortex. Enter this code to verify your email address:`
       : `Hi ${name || 'there'} — enter this code to reset your Cortex password:`
+  // Responsive: same pattern as the morning briefing / receipt — inline base
+  // styles, <style> block refines phones (smaller paddings, the 6-char code
+  // with 0.35em tracking otherwise crowds a 320px viewport).
   return `<!doctype html>
-<html><body style="margin:0;padding:32px;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-  <div style="max-width:440px;margin:0 auto;background:#ffffff;border-radius:16px;padding:32px;border:1px solid #e4e4e7;">
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  @media only screen and (max-width:520px) {
+    .card { padding:22px 16px 18px !important; border-radius:12px !important; }
+    .code { font-size:28px !important; letter-spacing:0.28em !important; }
+  }
+</style>
+</head>
+<body style="margin:0;padding:24px 12px;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;text-size-adjust:100%;">
+  <div class="card" style="max-width:440px;margin:0 auto;background:#ffffff;border-radius:16px;padding:32px;border:1px solid #e4e4e7;">
     <p style="margin:0 0 8px;font-size:20px;font-weight:600;color:#18181b;">Cortex</p>
     <h1 style="margin:0 0 12px;font-size:18px;color:#18181b;">${heading}</h1>
     <p style="margin:0 0 20px;font-size:14px;line-height:1.6;color:#52525b;">${intro}</p>
-    <p style="margin:0 0 20px;font-size:34px;font-weight:700;letter-spacing:0.35em;color:#18181b;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;">${code}</p>
+    <p class="code" style="margin:0 0 20px;font-size:34px;font-weight:700;letter-spacing:0.35em;color:#18181b;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;overflow-wrap:anywhere;">${code}</p>
     <p style="margin:0;margin-top:20px;padding-top:14px;border-top:1px solid #e4e4e7;font-size:12px;line-height:1.6;color:#a1a1aa;">This code expires in 10 minutes and can be used once. If you didn't request it, you can safely ignore this email.<br>Need help? <a href="mailto:${SUPPORT_EMAIL}" style="color:#71717a;text-decoration:underline;">${SUPPORT_EMAIL}</a></p>
   </div>
 </body></html>`

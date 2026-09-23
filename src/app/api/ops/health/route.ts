@@ -406,11 +406,24 @@ async function checkBilling() {
     polarAnnualProductSet: Boolean(annualId),
     lemonsqueezyConfigured,
     safepayConfigured,
+    // BILLING_TEST_MODE=true short-circuits ALL providers: Upgrade returns a
+    // fake /app?billing=test redirect and emails a sample receipt. It exists
+    // for local dev / provider-onboarding evidence only — if it is ever left
+    // on in production, buyers see a "completed checkout" that charged nobody
+    // and the real providers are never called. Surface it loudly here.
+    testMode: (process.env.BILLING_TEST_MODE || '').trim().toLowerCase() === 'true',
     checkoutReady: polarConfigured || lemonsqueezyConfigured || safepayConfigured,
     tokenValid: null as boolean | null,
     monthlyProductFound: null as boolean | null,
     annualProductFound: null as boolean | null,
     note: '',
+  }
+  if (base.testMode) {
+    return {
+      ...base,
+      note:
+        'BILLING_TEST_MODE is ON — Upgrade clicks skip every real provider (fake redirect + sample receipt email). Remove BILLING_TEST_MODE in Vercel → Settings → Environment Variables and redeploy to take real payments.',
+    }
   }
   if (!base.checkoutReady) {
     return { ...base, note: 'no payment provider configured — Upgrade shows "launching soon" (Polar needs POLAR_ACCESS_TOKEN + POLAR_PRODUCT_ID_MONTHLY at minimum)' }
@@ -425,7 +438,7 @@ async function checkBilling() {
       signal: AbortSignal.timeout(10_000),
     })
     if (res.status === 401 || res.status === 403) {
-      return { ...base, tokenValid: false, note: `Polar access token REJECTED on the ${sandbox ? 'sandbox' : 'live'} API — the token was likely created in the other org (check POLAR_MODE) or was revoked; regenerate under polar.sh → Settings → API` }
+      return { ...base, tokenValid: false, note: `Polar access token REJECTED on the ${sandbox ? 'sandbox' : 'live'} API — the token was likely created in the other org (check POLAR_MODE) or was revoked; regenerate under polar.sh → Settings → API, update POLAR_ACCESS_TOKEN in Vercel, and REDEPLOY (env changes never reach an already-running deployment)` }
     }
     if (!res.ok) {
       return { ...base, tokenValid: null, note: `Polar products check returned ${res.status}` }

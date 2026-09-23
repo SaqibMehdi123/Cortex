@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { FaCheck, FaCrown, FaSeedling } from 'react-icons/fa6'
@@ -100,16 +100,36 @@ export function PricingCards() {
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const statusRef = useRef<HTMLParagraphElement>(null)
+
+  // Notices and errors render below the card grid — on a phone they can sit
+  // below the fold, which made failures look like the button "did nothing".
+  // Scroll them into view the moment they appear.
+  function revealStatus() {
+    setTimeout(() => statusRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 60)
+  }
 
   async function upgrade() {
     setBusy(true)
     setNotice(null)
     setError(null)
     try {
-      const res = await api.post<{ url?: string }>('/api/billing/checkout', {
+      const res = await api.post<{ url?: string; test?: boolean }>('/api/billing/checkout', {
         plan: 'pro',
         interval: cycle,
       })
+      if (res.test) {
+        // BILLING_TEST_MODE is still enabled on this deployment. Never fake a
+        // purchase: no redirect, no success vibes — an operator-actionable
+        // warning. (A stale test-mode flag in prod used to bounce buyers back
+        // to the app with a sample receipt, looking exactly like checkout.)
+        setError(
+          'Test mode is ON — no real checkout was opened and nothing was charged. Remove BILLING_TEST_MODE in Vercel → Settings → Environment Variables, then redeploy to enable live payments.'
+        )
+        setBusy(false)
+        revealStatus()
+        return
+      }
       if (res.url) window.location.href = res.url
     } catch (err) {
       const status = (err as { status?: number }).status
@@ -131,6 +151,7 @@ export function PricingCards() {
         setError(message)
       }
       setBusy(false)
+      revealStatus()
     }
   }
 
@@ -245,16 +266,18 @@ export function PricingCards() {
         </CardShell>
       </div>
 
-      {notice && (
-        <p role="status" className="mt-4 rounded-lg border border-border bg-secondary/40 px-4 py-3 text-[13px] text-foreground/80">
-          {notice}
-        </p>
-      )}
-      {error && (
-        <p role="alert" className="mt-4 rounded-lg bg-danger/10 px-4 py-3 text-[13px] text-danger">
-          {error}
-        </p>
-      )}
+      <p ref={statusRef} aria-live="polite">
+        {notice && (
+          <span className="mt-4 block rounded-lg border border-border bg-secondary/40 px-4 py-3 text-[13px] text-foreground/80">
+            {notice}
+          </span>
+        )}
+        {error && (
+          <span role="alert" className="mt-4 block rounded-lg bg-danger/10 px-4 py-3 text-[13px] leading-relaxed text-danger">
+            {error}
+          </span>
+        )}
+      </p>
       <p className="mt-4 text-center text-[12px] text-muted-foreground">
         Prices in USD. Pakistan visitors are billed in PKR. Refunds:{' '}
         <Link href="/refund" className="underline underline-offset-2 hover:text-foreground">
