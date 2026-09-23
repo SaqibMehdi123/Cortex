@@ -1,6 +1,6 @@
 'use client'
 
-import { FaAt, FaBell, FaCalendarPlus, FaChrome, FaCopy, FaCrown, FaDesktop, FaDownload, FaEnvelope, FaFileCode, FaFileLines, FaInbox, FaInfo, FaKey, FaMoon, FaPaperPlane, FaPalette, FaRightFromBracket, FaRotate, FaShieldHalved, FaSpinner, FaSun, FaUser } from 'react-icons/fa6'
+import { FaAt, FaBell, FaCalendarPlus, FaChrome, FaCopy, FaCrown, FaDesktop, FaDownload, FaEnvelope, FaFileCode, FaFileLines, FaGraduationCap, FaInbox, FaInfo, FaKey, FaMoon, FaPaperPlane, FaPalette, FaRightFromBracket, FaRotate, FaShieldHalved, FaSpinner, FaSun, FaUser } from 'react-icons/fa6'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -8,6 +8,7 @@ import { api } from '@/lib/client'
 import { useApi } from '@/lib/client'
 import { useMounted } from '@/components/shared'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -35,7 +36,7 @@ export function SettingsView() {
   const { theme, setTheme } = useTheme()
   const { data } = useApi<{ setting: SettingsData }>('/api/settings')
   const { data: me } = useApi<{ user: { id: string; name: string; email: string } } | null>('/api/auth/me')
-  const { data: billing } = useApi<BillingStatus | null>('/api/billing/status')
+  const { data: billing, loading: billingLoading } = useApi<BillingStatus | null>('/api/billing/status')
   const mounted = useMounted()
 
   async function save(patch: Record<string, string>) {
@@ -54,7 +55,7 @@ export function SettingsView() {
       </div>
 
       {me?.user && <AccountCard user={me.user} />}
-      <PlanCard billing={billing} />
+      <PlanCard billing={billing} loading={billingLoading} />
       <ProfileCard data={data?.setting} save={save} />
       <AppearanceCard mounted={mounted} theme={theme ?? 'system'} setTheme={setTheme} save={save} />
       <GoogleCard />
@@ -84,7 +85,11 @@ export function SettingsView() {
   )
 }
 
-function PlanCard({ billing }: { billing?: BillingStatus | null }) {
+function PlanCard({ billing, loading }: { billing?: BillingStatus | null; loading?: boolean }) {
+  // Tri-state: while /api/billing/status is in flight (or failed) we must NOT
+  // render "Free" — a paying Pro user on a slow connection would see the wrong
+  // plan and an upgrade CTA. Unknown plan → neutral "checking" state.
+  const known = !loading && billing !== undefined
   const pro = billing?.pro === true
   const expiry = billing?.planExpiresAt
     ? new Date(billing.planExpiresAt).toLocaleDateString(undefined, {
@@ -99,25 +104,41 @@ function PlanCard({ billing }: { billing?: BillingStatus | null }) {
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-sm">
           <FaCrown className="h-4 w-4 text-primary" /> Plan
-          <span className={cn('ml-1 rounded-full border px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.14em]', pro ? 'border-primary/40 bg-primary/10 text-primary' : 'text-muted-foreground')}>
-            {pro ? 'Pro' : 'Free'}
+          <span
+            className={cn(
+              'ml-1 rounded-full border px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.14em]',
+              !known ? 'animate-pulse text-muted-foreground/60' : pro ? 'border-primary/40 bg-primary/10 text-primary' : 'text-muted-foreground'
+            )}
+          >
+            {!known ? '…' : pro ? 'Pro' : 'Free'}
           </span>
         </CardTitle>
         <CardDescription>
-          {pro
-            ? `Pro is active${expiry ? ` — renews/holds until ${expiry}` : ''}. Thank you for backing an independent workspace.`
-            : 'You are on Free — the whole workspace, unlimited, forever.'}
+          {!known
+            ? 'Checking your plan…'
+            : pro
+              ? `Pro is active${expiry ? ` — renews/holds until ${expiry}` : ''}. Thank you for backing an independent workspace.`
+              : 'You are on Free — the whole workspace, unlimited, forever.'}
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-[13px] leading-relaxed text-muted-foreground">
-          {pro
-            ? 'Everything is unlimited on your plan. Billing details and the plan comparison live on the pricing page.'
-            : 'Pro only lifts what costs money to run: unlimited AI Copilot, summaries, cards & mind maps, and a 500-document library.'}
+          {!known
+            ? null
+            : pro
+              ? 'Everything is unlimited on your plan. To cancel or manage billing, use the link in your receipt email — or contact support@scrutinies.dev.'
+              : 'Pro only lifts what costs money to run: unlimited AI Copilot, summaries, cards & mind maps, and a 500-document library.'}
         </p>
-        <Button asChild variant={pro ? 'outline' : 'default'} className={cn('shrink-0', !pro && 'sheen')}>
-          <Link href="/pricing">{pro ? 'View pricing' : 'See pricing & upgrade'}</Link>
-        </Button>
+        {known && !pro && (
+          <p className="flex items-center gap-1.5 text-[13px] text-muted-foreground sm:hidden">
+            <FaGraduationCap className="h-3.5 w-3.5 text-primary" /> Students get 50% off Pro
+          </p>
+        )}
+        {known && (
+          <Button asChild variant={pro ? 'outline' : 'default'} className={cn('shrink-0', !pro && 'sheen')}>
+            <Link href="/pricing">{pro ? 'View pricing' : 'See pricing & upgrade'}</Link>
+          </Button>
+        )}
       </CardContent>
     </Card>
   )
@@ -184,9 +205,12 @@ function ProfileCard({ data, save }: { data?: SettingsData; save: (patch: Record
         >
           <div className="flex-1">
             <Label htmlFor="name">Display name</Label>
-            <Input id="name" name="name" defaultValue={data?.name} className="mt-1" placeholder="Your name" />
+            {/* keyed by the loaded name so the field fills in once /api/settings
+                resolves — an uncontrolled defaultValue set before data arrives
+                renders an empty field that looks like lost data */}
+            <Input key={data?.name ?? 'loading'} id="name" name="name" defaultValue={data?.name} className="mt-1" placeholder="Your name" disabled={!data} />
           </div>
-          <Button type="submit">Save</Button>
+          <Button type="submit" disabled={!data}>Save</Button>
         </form>
       </CardContent>
     </Card>
@@ -282,7 +306,7 @@ function DigestCard({ email }: { email?: string }) {
           <p className={cn('rounded-lg border px-3 py-2 text-xs leading-relaxed', result.delivered ? 'border-success/40 bg-success/10 text-success' : 'border-destructive/40 bg-destructive/10 text-destructive')}>
             {result.delivered
               ? `Sent via ${result.provider ?? 'mail'} — check your inbox (and the spam folder) for a “Cortex test email”.`
-              : `Could NOT send (${result.provider ?? result.reason ?? 'no provider'})${result.detail ? `: ${result.detail}` : '.'} — this is exactly why the 9 AM briefing may not arrive; fix the mail provider and this turns green.`}
+              : `Could NOT send (${result.provider ?? result.reason ?? 'no provider'})${result.detail ? `: ${result.detail}` : '.'} — this is why the 9 AM briefing may not arrive. Contact support@scrutinies.dev if this keeps happening.`}
           </p>
         )}
         <p className="text-xs text-muted-foreground">
@@ -366,14 +390,20 @@ function GoogleCard() {
             <div className="flex items-start gap-2.5 rounded-lg border border-warning/40 bg-warning/5 p-3">
               <FaKey className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
               <div className="text-xs leading-relaxed">
-                <p className="font-medium text-foreground">Google API credentials needed (one-time setup)</p>
-                <ol className="mt-1.5 list-decimal space-y-1 pl-4 text-muted-foreground">
-                  <li>Go to <span className="font-mono text-xs">console.cloud.google.com</span> → create/select a project.</li>
-                  <li>APIs &amp; Services → Library → enable <b>Gmail API</b> and <b>Google Calendar API</b>.</li>
-                  <li>OAuth consent screen → External → add yourself as a test user.</li>
-                  <li>Credentials → Create OAuth client ID → <b>Web application</b>; add the redirect URI below.</li>
-                  <li>Put the client ID &amp; secret into <span className="font-mono text-xs">.env</span> as <span className="font-mono text-xs">GOOGLE_CLIENT_ID</span> and <span className="font-mono text-xs">GOOGLE_CLIENT_SECRET</span>, then restart the app.</li>
-                </ol>
+                <p className="font-medium text-foreground">Google sync isn&apos;t set up yet</p>
+                <p className="mt-1 text-muted-foreground">
+                  Google Calendar &amp; Gmail import need OAuth credentials configured by the site operator. Contact support@scrutinies.dev if this should be enabled for your account.
+                </p>
+                <details className="mt-2">
+                  <summary className="cursor-pointer select-none font-medium text-foreground">Self-hosting? Show the one-time setup steps</summary>
+                  <ol className="mt-1.5 list-decimal space-y-1 pl-4 text-muted-foreground">
+                    <li>Go to <span className="font-mono text-xs">console.cloud.google.com</span> → create/select a project.</li>
+                    <li>APIs &amp; Services → Library → enable <b>Gmail API</b> and <b>Google Calendar API</b>.</li>
+                    <li>OAuth consent screen → External → add yourself as a test user.</li>
+                    <li>Credentials → Create OAuth client ID → <b>Web application</b>; add the redirect URI below.</li>
+                    <li>Put the client ID &amp; secret into <span className="font-mono text-xs">.env</span> as <span className="font-mono text-xs">GOOGLE_CLIENT_ID</span> and <span className="font-mono text-xs">GOOGLE_CLIENT_SECRET</span>, then restart the app.</li>
+                  </ol>
+                </details>
               </div>
             </div>
             <div className="flex items-center gap-2 rounded-lg border bg-muted/40 p-2.5">
@@ -395,9 +425,25 @@ function GoogleCard() {
                 <p className="truncate font-medium">{status.email ?? 'Google account'}</p>
                 <p className="text-xs text-muted-foreground">Connected · tokens auto-refresh</p>
               </div>
-              <Button variant="outline" size="sm" onClick={disconnect} disabled={busy === 'disconnect'}>
-                <FaRightFromBracket className="mr-1.5 h-3.5 w-3.5" /> Disconnect
-              </Button>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" size="sm" disabled={busy === 'disconnect'}>
+                    <FaRightFromBracket className="mr-1.5 h-3.5 w-3.5" /> Disconnect
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Disconnect Google account?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Gmail application scans and Calendar pushes will stop working until you reconnect. Your existing Career entries and tasks are kept.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={disconnect}>Disconnect</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
               <Button variant="outline" onClick={importGmail} disabled={busy === 'gmail'}>
@@ -410,7 +456,7 @@ function GoogleCard() {
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              “Scan inbox” reads your last 25 emails and files career-relevant ones in Career. Re-running is safe — duplicates are skipped.
+              “Scan inbox” reads your 25 most recent inbox emails from the past 60 days and files career-relevant ones in Career. Re-running is safe — duplicates are skipped.
             </p>
           </div>
         ) : (

@@ -74,7 +74,7 @@ export function DashboardView() {
   // tzOffset keeps every "today" window on the USER's calendar (the serverless
   // runtime runs on UTC — without it early-morning items shift days)
   const tzOffset = new Date().getTimezoneOffset()
-  const { data, loading, setData, reload } = useApi<DashboardData>(`/api/dashboard?tzOffset=${tzOffset}`)
+  const { data, loading, error, setData, reload } = useApi<DashboardData>(`/api/dashboard?tzOffset=${tzOffset}`)
   const [completingIds, setCompletingIds] = useState<Set<string>>(new Set())
 
   // First visit / stale feed: quietly pull news in the background so the digest
@@ -157,6 +157,19 @@ export function DashboardView() {
   }
 
   if (loading || !data) {
+    // a failed cold load used to spin skeletons forever — distinguish it
+    if (!loading && error) {
+      return (
+        <div className="anim-fade-up space-y-4">
+          <EmptyState
+            icon={<FaTriangleExclamation className="h-5 w-5 text-danger" />}
+            title="Couldn't load your day"
+            description="Something went wrong while fetching your briefing, tasks and goals. Your data is safe — nothing was lost."
+            action={{ label: 'Try again', onClick: () => reload() }}
+          />
+        </div>
+      )
+    }
     return (
       <div className="space-y-4">
         <SkeletonCard className="h-28" />
@@ -203,12 +216,16 @@ export function DashboardView() {
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
           <div className="flex flex-wrap gap-2">
-            <button onClick={() => setView('flashcards')} className="flex items-center gap-1.5 rounded-full border bg-card px-3 py-1.5 text-xs font-medium transition-colors hover:bg-muted">
-              <FaLayerGroup className="h-3.5 w-3.5 text-primary" /> {b.dueFlashcards} flashcards due
-            </button>
-            <button onClick={() => setView('news')} className="flex items-center gap-1.5 rounded-full border bg-card px-3 py-1.5 text-xs font-medium transition-colors hover:bg-muted">
-              <FaNewspaper className="h-3.5 w-3.5 text-primary" /> {b.unreadNews} unread stories
-            </button>
+            {b.dueFlashcards > 0 && (
+              <button onClick={() => setView('flashcards')} className="flex items-center gap-1.5 rounded-full border bg-card px-3 py-1.5 text-xs font-medium transition-colors hover:bg-muted">
+                <FaLayerGroup className="h-3.5 w-3.5 text-primary" /> {b.dueFlashcards} flashcard{b.dueFlashcards === 1 ? '' : 's'} due
+              </button>
+            )}
+            {b.unreadNews > 0 && (
+              <button onClick={() => setView('news')} className="flex items-center gap-1.5 rounded-full border bg-card px-3 py-1.5 text-xs font-medium transition-colors hover:bg-muted">
+                <FaNewspaper className="h-3.5 w-3.5 text-primary" /> {b.unreadNews} unread storie{b.unreadNews === 1 ? 'y' : 's'}
+              </button>
+            )}
             {b.streakBest > 0 && (
               <span className="flex items-center gap-1.5 rounded-full border bg-card px-3 py-1.5 text-xs font-medium">
                 <FaFire className="h-3.5 w-3.5 text-warning" /> {b.streakBest}-day best streak
@@ -252,7 +269,12 @@ export function DashboardView() {
           </CardHeader>
           <CardContent className="space-y-2">
             {data.todayTasks.length === 0 && data.todayPlans.length === 0 && (data.todayReminders?.length ?? 0) === 0 ? (
-              <p className="py-6 text-center text-sm text-muted-foreground">Nothing scheduled today. Enjoy the calm — or plan something.</p>
+              <div className="py-6 text-center">
+                <p className="text-sm text-muted-foreground">Nothing scheduled today. Enjoy the calm — or plan something.</p>
+                <Button variant="outline" size="sm" className="mt-2" onClick={() => setView('plans')}>
+                  Open Plans
+                </Button>
+              </div>
             ) : (
               <>
                 {/* reminders active today — dismissible (current occurrence only) */}
@@ -336,8 +358,8 @@ export function DashboardView() {
                     )}
                   </>
                 )}
-                <p className="pt-1 text-center text-[10px] text-muted-foreground">
-                  Swipe right to complete, left to snooze
+                <p className="hidden pt-1 text-center text-[10px] text-muted-foreground sm:block">
+                  Hover a task for focus &amp; snooze
                 </p>
               </>
             )}
@@ -397,10 +419,17 @@ export function DashboardView() {
           </CardHeader>
           <CardContent className="space-y-2.5">
             {data.newsDigest.length === 0 ? (
-              <p className="flex items-center justify-center gap-2 py-6 text-center text-sm text-muted-foreground">
-                {newsAutoFetching && <FaSpinner className="h-3.5 w-3.5 animate-spin" />}
-                {newsAutoFetching ? 'Fetching the latest AI news…' : 'No stories yet — fetch the latest in News & Papers.'}
-              </p>
+              <div className="flex flex-col items-center gap-2 py-6 text-center">
+                <p className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                  {newsAutoFetching && <FaSpinner className="h-3.5 w-3.5 animate-spin" />}
+                  {newsAutoFetching ? 'Fetching the latest AI news…' : 'No stories yet — pull a fresh feed in one click.'}
+                </p>
+                {!newsAutoFetching && (
+                  <Button variant="outline" size="sm" onClick={() => setView('news')}>
+                    Go to News &amp; Papers
+                  </Button>
+                )}
+              </div>
             ) : (
               data.newsDigest.map((n) => (
                 <a
@@ -460,7 +489,7 @@ export function DashboardView() {
                     <p className="text-xs text-muted-foreground">{d.subtitle ?? (d.kind === 'task' ? 'Task' : d.kind === 'goal' ? 'Goal' : 'Application')}</p>
                   </div>
                   <Badge variant="outline" className={cn('shrink-0 text-[10px]', d.daysLeft < 0 && 'border-danger/50 text-danger', d.daysLeft >= 0 && d.daysLeft <= 2 && 'border-warning/50 text-warning')}>
-                    {d.daysLeft < 0 ? `${-d.daysLeft}d overdue` : d.daysLeft === 0 ? 'today' : `${d.daysLeft}d`}
+                    {d.daysLeft < 0 ? `${-d.daysLeft}d overdue` : d.daysLeft === 0 ? 'Due today' : `${d.daysLeft}d`}
                   </Badge>
                 </div>
               ))

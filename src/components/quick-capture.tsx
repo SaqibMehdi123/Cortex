@@ -81,7 +81,11 @@ export function QuickCapture() {
       }
       if (final) setContent((c) => (c ? `${c} ${final}` : final))
     }
-    rec.onerror = () => setListening(false)
+    rec.onerror = () => {
+      setListening(false)
+      // mic permission denial or hardware failure — silence read as "broken button"
+      toast({ title: 'Microphone unavailable', description: 'Check the browser permission for this site, or just type instead.', variant: 'destructive' })
+    }
     rec.onend = () => setListening(false)
     recognitionRef.current = rec
     rec.start()
@@ -117,6 +121,19 @@ export function QuickCapture() {
     } finally {
       setBusy(false)
     }
+  }
+
+  const hasDraft = content.trim().length > 0 || url.trim().length > 0
+
+  const cancelCapture = () => {
+    // a dictated/typed draft shouldn't vanish on a stray click — warn once
+    if (hasDraft && !busy) {
+      const ok = window.confirm('Discard this capture? What you wrote so far will be lost.')
+      if (!ok) return
+    }
+    recognitionRef.current?.stop()
+    reset()
+    setCaptureOpen(false)
   }
 
   return (
@@ -196,7 +213,7 @@ export function QuickCapture() {
         </div>
 
         <div className="flex justify-end gap-2">
-          <Button variant="ghost" onClick={() => { recognitionRef.current?.stop(); setCaptureOpen(false) }}>Cancel</Button>
+          <Button variant="ghost" onClick={cancelCapture}>{hasDraft ? 'Discard' : 'Cancel'}</Button>
           <Button onClick={submit} disabled={busy}>
             {busy && <FaSpinner className="mr-1.5 h-4 w-4 animate-spin" />}
             {type === 'url' ? 'Save to read later' : 'Capture'}

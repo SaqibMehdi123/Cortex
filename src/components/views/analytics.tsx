@@ -1,21 +1,43 @@
 'use client'
 
-import { FaArrowTrendUp, FaBookOpen, FaBullseye, FaGraduationCap, FaLayerGroup, FaListCheck, FaStopwatch } from 'react-icons/fa6'
+import { FaArrowTrendUp, FaBookOpen, FaBullseye, FaGraduationCap, FaLayerGroup, FaListCheck, FaStopwatch, FaTriangleExclamation } from 'react-icons/fa6'
 import { useState } from 'react'
 import { useApi } from '@/lib/client'
 import type { AnalyticsData } from '@/lib/types'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { SkeletonCard } from '@/components/shared'
+import { SkeletonCard, EmptyState } from '@/components/shared'
 import { cn } from '@/lib/utils'
 import {
   AreaChart, Area, BarChart, Bar, LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip as ReTooltip, CartesianGrid,
 } from 'recharts'
 
+// minutes in human units — students think in minutes, not "0.3h"
+function fmtMinutes(total: number): string {
+  const h = Math.floor(total / 60)
+  const m = Math.round(total % 60)
+  if (h === 0) return `${m}m`
+  if (m === 0) return `${h}h`
+  return `${h}h ${m}m`
+}
+
 export function AnalyticsView() {
   const [range, setRange] = useState<'week' | 'month'>('week')
-  const { data, loading } = useApi<AnalyticsData>(`/api/analytics?range=${range}`, [range])
+  const { data, loading, error, reload } = useApi<AnalyticsData>(`/api/analytics?range=${range}`, [range])
 
   if (loading || !data) {
+    // a failed cold load used to spin skeletons forever
+    if (!loading && error) {
+      return (
+        <div className="anim-fade-up pb-8">
+          <EmptyState
+            icon={<FaTriangleExclamation className="h-5 w-5 text-danger" />}
+            title="Couldn't load your analytics"
+            description="A network error got in the way — nothing is lost. Try again."
+            action={{ label: 'Retry', onClick: () => reload() }}
+          />
+        </div>
+      )
+    }
     return (
       <div className="space-y-4 pb-8">
         <SkeletonCard className="h-24" />
@@ -32,10 +54,18 @@ export function AnalyticsView() {
     readingHours: +(d.readingMinutes / 60).toFixed(2),
   }))
 
+  // zero-data state: six "0" tiles and empty charts read as "broken" — guide instead
+  const hasAnyData =
+    data.totals.readingMinutes > 0 ||
+    data.totals.focusMinutes > 0 ||
+    data.totals.tasksCompleted > 0 ||
+    data.totals.flashcardsReviewed > 0 ||
+    data.totals.docsFinished > 0
+
   const tiles = [
-    { label: 'Reading time', value: `${Math.round(data.totals.readingMinutes / 60 * 10) / 10}h`, icon: <FaBookOpen className="h-4 w-4" />, color: 'text-primary' },
+    { label: 'Reading time', value: fmtMinutes(data.totals.readingMinutes), icon: <FaBookOpen className="h-4 w-4" />, color: 'text-primary' },
     { label: 'Tasks completed', value: data.totals.tasksCompleted, icon: <FaListCheck className="h-4 w-4" />, color: 'text-success' },
-    { label: 'Focus hours', value: `${Math.round(data.totals.focusMinutes / 60 * 10) / 10}h`, icon: <FaStopwatch className="h-4 w-4" />, color: 'text-warning' },
+    { label: 'Focus time', value: fmtMinutes(data.totals.focusMinutes), icon: <FaStopwatch className="h-4 w-4" />, color: 'text-warning' },
     { label: 'Cards reviewed', value: data.totals.flashcardsReviewed, icon: <FaLayerGroup className="h-4 w-4" />, color: 'text-teal-500' },
     { label: 'Active goals', value: data.totals.activeGoals, icon: <FaBullseye className="h-4 w-4" />, color: 'text-violet-500' },
     { label: 'Docs finished', value: data.totals.docsFinished, icon: <FaGraduationCap className="h-4 w-4" />, color: 'text-cyan-500' },
@@ -75,6 +105,14 @@ export function AnalyticsView() {
         ))}
       </div>
 
+      {!hasAnyData ? (
+        <EmptyState
+          icon={<FaArrowTrendUp className="h-5 w-5" />}
+          title="No activity in this period yet"
+          description="Read a document, complete tasks or run a focus session — your stats and charts build themselves as you work."
+        />
+      ) : (
+        <>
       {/* reading */}
       <Card className="transition-shadow hover:shadow-soft">
         <CardHeader className="pb-2">
@@ -176,6 +214,8 @@ export function AnalyticsView() {
           </div>
         </CardContent>
       </Card>
+        </>
+      )}
     </div>
   )
 }

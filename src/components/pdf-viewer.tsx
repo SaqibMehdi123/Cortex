@@ -66,6 +66,7 @@ export const PdfCanvasViewer = forwardRef<
 >(function PdfCanvasViewer({ url, className, initialPage = 1, onPageChange, jump, onFullscreenChange, escapeGuard }, ref) {
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null)
   const [error, setError] = useState(false)
+  const [loadPct, setLoadPct] = useState(0)
   const [containerWidth, setContainerWidth] = useState(0)
   const [ratio, setRatio] = useState(1.414) // page width/height — A4-ish until known
   const [zoomIndex, setZoomIndex] = useState(DEFAULT_ZOOM_INDEX)
@@ -117,8 +118,14 @@ export const PdfCanvasViewer = forwardRef<
         pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'
         const task = pdfjs.getDocument({ url })
         loadTask = task
+        // download progress — a 200 MB file on a slow link must not look frozen
+        task.onProgress = ({ loaded: bytes, total }: { loaded: number; total: number }) => {
+          if (cancelled || !total) return
+          setLoadPct(Math.min(99, Math.round((bytes / total) * 100)))
+        }
         const loaded = await task.promise
         if (cancelled) return
+        setLoadPct(100)
         const p1 = await loaded.getPage(1)
         if (cancelled) return
         const vp = p1.getViewport({ scale: 1 })
@@ -394,7 +401,10 @@ export const PdfCanvasViewer = forwardRef<
 
   if (!pdf) {
     return (
-      <div className={cn('flex min-h-0 flex-1 items-center justify-center', className)}>
+      <div className={cn('flex min-h-0 flex-1 flex-col items-center justify-center', className)}>
+        {loadPct > 0 && (
+          <p className="mb-2 text-xs tabular-nums text-muted-foreground">Downloading… {loadPct}%</p>
+        )}
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <FaSpinner className="h-4 w-4 animate-spin" /> Loading PDF…
         </div>
@@ -415,22 +425,36 @@ export const PdfCanvasViewer = forwardRef<
     >
       {/* Toolbar */}
       <div className="flex shrink-0 items-center gap-0.5 border-b bg-background/95 px-1.5 py-1">
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => scrollToPage(currentPage - 1)} disabled={currentPage <= 1} aria-label="Previous page">
+        <Button variant="ghost" size="icon" className="h-9 w-9 sm:h-7 sm:w-7" onClick={() => scrollToPage(currentPage - 1)} disabled={currentPage <= 1} aria-label="Previous page">
           <FaChevronLeft className="h-4 w-4" />
         </Button>
-        <button
-          onClick={() => scrollToPage(1)}
-          className="min-w-[64px] rounded px-1 text-center text-xs tabular-nums text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          title="Back to first page"
-          aria-label={`Page ${currentPage} of ${numPages}`}
+        {/* page jump — a real input, not a hidden "back to page 1" button */}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            const el = (e.currentTarget.elements.namedItem('page') as HTMLInputElement) ?? null
+            const n = Math.max(1, Math.min(numPages, Number.parseInt(el?.value ?? '', 10) || currentPage))
+            scrollToPage(n)
+            if (el) el.value = String(n)
+          }}
+          className="min-w-[64px] rounded px-1 text-center text-xs tabular-nums text-muted-foreground focus-within:bg-muted"
+          title="Jump to page"
         >
-          {currentPage} / {numPages}
-        </button>
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => scrollToPage(currentPage + 1)} disabled={currentPage >= numPages} aria-label="Next page">
+          <input
+            name="page"
+            inputMode="numeric"
+            defaultValue={currentPage}
+            key={currentPage}
+            aria-label={`Page — enter 1 to ${numPages}`}
+            className="w-8 bg-transparent text-center text-xs tabular-nums outline-none"
+          />
+          <span aria-hidden>/ {numPages}</span>
+        </form>
+        <Button variant="ghost" size="icon" className="h-9 w-9 sm:h-7 sm:w-7" onClick={() => scrollToPage(currentPage + 1)} disabled={currentPage >= numPages} aria-label="Next page">
           <FaChevronRight className="h-4 w-4" />
         </Button>
         <span className="mx-1 h-4 w-px shrink-0 bg-border" aria-hidden />
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setZoomIndex((i) => Math.max(0, i - 1))} disabled={zoomIndex === 0} aria-label="Zoom out">
+        <Button variant="ghost" size="icon" className="h-9 w-9 sm:h-7 sm:w-7" onClick={() => setZoomIndex((i) => Math.max(0, i - 1))} disabled={zoomIndex === 0} aria-label="Zoom out">
           <FaMagnifyingGlassMinus className="h-4 w-4" />
         </Button>
         <button
@@ -441,13 +465,13 @@ export const PdfCanvasViewer = forwardRef<
         >
           {Math.round(zoom * 100)}%
         </button>
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setZoomIndex((i) => Math.min(ZOOMS.length - 1, i + 1))} disabled={zoomIndex === ZOOMS.length - 1} aria-label="Zoom in">
+        <Button variant="ghost" size="icon" className="h-9 w-9 sm:h-7 sm:w-7" onClick={() => setZoomIndex((i) => Math.min(ZOOMS.length - 1, i + 1))} disabled={zoomIndex === ZOOMS.length - 1} aria-label="Zoom in">
           <FaMagnifyingGlassPlus className="h-4 w-4" />
         </Button>
         <Button
           variant="ghost"
           size="icon"
-          className="ml-auto h-7 w-7"
+          className="ml-auto h-9 w-9 sm:h-7 sm:w-7"
           onClick={toggleFullscreen}
           aria-label={fullscreen ? 'Exit fullscreen (Esc)' : 'Enter fullscreen'}
           title={fullscreen ? 'Exit fullscreen (Esc)' : 'Fullscreen'}

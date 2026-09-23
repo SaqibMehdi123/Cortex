@@ -1,6 +1,6 @@
 'use client'
 
-import { FaBookOpen, FaBriefcase, FaBullseye, FaCalendarWeek, FaDownload, FaFileLines, FaLink, FaListCheck, FaMicrophone, FaMoon, FaNewspaper, FaPlus, FaRotate, FaStopwatch, FaSun } from 'react-icons/fa6'
+import { FaBookOpen, FaBriefcase, FaBullseye, FaCalendarWeek, FaDownload, FaFileLines, FaLink, FaListCheck, FaMicrophone, FaMoon, FaNewspaper, FaPlus, FaRotate, FaSpinner, FaStopwatch, FaSun, FaTriangleExclamation } from 'react-icons/fa6'
 import { useEffect, useState, useCallback } from 'react'
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem, CommandSeparator } from '@/components/ui/command'
@@ -9,6 +9,7 @@ import { api } from '@/lib/client'
 import { usePomodoro } from '@/lib/pomodoro'
 import type { SearchResults } from '@/lib/types'
 import { useTheme } from 'next-themes'
+import { useToast } from '@/hooks/use-toast'
 
 export function CommandBar() {
   const commandOpen = useUI((s) => s.commandOpen)
@@ -17,8 +18,11 @@ export function CommandBar() {
   const setCaptureOpen = useUI((s) => s.setCaptureOpen)
   const openReader = useUI((s) => s.openReader)
   const { resolvedTheme, setTheme } = useTheme()
+  const { toast } = useToast()
   const [query, setQuery] = useState('')
   const [rawResults, setRawResults] = useState<SearchResults | null>(null)
+  const [searching, setSearching] = useState(false)
+  const [searchFailed, setSearchFailed] = useState(false)
   const results = query.trim() ? rawResults : null
 
   const handleOpenChange = (open: boolean) => {
@@ -32,12 +36,21 @@ export function CommandBar() {
   // debounced universal search
   useEffect(() => {
     const q = query.trim()
-    if (!q) return
     const t = setTimeout(() => {
+      if (!q) {
+        setSearching(false)
+        setSearchFailed(false)
+        return
+      }
+      setSearching(true)
       api.get<SearchResults>(`/api/search?q=${encodeURIComponent(q)}`)
-        .then(setRawResults)
-        .catch(() => {})
-    }, 180)
+        .then((r) => {
+          setRawResults(r)
+          setSearchFailed(false)
+        })
+        .catch(() => setSearchFailed(true))
+        .finally(() => setSearching(false))
+    }, q ? 180 : 0)
     return () => clearTimeout(t)
   }, [query])
 
@@ -78,7 +91,19 @@ export function CommandBar() {
               <CommandItem onSelect={() => { setCommandOpen(false); setView('library') }}>
                 <FaBookOpen /> Import a document
               </CommandItem>
-              <CommandItem onSelect={async () => { setCommandOpen(false); try { await api.post('/api/news/fetch') } catch {} setView('news') }}>
+              <CommandItem
+                onSelect={async () => {
+                  setCommandOpen(false)
+                  toast({ title: 'Fetching news…', description: 'Fresh stories land in News & Papers.' })
+                  try {
+                    await api.post('/api/news/fetch')
+                    toast({ title: 'News fetched' })
+                  } catch {
+                    toast({ title: 'News fetch failed', description: 'Try again from the News & Papers view.', variant: 'destructive' })
+                  }
+                  setView('news')
+                }}
+              >
                 <FaRotate /> Fetch latest AI news
               </CommandItem>
               <CommandItem onSelect={() => { setCommandOpen(false); window.location.href = '/api/export?format=json' }}>
@@ -99,7 +124,19 @@ export function CommandBar() {
           </>
         )}
 
-        {query.trim() !== '' && !hasResults && (
+        {query.trim() !== '' && searching && (
+          <div className="flex items-center gap-2 px-4 py-3 text-sm text-muted-foreground">
+            <FaSpinner className="h-4 w-4 animate-spin" /> Searching…
+          </div>
+        )}
+
+        {query.trim() !== '' && !searching && searchFailed && (
+          <div className="flex items-center gap-2 px-4 py-3 text-sm text-destructive">
+            <FaTriangleExclamation className="h-4 w-4" /> Search failed — check your connection and try again.
+          </div>
+        )}
+
+        {query.trim() !== '' && !searching && !searchFailed && !hasResults && (
           <CommandEmpty>No matches for “{query}”.</CommandEmpty>
         )}
 

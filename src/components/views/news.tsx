@@ -1,7 +1,7 @@
 'use client'
 
-import { FaArrowTrendUp, FaBook, FaBookmark, FaBullseye, FaChevronDown, FaChevronUp, FaCircleCheck, FaFileLines, FaFlask, FaLightbulb, FaMagnifyingGlass, FaNewspaper, FaPlus, FaRegBookmark, FaRotate, FaSliders, FaSpinner, FaTrashCan, FaUpRightFromSquare, FaWandMagicSparkles, FaWrench } from 'react-icons/fa6'
-import { useMemo, useState } from 'react'
+import { FaArrowTrendUp, FaBook, FaBookmark, FaBullseye, FaChevronDown, FaChevronUp, FaCircleCheck, FaEnvelopeOpen, FaFileLines, FaFlask, FaLightbulb, FaMagnifyingGlass, FaNewspaper, FaPlus, FaRegBookmark, FaRotate, FaSliders, FaSpinner, FaTrashCan, FaUpRightFromSquare, FaWandMagicSparkles, FaWrench } from 'react-icons/fa6'
+import { useEffect, useMemo, useState } from 'react'
 import { api, fmtDate, useApi } from '@/lib/client'
 import type { NewsArticle, Paper } from '@/lib/types'
 import { useUI } from '@/lib/nav-config'
@@ -74,9 +74,18 @@ function NewsTab() {
   const [savedOnly, setSavedOnly] = useState(false)
   const [range, setRange] = useState('all')
   const [source, setSource] = useState('all')
+  const [qInput, setQInput] = useState('')
   const [q, setQ] = useState('')
   const [fetching, setFetching] = useState(false)
   const [sourcesOpen, setSourcesOpen] = useState(false)
+  const [markingRead, setMarkingRead] = useState(false)
+
+  // debounce the search box: the useApi URL embeds q, so per-keystroke state
+  // would fire one GET per character (and evict entries from the shared cache)
+  useEffect(() => {
+    const t = setTimeout(() => setQ(qInput.trim()), 300)
+    return () => clearTimeout(t)
+  }, [qInput])
 
   const { data, loading, reload, setData } = useApi<{ articles: NewsArticle[]; sources: { name: string; count: number }[] }>(
     `/api/news?category=${category}&range=${range}&source=${encodeURIComponent(source)}${savedOnly ? '&saved=1' : ''}${q ? `&q=${encodeURIComponent(q)}` : ''}`
@@ -133,6 +142,21 @@ function NewsTab() {
     } catch {}
   }
 
+  const unreadCount = articles.filter((a) => !a.read).length
+
+  async function markAllRead() {
+    setMarkingRead(true)
+    try {
+      await api.patch('/api/news', { markAllRead: true })
+      setData({ ...(data ?? { articles: [], sources: [] }), articles: articles.map((x) => ({ ...x, read: true })) })
+      toast({ title: `Marked ${unreadCount} stories as read` })
+    } catch {
+      toast({ title: 'Could not mark stories as read', variant: 'destructive' })
+    } finally {
+      setMarkingRead(false)
+    }
+  }
+
   return (
     <div className="space-y-4">
       {/* Toolbar */}
@@ -147,12 +171,18 @@ function NewsTab() {
           <FaSliders className="mr-1.5 h-4 w-4" /> Sources
         </Button>
         {lastFetchedAt && !fetching && !autoFetching && (
-          <span className="hidden text-xs text-muted-foreground sm:inline">Updated {timeAgo(lastFetchedAt)}</span>
+          <span className="text-xs text-muted-foreground">Updated {timeAgo(lastFetchedAt)}</span>
         )}
-        {autoFetching && <span className="hidden text-xs text-muted-foreground sm:inline">Refreshing in background…</span>}
+        {autoFetching && <span className="text-xs text-muted-foreground">Refreshing in background…</span>}
+        {articles.length > 0 && unreadCount > 0 && (
+          <Button variant="ghost" size="sm" className="h-9" onClick={markAllRead} disabled={markingRead}>
+            {markingRead ? <FaSpinner className="mr-1.5 h-4 w-4 animate-spin" /> : <FaEnvelopeOpen className="mr-1.5 h-4 w-4" />}
+            Mark all read ({unreadCount})
+          </Button>
+        )}
         <div className="relative ml-auto w-full sm:w-52">
           <FaMagnifyingGlass className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search stories…" className="h-9 pl-9 text-xs" aria-label="Search news" />
+          <Input value={qInput} onChange={(e) => setQInput(e.target.value)} placeholder="Search stories…" className="h-9 pl-9 text-xs" aria-label="Search news" />
         </div>
       </div>
 
@@ -334,8 +364,14 @@ function PaperCard({ paper, onUpdated }: { paper: Paper; onUpdated: (p: Paper) =
       onUpdated(updated)
       setExpanded(true)
       toast({ title: 'Analysis ready', description: 'Problem, innovation and key results extracted.' })
-    } catch {
-      toast({ title: 'Analysis failed', description: 'Try again in a moment.', variant: 'destructive' })
+    } catch (e) {
+      // the 402 path carries the friendly free-plan limit message — show it,
+      // don't flatten every failure into "try again in a moment"
+      toast({
+        title: 'Analysis failed',
+        description: e instanceof Error && e.message ? e.message : 'Try again in a moment.',
+        variant: 'destructive',
+      })
     } finally {
       setAnalyzing(false)
     }
@@ -438,8 +474,15 @@ function PapersTab() {
   const [range, setRange] = useState('week')
   const [sort, setSort] = useState('date')
   const [savedOnly, setSavedOnly] = useState(false)
+  const [qInput, setQInput] = useState('')
   const [q, setQ] = useState('')
   const [syncing, setSyncing] = useState(false)
+
+  // same debounce as the news search — the URL embeds q
+  useEffect(() => {
+    const t = setTimeout(() => setQ(qInput.trim()), 300)
+    return () => clearTimeout(t)
+  }, [qInput])
 
   const { data, loading, reload, setData } = useApi<{ papers: Paper[] }>(
     `/api/papers?range=${range}&sort=${sort}${savedOnly ? '&saved=1' : ''}${q ? `&q=${encodeURIComponent(q)}` : ''}`
@@ -501,7 +544,7 @@ function PapersTab() {
         {autoSyncing && <span className="text-xs text-muted-foreground">Syncing in background…</span>}
         <div className="relative ml-auto w-full sm:w-52">
           <FaMagnifyingGlass className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search papers…" className="h-9 pl-9 text-xs" aria-label="Search papers" />
+          <Input value={qInput} onChange={(e) => setQInput(e.target.value)} placeholder="Search papers…" className="h-9 pl-9 text-xs" aria-label="Search papers" />
         </div>
       </div>
 
@@ -595,6 +638,7 @@ function SourcesDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v
   const [name, setName] = useState('')
   const [url, setUrl] = useState('')
   const [type, setType] = useState('blog')
+  const [confirmDel, setConfirmDel] = useState<string | null>(null)
   const { toast } = useToast()
 
   return (
@@ -646,11 +690,23 @@ function SourcesDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v
               </span>
               <button
                 onClick={async () => {
-                  await api.del(`/api/sources/${s.id}`)
-                  reload()
+                  // two-step inline confirm: first click arms, second deletes
+                  if (confirmDel !== s.id) {
+                    setConfirmDel(s.id)
+                    return
+                  }
+                  setConfirmDel(null)
+                  try {
+                    await api.del(`/api/sources/${s.id}`)
+                    reload()
+                    toast({ title: `Removed “${s.name}”` })
+                  } catch {
+                    toast({ title: 'Could not remove the source', variant: 'destructive' })
+                  }
                 }}
-                className="text-muted-foreground hover:text-danger"
-                aria-label="Remove source"
+                className={cn('text-muted-foreground transition-colors hover:text-danger', confirmDel === s.id && 'font-semibold text-danger')}
+                aria-label={confirmDel === s.id ? `Click again to permanently remove ${s.name}` : `Remove source ${s.name}`}
+                title={confirmDel === s.id ? 'Click again to remove' : 'Remove'}
               >
                 <FaTrashCan className="h-4 w-4" />
               </button>

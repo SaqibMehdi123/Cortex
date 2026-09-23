@@ -3,7 +3,7 @@ import { db } from '@/lib/db'
 import { usedCitationNumbers } from '@/lib/citations'
 import { createAI } from '@/lib/ai'
 import { getSessionUser, unauthorized } from '@/lib/auth-server'
-import { guardUsage, isActivePro, limitMessage, usageFields } from '@/lib/entitlements'
+import { guardUsage, isActivePro, limitMessage, peekUsage, usageFields } from '@/lib/entitlements'
 
 // Long AI generations must not hit the default serverless timeout (Vercel Hobby caps at 60 s).
 export const maxDuration = 60
@@ -30,6 +30,8 @@ export async function GET() {
     })
     return NextResponse.json({
       messages: messages.map((m) => ({ ...m, citations: m.citations ? JSON.parse(m.citations) : null })),
+      // usage powers the dock's "12/15 messages today" counter
+      usage: await peekUsage(user.id, 'copilot', isActivePro(user)),
     })
   } catch (e) {
     console.error('GET /api/copilot error', e)
@@ -191,7 +193,7 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    return NextResponse.json({ userMessage: userMsg, assistantMessage: { ...assistantMsg, citations: usedCitations } })
+    return NextResponse.json({ userMessage: userMsg, assistantMessage: { ...assistantMsg, citations: usedCitations }, usage: await peekUsage(user.id, 'copilot', isActivePro(user)) })
   } catch (e) {
     console.error('POST /api/copilot error', e)
     return NextResponse.json({ error: 'AI request failed. Please try again.' }, { status: 500 })

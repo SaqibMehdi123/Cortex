@@ -3,11 +3,12 @@
 import { FaBell, FaBolt, FaBullseye, FaChartLine, FaCircleCheck, FaClock, FaGear, FaIndent, FaLayerGroup, FaMagnifyingGlass, FaMoon, FaOutdent, FaPlus, FaRightFromBracket, FaShareNodes, FaSpinner, FaSun, FaTriangleExclamation, FaWandMagicSparkles, FaXmark } from 'react-icons/fa6'
 import { cn } from '@/lib/utils'
 import { useUI, type ViewKey, NAV_ITEMS, MOBILE_TABS, NAV_GROUP_LABELS } from '@/lib/nav-config'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTheme } from 'next-themes'
 import { api } from '@/lib/client'
 import { useIdleLogout } from '@/hooks/use-idle-logout'
+import { Button } from '@/components/ui/button'
 import type { DashboardData } from '@/lib/types'
 import { recurrenceLabel } from '@/lib/reminder-span'
 import { hasTimePart } from '@/lib/plan-span'
@@ -49,7 +50,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { resolvedTheme, setTheme } = useTheme()
   const [online, setOnline] = useState(true)
   const [synced, setSynced] = useState(true)
-  const [notifData, setNotifData] = useState<DashboardData | null>(null)
 
   useEffect(() => {
     const update = () => {
@@ -74,13 +74,24 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
-  useEffect(() => {
-    let cancelled = false
+  const [notifData, setNotifData] = useState<DashboardData | null>(null)
+  const [notifFailed, setNotifFailed] = useState(false)
+  const notifFetchedAt = useRef(0)
+
+  const loadNotif = useCallback(() => {
+    notifFetchedAt.current = Date.now()
     api.get<DashboardData>('/api/dashboard').then((d) => {
-      if (!cancelled) setNotifData(d)
-    }).catch(() => {})
-    return () => { cancelled = true }
-  }, [view])
+      setNotifData(d)
+      setNotifFailed(false)
+    }).catch(() => setNotifFailed(true))
+  }, [])
+
+  useEffect(() => {
+    // cache the badge payload for 60s — the dashboard already fetches the same
+    // data, so re-hitting /api/dashboard on every view switch was pure waste
+    if (notifData && Date.now() - notifFetchedAt.current < 60_000) return
+    loadNotif()
+  }, [view, loadNotif, notifData])
 
   // ⌘K / Ctrl+K
   useEffect(() => {
@@ -102,11 +113,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // notification panel lists first) — not the whole day agenda
   const notifCount = dueFlashcards + urgentDeadlines + remindersToday + dueTodayCount
   const collapsed = sidebarCollapsed
+  // platform-aware shortcut hint (⌘ on Apple devices, Ctrl elsewhere)
+  const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/i.test(navigator.userAgent)
 
   return (
     <TooltipProvider delayDuration={300}>
-      <div className="min-h-screen bg-background">
-        {/* Offline banner */}
+      <div className={cn('min-h-screen bg-background', !online && 'pt-9')}>
+        {/* Offline banner — the pt on the wrapper below keeps it from
+            painting over the mobile header */}
         {!online && (
           <div className="fixed inset-x-0 top-0 z-50 flex items-center justify-center gap-2 bg-warning py-1.5 text-xs font-medium text-white">
             <FaTriangleExclamation className="h-3.5 w-3.5" /> Offline — changes will sync when you reconnect
@@ -145,7 +159,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               {!collapsed && (
                 <>
                   <span className="flex-1 text-left">Search…</span>
-                  <kbd className="rounded border bg-muted px-1 py-0.5 text-[10px] font-medium">⌘K</kbd>
+                  <kbd className="rounded border bg-muted px-1 py-0.5 text-[10px] font-medium">{isMac ? '⌘K' : 'Ctrl K'}</kbd>
                 </>
               )}
             </button>
@@ -200,7 +214,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="space-y-1 border-t px-2 py-3">
             <Popover>
               <PopoverTrigger asChild>
-                <button aria-label="Notifications" className={cn('relative flex min-h-[36px] w-full items-center gap-2.5 rounded-lg px-3 py-1.5 text-[13px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground', collapsed && 'justify-center px-0')}>
+                <button aria-label={`Notifications${notifCount > 0 ? ` (${notifCount})` : ''}`} className={cn('relative flex min-h-[36px] w-full items-center gap-2.5 rounded-lg px-3 py-1.5 text-[13px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground', collapsed && 'justify-center px-0')}>
                   <FaBell className="h-4 w-4" />
                   {!collapsed && 'Notifications'}
                   {notifCount > 0 && (
@@ -211,7 +225,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </button>
               </PopoverTrigger>
               <PopoverContent side="right" align="start" className="w-80 p-0">
-                <NotificationPanel data={notifData} />
+                <NotificationPanel data={notifData} failed={notifFailed} onRetry={loadNotif} />
               </PopoverContent>
             </Popover>
 
@@ -297,7 +311,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   <FaXmark className="h-4.5 w-4.5" />
                 </SheetClose>
               </SheetHeader>
-              <NotificationPanel data={notifData} onNavigate={() => setMobileNotifOpen(false)} />
+              <NotificationPanel data={notifData} failed={notifFailed} onRetry={loadNotif} onNavigate={() => setMobileNotifOpen(false)} />
             </SheetContent>
           </Sheet>
           <button
@@ -477,11 +491,19 @@ function ChatToggleButton() {
   )
 }
 
-function NotificationPanel({ data, onNavigate }: { data: DashboardData | null; onNavigate?: () => void }) {
+function NotificationPanel({ data, failed, onRetry, onNavigate }: { data: DashboardData | null; failed?: boolean; onRetry?: () => void; onNavigate?: () => void }) {
   const setView = useUI((s) => s.setView)
   const go = (v: Parameters<typeof setView>[0]) => {
     setView(v)
     onNavigate?.()
+  }
+  if (failed) {
+    return (
+      <div className="p-4">
+        <p className="text-sm text-muted-foreground">Couldn&apos;t load notifications.</p>
+        <Button variant="outline" size="sm" className="mt-2" onClick={onRetry}>Try again</Button>
+      </div>
+    )
   }
   if (!data) return <div className="p-4 text-sm text-muted-foreground">Loading…</div>
   const { deadlines, briefing, todayTasks, todayReminders } = data
@@ -599,7 +621,12 @@ function UserChip({ collapsed }: { collapsed: boolean }) {
       role="button"
       tabIndex={0}
       onClick={() => setView('settings')}
-      onKeyDown={(e) => e.key === 'Enter' && setView('settings')}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          setView('settings')
+        }
+      }}
       className={cn(
         'group mt-1 flex cursor-pointer items-center gap-2.5 rounded-lg border bg-card px-2.5 py-2 transition-colors hover:bg-muted',
         collapsed && 'justify-center border-transparent bg-transparent px-0 hover:bg-transparent',
@@ -618,7 +645,7 @@ function UserChip({ collapsed }: { collapsed: boolean }) {
           <button
             onClick={signOut}
             disabled={busy}
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:text-danger group-hover:opacity-100"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:text-danger focus-visible:opacity-100 group-hover:opacity-100"
             aria-label="Sign out"
           >
             {busy ? <FaSpinner className="h-3.5 w-3.5 animate-spin" /> : <FaRightFromBracket className="h-3.5 w-3.5" />}

@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
@@ -240,6 +242,22 @@ function PipelineTab() {
   const [addOpen, setAddOpen] = useState(false)
   const [dragId, setDragId] = useState<string | null>(null)
   const [scanning, setScanning] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState<Opportunity | null>(null)
+  const [deleteBusy, setDeleteBusy] = useState(false)
+
+  async function deleteApplication(o: Opportunity) {
+    setDeleteBusy(true)
+    try {
+      await api.del(`/api/opportunities/${o.id}`)
+      setConfirmDelete(null)
+      reload()
+      toast({ title: 'Application removed', description: `${o.company} — ${o.role} is off the board.` })
+    } catch {
+      toast({ title: 'Could not remove the application', variant: 'destructive' })
+    } finally {
+      setDeleteBusy(false)
+    }
+  }
 
   async function scanGmail() {
     setScanning(true)
@@ -280,7 +298,14 @@ function PipelineTab() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
-          {nextDeadline?.deadline ? `Next deadline: ${nextDeadline.company} in ${Math.max(0, daysUntil(nextDeadline.deadline) ?? 0)}d.` : ''}
+          {nextDeadline?.deadline
+            ? (() => {
+                const d = daysUntil(nextDeadline.deadline) ?? 0
+                return d < 0
+                  ? `Next deadline: ${nextDeadline.company} — overdue by ${-d}d.`
+                  : `Next deadline: ${nextDeadline.company} in ${d}d.`
+              })()
+            : ''}
         </p>
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" onClick={scanGmail} disabled={scanning}>
@@ -298,7 +323,7 @@ function PipelineTab() {
         <FaEnvelope className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
         <p>
           <b className="text-foreground">Gmail, for real:</b> connect your Google account in Settings → Google account, then hit “Scan Gmail” —
-          career emails from the last 60 days are classified (opportunity / rejection / interview / offer / deadline) and land on this board automatically.
+          your 25 most recent inbox emails from the past 60 days are classified (opportunity / rejection / interview / offer / deadline) and land on this board automatically.
           Manual paste still works via “Add application”.
         </p>
       </div>
@@ -361,6 +386,27 @@ function PipelineTab() {
                               </span>
                             )}
                           </div>
+                          {/* touch fallback: HTML5 drag doesn't fire on phones —
+                              a tap-friendly stage picker moves cards instead */}
+                          <Select
+                            value={o.status}
+                            onValueChange={(v) => {
+                              if (v !== o.status) moveStage(o.id, v)
+                            }}
+                          >
+                            <SelectTrigger
+                              className="mt-2 h-7 w-full text-[11px] xl:hidden"
+                              aria-label={`Stage for ${o.company} — ${o.role}`}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {STAGES.map((s) => (
+                                <SelectItem key={s.key} value={s.key}>{s.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                           {o.deadline && (
                             <p className={cn('mt-2 flex items-center gap-1 text-[10px] font-medium', dl !== null && dl < 0 ? 'text-danger' : dl !== null && dl <= 7 ? 'text-warning' : 'text-muted-foreground')}>
                               <FaClock className="h-3 w-3" />
@@ -375,12 +421,9 @@ function PipelineTab() {
                           )}
                           {o.nextAction && <p className="mt-1 line-clamp-1 text-[10px] italic text-muted-foreground">→ {o.nextAction}</p>}
                           <button
-                            onClick={async () => {
-                              await api.del(`/api/opportunities/${o.id}`)
-                              reload()
-                            }}
-                            className="mt-1.5 flex h-6 w-6 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:text-danger group-hover:opacity-100"
-                            aria-label="Delete application"
+                            onClick={() => setConfirmDelete(o)}
+                            className="mt-1.5 flex h-7 w-7 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:text-danger focus-visible:opacity-100 group-hover:opacity-100 max-sm:opacity-100"
+                            aria-label={`Delete application ${o.company} — ${o.role}`}
                           >
                             <FaTrashCan className="h-3 w-3" />
                           </button>
@@ -388,7 +431,7 @@ function PipelineTab() {
                       </Card>
                     )
                   })}
-                  {cards.length === 0 && <p className="py-5 text-center text-[10px] text-muted-foreground">Drag cards here</p>}
+                  {cards.length === 0 && <p className="py-5 text-center text-[10px] text-muted-foreground">Drag cards here — or use a card's stage picker</p>}
                 </div>
               </div>
             )
@@ -397,6 +440,27 @@ function PipelineTab() {
       )}
 
       <AddApplicationDialog open={addOpen} onOpenChange={setAddOpen} onCreated={() => { reload(); setView('career') }} />
+
+      <AlertDialog open={!!confirmDelete} onOpenChange={(v) => !v && setConfirmDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove “{confirmDelete?.company} — {confirmDelete?.role}”?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This deletes the application card and its notes from your pipeline. This can’t be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteBusy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-danger text-white hover:bg-danger/90"
+              disabled={deleteBusy}
+              onClick={() => confirmDelete && deleteApplication(confirmDelete)}
+            >
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
@@ -617,7 +681,12 @@ function DiscoverTab() {
     setBusyId(l.id)
     try {
       await api.patch(`/api/opportunities/listings/${l.id}`, { saved: !l.saved })
-      if (!l.saved) toast({ title: 'Saved to pipeline', description: `${l.role} at ${l.company} now sits on your pipeline board.` })
+      if (!l.saved) {
+        toast({ title: 'Saved to pipeline', description: `${l.role} at ${l.company} now sits on your pipeline board.` })
+      } else {
+        // symmetric feedback — the pipeline card created on save deliberately stays
+        toast({ title: 'Removed from shortlist', description: 'The pipeline entry it created is kept — remove it from the board if you like.' })
+      }
       reload()
     } catch {
       toast({ title: 'Could not update listing', variant: 'destructive' })

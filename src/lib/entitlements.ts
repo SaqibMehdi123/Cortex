@@ -93,10 +93,24 @@ export async function guardUsage(userId: string, feature: UsageFeature, isPro: b
   return { allowed: true, isPro, used: used + 1, limit }
 }
 
+/** Read-only usage peek for UI counters — does NOT record a use. */
+export async function peekUsage(userId: string, feature: UsageFeature, isPro: boolean): Promise<UsageVerdict> {
+  const { limit } = FREE_LIMITS[feature]
+  const day = windowStart(feature, new Date())
+  const row = await db.dailyUsage.findUnique({
+    where: { userId_day_feature: { userId, day, feature } },
+    select: { count: true },
+  })
+  const used = row?.count ?? 0
+  return { allowed: isPro || used < limit, isPro, used, limit }
+}
+
 /** Human, actionable message for a free-plan limit hit. */
 export function limitMessage(feature: UsageFeature, limit: number): string {
   const { window } = FREE_LIMITS[feature]
-  const span = window === 'day' ? 'today' : 'this month'
+  // Day windows reset at UTC midnight = 5 AM PKT — say so, otherwise a student
+  // blocked at 11 PM reads "today" and expects a reset at midnight their time.
+  const span = window === 'day' ? 'today (resets 5 AM PKT)' : 'this month'
   const label =
     feature === 'copilot' ? 'Copilot messages' :
     feature === 'summary' ? 'AI summaries' :

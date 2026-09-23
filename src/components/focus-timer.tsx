@@ -30,6 +30,8 @@ import { useToast } from '@/hooks/use-toast'
 
 export function FocusTimer() {
   const { toast } = useToast()
+  // two-step End guard: armed by clicking End mid-phase, auto-disarms
+  const [endArmed, setEndArmed] = useState(false)
 
   const phase = usePomodoro((s) => s.phase)
   const secondsLeft = usePomodoro((s) => s.secondsLeft)
@@ -221,8 +223,23 @@ export function FocusTimer() {
                       <FaForwardStep className="h-4 w-4" />
                     </Button>
                   )}
-                  <Button variant="outline" onClick={() => usePomodoro.getState().stop()} aria-label="End session">
-                    <FaXmark className="h-4 w-4" /> End
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      // mid-phase End discards the running pomodoro — warn once
+                      if (running && secondsLeft > 30 && !endArmed) {
+                        setEndArmed(true)
+                        setTimeout(() => setEndArmed(false), 4000)
+                        return
+                      }
+                      setEndArmed(false)
+                      usePomodoro.getState().stop()
+                    }}
+                    className={cn(endArmed && 'border-danger/50 bg-danger/10 text-danger')}
+                    aria-label={endArmed ? 'Click again to end and discard this session' : 'End session'}
+                    title={endArmed ? 'Click again — this phase’s progress will be discarded' : 'End session'}
+                  >
+                    <FaXmark className="h-4 w-4" /> {endArmed ? 'Sure?' : 'End'}
                   </Button>
                   {typeof Notification !== 'undefined' && Notification.permission === 'default' && (
                     <Button

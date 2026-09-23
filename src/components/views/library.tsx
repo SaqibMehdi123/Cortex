@@ -1,6 +1,6 @@
 'use client'
 
-import { FaBookOpen, FaBorderAll, FaCheck, FaEllipsis, FaFileArrowUp, FaFileLines, FaLayerGroup, FaLink, FaList, FaMagnifyingGlass, FaNoteSticky, FaPaste, FaPenToSquare, FaPlus, FaRegBookmark, FaSpinner, FaTrashCan, FaXmark } from 'react-icons/fa6'
+import { FaBookOpen, FaBorderAll, FaCheck, FaEllipsis, FaFileArrowUp, FaFileLines, FaLayerGroup, FaLink, FaList, FaMagnifyingGlass, FaNoteSticky, FaPaste, FaPenToSquare, FaPlus, FaRegBookmark, FaSpinner, FaTrashCan, FaTriangleExclamation, FaXmark } from 'react-icons/fa6'
 import { useMemo, useState, useEffect, useCallback } from 'react'
 import { api, fmtDate } from '@/lib/client'
 import type { DocumentItem, Note, ShelfItem } from '@/lib/types'
@@ -56,6 +56,7 @@ export function LibraryView() {
   const openReader = useUI((s) => s.openReader)
   const { toast } = useToast()
   const [status, setStatus] = useState('all')
+  const [qInput, setQInput] = useState('')
   const [q, setQ] = useState('')
   const [layout, setLayout] = useState<'grid' | 'list'>('grid')
   const [importOpen, setImportOpen] = useState(false)
@@ -66,7 +67,10 @@ export function LibraryView() {
   const [noteEditTitle, setNoteEditTitle] = useState('')
   const [noteEditBody, setNoteEditBody] = useState('')
   const [noteSaving, setNoteSaving] = useState(false)
+  const [noteDiscardArmed, setNoteDiscardArmed] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState<DocumentItem | null>(null)
+  const [confirmDeleteNote, setConfirmDeleteNote] = useState<Note | null>(null)
+  const [deleteBusy, setDeleteBusy] = useState(false)
 
   // Shelves — named groups on the bookcase; a book sits on at most one.
   const [shelves, setShelves] = useState<ShelfItem[]>([])
@@ -76,7 +80,14 @@ export function LibraryView() {
   const [shelfNameDraft, setShelfNameDraft] = useState('')
   const [confirmShelfDelete, setConfirmShelfDelete] = useState<ShelfItem | null>(null)
 
-  const { data, loading, reload } = useApi<{ documents: DocumentItem[] }>(
+  // debounce the search: the URL embeds q, so per-keystroke state fires one
+  // GET per character against /api/documents
+  useEffect(() => {
+    const t = setTimeout(() => setQ(qInput.trim()), 300)
+    return () => clearTimeout(t)
+  }, [qInput])
+
+  const { data, loading, error, reload } = useApi<{ documents: DocumentItem[] }>(
     `/api/documents?status=${status}${q ? `&q=${encodeURIComponent(q)}` : ''}${activeShelf ? `&shelf=${activeShelf}` : ''}`
   )
   const [allDocs, setAllDocs] = useState<DocumentItem[] | null>(null)
@@ -132,6 +143,7 @@ export function LibraryView() {
   }
 
   async function deleteDoc(doc: DocumentItem) {
+    setDeleteBusy(true)
     try {
       await api.del(`/api/documents/${doc.id}`)
       setConfirmDelete(null)
@@ -141,6 +153,23 @@ export function LibraryView() {
       toast({ title: 'Document deleted', description: `“${doc.title}” was removed from your library.` })
     } catch {
       toast({ title: 'Delete failed', variant: 'destructive' })
+    } finally {
+      setDeleteBusy(false)
+    }
+  }
+
+  async function deleteNote(note: Note) {
+    setDeleteBusy(true)
+    try {
+      await api.del(`/api/notes/${note.id}`)
+      setNotes((prev) => (prev ? prev.filter((x) => x.id !== note.id) : prev))
+      if (viewNote?.id === note.id) setViewNote(null)
+      setConfirmDeleteNote(null)
+      toast({ title: 'Note deleted' })
+    } catch {
+      toast({ title: 'Delete failed', variant: 'destructive' })
+    } finally {
+      setDeleteBusy(false)
     }
   }
 
@@ -391,10 +420,10 @@ export function LibraryView() {
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative flex-1 sm:max-w-xs">
               <FaMagnifyingGlass className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search library…" className="pl-9" aria-label="Search documents" />
+              <Input value={qInput} onChange={(e) => setQInput(e.target.value)} placeholder="Search library…" className="pl-9" aria-label="Search documents" />
             </div>
             <div className="flex gap-1.5">
-              {['all', 'queued', 'reading', 'finished'].map((s) => (
+              {['all', 'queued', 'reading', 'finished', 'paused'].map((s) => (
                 <button
                   key={s}
                   onClick={() => setStatus(s)}
@@ -423,6 +452,13 @@ export function LibraryView() {
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {[1, 2, 3].map((i) => <SkeletonCard key={i} />)}
             </div>
+          ) : error && !data ? (
+            <EmptyState
+              icon={<FaTriangleExclamation className="h-5 w-5 text-danger" />}
+              title="Couldn't load your library"
+              description="A network error got in the way — your books and notes are safe. Try again."
+              action={{ label: 'Retry', onClick: () => reload() }}
+            />
           ) : !data || data.documents.length === 0 ? (
             <EmptyState
               icon={<FaBookOpen className="h-5 w-5" />}
@@ -431,7 +467,7 @@ export function LibraryView() {
                 q
                   ? 'Try a different search — titles, authors, tags and summaries are all searched.'
                   : activeShelf
-                    ? 'Drag a book onto this shelf, or open the shelf button on any book card to file it here.'
+                    ? 'Use the shelf button (layers icon) on any book card to file it here — drag & drop works on desktop too.'
                     : "Paste a URL, paste raw text, or add a book — then ask AI questions about it."
               }
               action={activeShelf && !q ? undefined : { label: 'Import', onClick: () => setImportOpen(true) }}
@@ -659,13 +695,11 @@ export function LibraryView() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-7 w-7 opacity-0 transition-opacity group-hover:opacity-100"
-                        aria-label="Delete note"
-                        onClick={async (e) => {
+                        className="h-7 w-7 text-muted-foreground opacity-0 transition-opacity hover:text-danger focus-visible:opacity-100 group-hover:opacity-100 max-sm:opacity-100"
+                        aria-label={`Delete note ${n.title ?? ''}`.trim() || 'Delete note'}
+                        onClick={(e) => {
                           e.stopPropagation()
-                          await api.del(`/api/notes/${n.id}`)
-                          setNotes(notes.filter((x) => x.id !== n.id))
-                          if (viewNote?.id === n.id) setViewNote(null)
+                          setConfirmDeleteNote(n)
                         }}
                       >
                         <FaTrashCan className="h-3.5 w-3.5" />
@@ -723,7 +757,22 @@ export function LibraryView() {
                 aria-label="Note text"
               />
               <div className="flex justify-end gap-2">
-                <Button variant="ghost" onClick={() => setEditingNote(false)} disabled={noteSaving}>Cancel</Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    // guard unsaved work: first click warns, second discards
+                    const dirty = viewNote && (noteEditBody !== viewNote.content || noteEditTitle !== (viewNote.title ?? ''))
+                    if (dirty && !noteDiscardArmed) {
+                      setNoteDiscardArmed(true)
+                      return
+                    }
+                    setNoteDiscardArmed(false)
+                    setEditingNote(false)
+                  }}
+                  disabled={noteSaving}
+                >
+                  {noteDiscardArmed ? 'Discard changes?' : 'Cancel'}
+                </Button>
                 <Button onClick={saveNoteEdit} disabled={noteSaving || !noteEditBody.trim()}>
                   {noteSaving ? <FaSpinner className="h-4 w-4 animate-spin" /> : <FaCheck className="h-4 w-4" />} Save note
                 </Button>
@@ -766,11 +815,10 @@ export function LibraryView() {
                 </Button>
                 <Button
                   variant="destructive"
-                  onClick={async () => {
+                  onClick={() => {
                     if (!viewNote) return
-                    await api.del(`/api/notes/${viewNote.id}`)
-                    setNotes((prev) => (prev ? prev.filter((x) => x.id !== viewNote.id) : prev))
-                    setViewNote(null)
+                    // route through the confirm dialog instead of deleting instantly
+                    setConfirmDeleteNote(viewNote)
                   }}
                 >
                   Delete
@@ -791,10 +839,33 @@ export function LibraryView() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={deleteBusy}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="bg-danger text-white hover:bg-danger/90"
+              disabled={deleteBusy}
               onClick={() => confirmDelete && deleteDoc(confirmDelete)}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete confirmation for notes (card trash icon + viewer Delete) */}
+      <AlertDialog open={!!confirmDeleteNote} onOpenChange={(v) => !v && setConfirmDeleteNote(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete “{confirmDeleteNote?.title ?? (confirmDeleteNote?.source === 'voice' ? 'Voice memo' : 'Note')}”?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently removes the note and its text. This can’t be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteBusy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-danger text-white hover:bg-danger/90"
+              disabled={deleteBusy}
+              onClick={() => confirmDeleteNote && deleteNote(confirmDeleteNote)}
             >
               Delete
             </AlertDialogAction>

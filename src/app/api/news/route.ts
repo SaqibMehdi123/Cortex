@@ -2,6 +2,27 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getSessionUser, unauthorized } from '@/lib/auth-server'
 
+// PATCH /api/news — bulk actions on the feed ({ markAllRead: true })
+export async function PATCH(req: NextRequest) {
+  try {
+    const user = await getSessionUser()
+    if (!user) return unauthorized()
+
+    const body = await req.json().catch(() => ({}))
+    if (body?.markAllRead) {
+      const r = await db.newsArticle.updateMany({
+        where: { userId: user.id, read: false },
+        data: { read: true },
+      })
+      return NextResponse.json({ ok: true, updated: r.count })
+    }
+    return NextResponse.json({ error: 'Nothing to do' }, { status: 400 })
+  } catch (e) {
+    console.error('PATCH /api/news error', e)
+    return NextResponse.json({ error: 'Failed to update news' }, { status: 500 })
+  }
+}
+
 // GET /api/news?category=&saved=&source=&q=&range=day|week|month|year — the user's feed
 export async function GET(req: NextRequest) {
   try {

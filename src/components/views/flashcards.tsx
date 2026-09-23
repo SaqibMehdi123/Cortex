@@ -1,7 +1,7 @@
 'use client'
 
-import { FaBookOpen, FaLayerGroup, FaPlay, FaPlus, FaRotateLeft, FaSpinner, FaTrashCan } from 'react-icons/fa6'
-import { useState } from 'react'
+import { FaBookOpen, FaLayerGroup, FaPlay, FaPlus, FaRotateLeft, FaSpinner, FaTrashCan, FaTriangleExclamation } from 'react-icons/fa6'
+import { useEffect, useState } from 'react'
 import { api, fmtDate } from '@/lib/client'
 import type { Flashcard } from '@/lib/types'
 import { useApi } from '@/lib/client'
@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Progress } from '@/components/ui/progress'
 import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
@@ -25,13 +26,16 @@ const GRADE_STYLE: Record<Grade, { label: string; className: string }> = {
 
 export function FlashcardsView() {
   const { toast } = useToast()
-  const { data, loading, reload } = useApi<{ cards: Flashcard[]; dueCount: number }>('/api/flashcards')
+  const { data, loading, error, reload } = useApi<{ cards: Flashcard[]; dueCount: number }>('/api/flashcards')
   const [reviewing, setReviewing] = useState(false)
   const [queue, setQueue] = useState<Flashcard[]>([])
   const [current, setCurrent] = useState<Flashcard | null>(null)
   const [flipped, setFlipped] = useState(false)
   const [reviewed, setReviewed] = useState(0)
   const [createOpen, setCreateOpen] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState<Flashcard | null>(null)
+  const [deleteBusy, setDeleteBusy] = useState(false)
+  const [showAll, setShowAll] = useState(false)
 
   async function startReview() {
     try {
@@ -84,7 +88,60 @@ export function FlashcardsView() {
     import('@/lib/confetti').then(({ fireConfetti }) => fireConfetti(60))
   }
 
+  async function deleteCard(c: Flashcard) {
+    setDeleteBusy(true)
+    try {
+      await api.del(`/api/flashcards/${c.id}`)
+      setConfirmDelete(null)
+      reload()
+      toast({ title: 'Card deleted' })
+    } catch {
+      toast({ title: 'Delete failed', variant: 'destructive' })
+    } finally {
+      setDeleteBusy(false)
+    }
+  }
+
+  // keyboard review: Space flips, 1–4 grade — the Anki convention, and the
+  // only path for keyboard users (the overlay is pointer-first otherwise)
+  useEffect(() => {
+    if (!reviewing) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setReviewing(false)
+        setCurrent(null)
+        reload()
+        return
+      }
+      if (!flipped && (e.key === ' ' || e.key === 'Enter')) {
+        e.preventDefault()
+        setFlipped(true)
+        return
+      }
+      if (flipped) {
+        if (e.key === '1') grade('again')
+        else if (e.key === '2') grade('hard')
+        else if (e.key === '3') grade('good')
+        else if (e.key === '4') grade('easy')
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [reviewing, flipped, current, queue])
+
   if (loading || !data) {
+    if (!loading && error) {
+      return (
+        <div className="anim-fade-up pb-8">
+          <EmptyState
+            icon={<FaTriangleExclamation className="h-5 w-5 text-danger" />}
+            title="Couldn't load your flashcards"
+            description="A network error got in the way — your decks are safe. Try again."
+            action={{ label: 'Retry', onClick: () => reload() }}
+          />
+        </div>
+      )
+    }
     return (
       <div className="space-y-4 pb-8">
         <SkeletonCard className="h-24" />
@@ -136,11 +193,14 @@ export function FlashcardsView() {
             <EmptyState
               icon={<FaLayerGroup className="h-5 w-5" />}
               title="No flashcards yet"
-              description="Open any document in the Reader, select text, and tap “Flashcard” — the AI writes the question and answer for you."
+              description="Open any document in the Reader, select text, and tap “Flashcard” — the AI writes the question and answer for you. You can also write cards by hand."
+              action={{ label: 'Write a card now', onClick: () => setCreateOpen(true) }}
             />
           </div>
         ) : (
-          data.cards.slice(0, 24).map((c) => (
+          (
+            showAll ? data.cards : data.cards.slice(0, 24)
+          ).map((c) => (
             <Card key={c.id} className="group transition-shadow hover:shadow-soft">
               <CardContent className="p-4">
                 <p className="line-clamp-2 text-sm font-medium">{c.front}</p>
@@ -155,12 +215,9 @@ export function FlashcardsView() {
                     {new Date(c.dueAt) <= new Date() ? 'due now' : fmtDate(c.dueAt, { month: 'short', day: 'numeric' })}
                   </span>
                   <button
-                    onClick={async () => {
-                      await api.del(`/api/flashcards/${c.id}`)
-                      reload()
-                    }}
-                    className="shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-danger group-hover:opacity-100"
-                    aria-label="Delete card"
+                    onClick={() => setConfirmDelete(c)}
+                    className="shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-danger focus-visible:opacity-100 group-hover:opacity-100 max-sm:opacity-100"
+                    aria-label={`Delete card “${c.front.slice(0, 40)}”`}
                   >
                     <FaTrashCan className="h-3.5 w-3.5" />
                   </button>
@@ -168,6 +225,13 @@ export function FlashcardsView() {
               </CardContent>
             </Card>
           ))
+        )}
+        {!showAll && data.cards.length > 24 && (
+          <div className="sm:col-span-2 lg:col-span-3 text-center">
+            <Button variant="ghost" size="sm" onClick={() => setShowAll(true)}>
+              Show all {data.cards.length} cards
+            </Button>
+          </div>
         )}
       </div>
 
@@ -205,7 +269,7 @@ export function FlashcardsView() {
                   <div className={cn('absolute inset-0 flex flex-col items-center justify-center rounded-3xl border bg-card p-8 text-center shadow-soft', flipped && 'opacity-0')} style={{ backfaceVisibility: 'hidden' }}>
                     <span className="mb-4 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Question</span>
                     <p className="text-lg font-semibold leading-snug sm:text-xl">{current.front}</p>
-                    <p className="mt-6 text-xs text-muted-foreground">tap to reveal</p>
+                    <p className="mt-6 text-xs text-muted-foreground">tap to reveal · or press Space</p>
                   </div>
                   {/* back */}
                   <div className={cn('absolute inset-0 flex flex-col items-center justify-center rounded-3xl border bg-sidebar-accent/30 p-8 text-center shadow-soft', !flipped && 'opacity-0')} style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}>
@@ -226,7 +290,7 @@ export function FlashcardsView() {
                           className={cn('flex min-h-[56px] flex-col items-center justify-center rounded-xl text-sm font-semibold transition-transform active:scale-95', GRADE_STYLE[g].className)}
                         >
                           {GRADE_STYLE[g].label}
-                          <span className="text-[10px] opacity-80">{labels[g]}</span>
+                          <span className="text-[10px] opacity-80">{labels[g]} · {['again', 'hard', 'good', 'easy'].indexOf(g) + 1}</span>
                         </button>
                       )
                     })}
@@ -239,6 +303,28 @@ export function FlashcardsView() {
       </AnimatePresence>
 
       <CreateCardDialog open={createOpen} onOpenChange={setCreateOpen} onCreated={() => reload()} />
+
+      {/* delete confirmation */}
+      <AlertDialog open={!!confirmDelete} onOpenChange={(v) => !v && setConfirmDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this card?</AlertDialogTitle>
+            <AlertDialogDescription>
+              “{confirmDelete?.front}” — its review history is removed too. This can’t be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteBusy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-danger text-white hover:bg-danger/90"
+              disabled={deleteBusy}
+              onClick={() => confirmDelete && deleteCard(confirmDelete)}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

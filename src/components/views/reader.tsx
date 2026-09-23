@@ -21,6 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { useToast } from '@/hooks/use-toast'
+import { ToastAction } from '@/components/ui/toast'
 import { cn } from '@/lib/utils'
 import { splitCitationParts } from '@/lib/citations'
 import ReactMarkdown from 'react-markdown'
@@ -135,6 +136,7 @@ export function ReaderView() {
   const [mindmapOpen, setMindmapOpen] = useState(false)
   const [mindmaps, setMindmaps] = useState<{ id: string; title: string }[]>([])
   const [mindmapChoice, setMindmapChoice] = useState<string>('__new')
+  const [mindmapAdding, setMindmapAdding] = useState(false)
   const [lastHighlightId, setLastHighlightId] = useState<string | null>(null)
   const [flashcardBusy, setFlashcardBusy] = useState(false)
   const [manualProgress, setManualProgress] = useState(0)
@@ -145,6 +147,28 @@ export function ReaderView() {
   const [editTitle, setEditTitle] = useState('')
   const [editBody, setEditBody] = useState('')
   const [savingEdit, setSavingEdit] = useState(false)
+  const [editDiscardArmed, setEditDiscardArmed] = useState(false)
+  const [pasteBusy, setPasteBusy] = useState(false)
+  // unsaved-work guard: title/body differ from the stored doc
+  const editDirty = !!doc && (editBody !== (doc.content ?? '') || editTitle.trim() !== doc.title)
+
+  // shared by Cancel and the header Back button — first click warns, second exits
+  function exitEditMode(force = false) {
+    if (editDirty && !force && !editDiscardArmed) {
+      setEditDiscardArmed(true)
+      return
+    }
+    setEditDiscardArmed(false)
+    setEditing(false)
+  }
+
+  function closeReaderGuarded() {
+    if (editing) {
+      exitEditMode()
+      return
+    }
+    closeReader()
+  }
 
   const contentRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -519,13 +543,27 @@ export function ReaderView() {
             className="mx-auto mt-4 min-h-[160px] max-w-xl text-left"
             placeholder="Paste the full text…"
             aria-label="Paste document text"
-            onBlur={(e) => {
+            disabled={pasteBusy}
+            onBlur={async (e) => {
               const v = e.target.value.trim()
-              if (v && doc) {
-                api.patch(`/api/documents/${doc.id}`, { content: v }).then(() => setDoc({ ...doc, content: v }))
+              if (!v || !doc || pasteBusy) return
+              setPasteBusy(true)
+              try {
+                await api.patch(`/api/documents/${doc.id}`, { content: v })
+                setDoc({ ...doc, content: v })
+                toast({ title: 'Text saved — highlighting & AI are ready' })
+              } catch {
+                toast({ title: 'Could not save the pasted text', variant: 'destructive' })
+              } finally {
+                setPasteBusy(false)
               }
             }}
           />
+          {pasteBusy && (
+            <p className="mt-1.5 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+              <FaSpinner className="h-3 w-3 animate-spin" /> Saving…
+            </p>
+          )}
         </div>
       )
     }
@@ -610,12 +648,21 @@ export function ReaderView() {
     if (!msg || !doc || aiBusy) return
     setAiInput('')
     setAiBusy(true)
-    setMessages((prev) => [...prev, { id: `tmp-${Date.now()}`, documentId: doc.id, role: 'user', content: msg, citations: null, createdAt: new Date().toISOString() }])
+    const optimisticId = `tmp-${Date.now()}`
+    setMessages((prev) => [...prev, { id: optimisticId, documentId: doc.id, role: 'user', content: msg, citations: null, createdAt: new Date().toISOString() }])
     try {
       const d = await api.post<{ assistantMessage: ChatMessage }>('/api/chat', { documentId: doc.id, message: msg })
       setMessages((prev) => [...prev, d.assistantMessage])
-    } catch {
-      toast({ title: 'AI request failed', variant: 'destructive' })
+    } catch (e) {
+      // a question with no answer looks hung: drop the optimistic bubble and
+      // surface the real reason (including the friendly 402 limit message)
+      setMessages((prev) => prev.filter((m) => m.id !== optimisticId))
+      toast({
+        title: 'AI request failed',
+        description: e instanceof Error && e.message ? e.message : 'Try again in a moment.',
+        variant: 'destructive',
+      })
+      setAiInput(msg)
     } finally {
       setAiBusy(false)
     }
@@ -637,7 +684,8 @@ export function ReaderView() {
   }
 
   async function addToMindmap() {
-    if (!doc) return
+    if (!doc || mindmapAdding) return
+    setMindmapAdding(true)
     try {
       if (mindmapChoice === '__new') {
         const res = await api.post<{ existing?: boolean }>('/api/mindmaps/generate', { documentId: doc.id })
@@ -663,29 +711,42 @@ export function ReaderView() {
       setMindmapOpen(false)
     } catch {
       toast({ title: 'Mindmap update failed', variant: 'destructive' })
+    } finally {
+      setMindmapAdding(false)
     }
   }
 
   async function toggleFinished() {
     if (!doc) return
     const finished = doc.status === 'finished'
-    const { document: updated } = await api.patch<{ document: DocumentItem }>(`/api/documents/${doc.id}`, {
-      status: finished ? 'reading' : 'finished',
-      progress: finished ? doc.progress : 100,
-    })
-    setDoc({ ...doc, ...updated, highlights: doc.highlights })
-    setManualProgress(updated.progress)
-    if (!finished) toast({ title: 'Marked as finished' })
+    try {
+      const { document: updated } = await api.patch<{ document: DocumentItem }>(`/api/documents/${doc.id}`, {
+        status: finished ? 'reading' : 'finished',
+        progress: finished ? doc.progress : 100,
+      })
+      setDoc({ ...doc, ...updated, highlights: doc.highlights })
+      setManualProgress(updated.progress)
+      if (!finished) toast({ title: 'Marked as finished' })
+    } catch (e) {
+      toast({ title: 'Could not update status', description: e instanceof Error ? e.message : undefined, variant: 'destructive' })
+    }
   }
 
   async function saveManualProgress(v: number) {
     if (!doc) return
+    const prev = manualProgress
     setManualProgress(v)
-    const { document: updated } = await api.patch<{ document: DocumentItem }>(`/api/documents/${doc.id}`, {
-      progress: v,
-      status: doc.status === 'queued' ? 'reading' : doc.status,
-    })
-    setDoc({ ...doc, ...updated, highlights: doc.highlights })
+    try {
+      const { document: updated } = await api.patch<{ document: DocumentItem }>(`/api/documents/${doc.id}`, {
+        progress: v,
+        status: doc.status === 'queued' ? 'reading' : doc.status,
+      })
+      setDoc({ ...doc, ...updated, highlights: doc.highlights })
+    } catch {
+      // revert the slider so it doesn't lie about what was saved
+      setManualProgress(prev)
+      toast({ title: 'Could not save progress', variant: 'destructive' })
+    }
   }
 
   const takeaways = useMemo<string[]>(() => {
@@ -852,10 +913,33 @@ export function ReaderView() {
                     <p className="min-w-0 flex-1 text-xs leading-relaxed text-foreground/90 line-clamp-4">{h.text}</p>
                     <button
                       onClick={async () => {
-                        await api.del(`/api/highlights/${h.id}`)
+                        // optimistic removal + Undo toast — highlights are small,
+                        // an undo beats a confirm dialog here
+                        const snapshot = doc!
                         setDoc({ ...doc!, highlights: doc!.highlights.filter((x) => x.id !== h.id) })
+                        const restore = async () => {
+                          try {
+                            const created = await api.post<{ highlight: Highlight }>('/api/highlights', {
+                              documentId: snapshot.id, text: h.text, color: h.color, note: h.note,
+                            })
+                            const highlight = created.highlight
+                            setDoc((d) => (d ? { ...d, highlights: [...d.highlights, highlight] } : d))
+                          } catch {
+                            toast({ title: 'Could not restore the highlight', variant: 'destructive' })
+                          }
+                        }
+                        try {
+                          await api.del(`/api/highlights/${h.id}`)
+                          toast({
+                            title: 'Highlight deleted',
+                            action: <ToastAction altText="Undo" onClick={restore}>Undo</ToastAction>,
+                          })
+                        } catch {
+                          setDoc(snapshot)
+                          toast({ title: 'Could not delete the highlight', variant: 'destructive' })
+                        }
                       }}
-                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:text-danger group-hover:opacity-100"
+                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:text-danger focus-visible:opacity-100 group-hover:opacity-100 max-sm:opacity-100"
                       aria-label="Delete highlight"
                     >
                       <FaTrashCan className="h-3.5 w-3.5" />
@@ -897,8 +981,8 @@ export function ReaderView() {
 
       {/* ── Reader header ── */}
       <header className="flex flex-wrap items-center gap-2 border-b pb-2.5">
-        <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={closeReader} aria-label="Back to library">
-          <FaArrowLeft className="h-4.5 w-4.5" />
+        <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={closeReaderGuarded} aria-label={editing && editDirty ? 'Unsaved changes — click again to go back' : 'Back to library'} title={editing && editDirty ? 'Unsaved changes — click again to leave' : 'Back to library'}>
+          <FaArrowLeft className={cn('h-4.5 w-4.5', editing && editDirty && editDiscardArmed && 'text-danger')} />
         </Button>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold leading-tight">{doc?.title ?? 'Loading…'}</p>
@@ -1025,8 +1109,19 @@ export function ReaderView() {
                       className="min-h-[55vh] bg-card leading-relaxed"
                     />
                     <div className="flex items-center justify-end gap-2">
-                      <p className="mr-auto text-xs text-muted-foreground">{editBody.trim() ? `${editBody.trim().split(/\s+/).length} words` : 'Empty'}</p>
-                      <Button variant="ghost" size="sm" onClick={() => setEditing(false)} disabled={savingEdit}>Cancel</Button>
+                      <p className="mr-auto text-xs text-muted-foreground">
+                        {editDirty ? <span className="text-warning">Unsaved changes</span> : null}
+                        {' '}{editBody.trim() ? `${editBody.trim().split(/\s+/).length} words` : 'Empty'}
+                      </p>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => exitEditMode()}
+                        disabled={savingEdit}
+                        className={cn(editDiscardArmed && 'font-semibold text-danger hover:text-danger')}
+                      >
+                        {editDiscardArmed ? 'Discard changes?' : 'Cancel'}
+                      </Button>
                       <Button size="sm" className="h-8 gap-1.5 text-xs" onClick={saveEdit} disabled={savingEdit || !editTitle.trim()}>
                         {savingEdit ? <FaSpinner className="h-3.5 w-3.5 animate-spin" /> : <FaCheck className="h-3.5 w-3.5" />} Save changes
                       </Button>
@@ -1130,6 +1225,9 @@ export function ReaderView() {
             )}
             role="dialog"
             aria-label="AI chat"
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setReaderChatOpen(false)
+            }}
           >
             <div className="flex shrink-0 items-center gap-2 border-b px-3 py-2.5">
               <FaWandMagicSparkles className="h-3.5 w-3.5 shrink-0 text-primary" />
@@ -1171,7 +1269,12 @@ export function ReaderView() {
       {selection && (
         <div
           className="anim-pop fixed z-50 flex -translate-x-1/2 -translate-y-full items-center gap-1 rounded-xl border bg-popover p-1.5 shadow-lg"
-          style={{ left: selection.x, top: selection.y - 8 }}
+          style={{
+            // clamp to the viewport so long selections near the top/right edge
+            // stay reachable (the toolbar is anchored above the selection)
+            left: Math.max(90, Math.min(selection.x, window.innerWidth - 90)),
+            top: Math.max(64, selection.y - 8),
+          }}
           role="toolbar"
           aria-label="Highlight actions"
         >
@@ -1285,9 +1388,10 @@ export function ReaderView() {
             </SelectContent>
           </Select>
           <div className="flex justify-end gap-2">
-            <Button variant="ghost" onClick={() => setMindmapOpen(false)}>Cancel</Button>
-            <Button onClick={addToMindmap}>
-              <FaShareNodes className="mr-1.5 h-4 w-4" /> Add
+            <Button variant="ghost" onClick={() => setMindmapOpen(false)} disabled={mindmapAdding}>Cancel</Button>
+            <Button onClick={addToMindmap} disabled={mindmapAdding}>
+              {mindmapAdding ? <FaSpinner className="mr-1.5 h-4 w-4 animate-spin" /> : <FaShareNodes className="mr-1.5 h-4 w-4" />}
+              {mindmapAdding ? 'Adding…' : 'Add'}
             </Button>
           </div>
         </DialogContent>

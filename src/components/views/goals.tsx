@@ -10,6 +10,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -31,6 +32,8 @@ export function GoalsView() {
   const [createOpen, setCreateOpen] = useState(false)
   const [editGoal, setEditGoal] = useState<Goal | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [deletingGoal, setDeletingGoal] = useState<Goal | null>(null)
+  const [deleteBusy, setDeleteBusy] = useState(false)
 
   async function toggleMilestone(goal: Goal, m: Milestone) {
     const done = !m.done
@@ -68,6 +71,7 @@ export function GoalsView() {
   }
 
   async function deleteGoal(goal: Goal) {
+    setDeletingGoal(null)
     try {
       await api.del(`/api/goals/${goal.id}`)
       reload()
@@ -121,8 +125,14 @@ export function GoalsView() {
           </DropdownMenuItem>
         )}
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => deleteGoal(goal)} className="text-danger focus:text-danger">
-          <FaTrashCan className="mr-2 h-3.5 w-3.5" /> Delete
+        <DropdownMenuItem
+          onSelect={(e) => {
+            e.preventDefault()
+            setDeletingGoal(goal)
+          }}
+          className="text-danger focus:text-danger"
+        >
+          <FaTrashCan className="mr-2 h-3.5 w-3.5" /> Delete…
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -154,8 +164,12 @@ export function GoalsView() {
       {active.length === 0 ? (
         <EmptyState
           icon={<FaBullseye className="h-5 w-5" />}
-          title="Set your first goal"
-          description="Break a big ambition into milestones, check them off, and watch the progress ring and streak build up."
+          title={completed.length > 0 ? 'No active goals right now' : 'Set your first goal'}
+          description={
+            completed.length > 0
+              ? 'You completed everything — time to aim at something new. Break it into milestones and watch the progress ring build up.'
+              : 'Break a big ambition into milestones, check them off, and watch the progress ring and streak build up.'
+          }
           action={{ label: 'Create a goal', onClick: () => setCreateOpen(true) }}
         />
       ) : (
@@ -287,6 +301,33 @@ export function GoalsView() {
 
       <CreateGoalDialog open={createOpen} onOpenChange={setCreateOpen} onCreated={() => reload()} />
       <EditGoalDialog goal={editGoal} onOpenChange={() => setEditGoal(null)} onSaved={() => reload()} />
+
+      <AlertDialog open={deletingGoal !== null} onOpenChange={(v) => !v && setDeletingGoal(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete “{deletingGoal?.title}”?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes the goal and its {deletingGoal?.milestones.length ?? 0} milestone{deletingGoal?.milestones.length === 1 ? '' : 's'} — completed ones included. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteBusy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-danger text-white hover:bg-danger/90"
+              disabled={deleteBusy}
+              onClick={async () => {
+                if (!deletingGoal) return
+                setDeleteBusy(true)
+                await deleteGoal(deletingGoal)
+                setDeleteBusy(false)
+              }}
+            >
+              {deleteBusy ? <FaSpinner className="mr-1.5 h-4 w-4 animate-spin" /> : <FaTrashCan className="mr-1.5 h-4 w-4" />}
+              Delete goal
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
@@ -344,18 +385,22 @@ function MilestoneRow({ m, onToggle, onDeleted }: { m: Milestone; onToggle: () =
       {m.completedAt && <span className="shrink-0 text-[10px] text-success">{fmtDate(m.completedAt, { month: 'short', day: 'numeric' })}</span>}
       <button
         onClick={() => setEditing(true)}
-        className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100"
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
         aria-label="Rename milestone"
       >
         <FaPencil className="h-3 w-3" />
       </button>
       <button
         onClick={async () => {
-          await api.del(`/api/milestones/${m.id}`)
-          onDeleted()
+          try {
+            await api.del(`/api/milestones/${m.id}`)
+            onDeleted()
+          } catch {
+            toast({ title: 'Could not delete milestone', variant: 'destructive' })
+          }
         }}
-        className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:text-danger group-hover:opacity-100"
-        aria-label="Delete milestone"
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:text-danger focus-visible:opacity-100 group-hover:opacity-100"
+        aria-label={`Delete milestone ${m.title}`}
       >
         <FaTrashCan className="h-3 w-3" />
       </button>
@@ -364,16 +409,23 @@ function MilestoneRow({ m, onToggle, onDeleted }: { m: Milestone; onToggle: () =
 }
 
 function AddMilestoneInline({ goalId, onAdded }: { goalId: string; onAdded: () => void }) {
+  const { toast } = useToast()
   const [value, setValue] = useState('')
   const [busy, setBusy] = useState(false)
 
   const add = async () => {
     if (!value.trim() || busy) return
     setBusy(true)
-    await api.post('/api/milestones', { goalId, title: value.trim() })
-    setValue('')
-    setBusy(false)
-    onAdded()
+    try {
+      await api.post('/api/milestones', { goalId, title: value.trim() })
+      setValue('')
+      onAdded()
+    } catch (e) {
+      toast({ title: 'Could not add milestone', description: e instanceof Error ? e.message : undefined, variant: 'destructive' })
+    } finally {
+      // finally matters: without it a failed POST left the button disabled forever
+      setBusy(false)
+    }
   }
 
   return (
@@ -386,8 +438,9 @@ function AddMilestoneInline({ goalId, onAdded }: { goalId: string; onAdded: () =
         }}
         placeholder="Add milestone…"
         className="h-8 text-sm"
+        aria-label="New milestone"
       />
-      <Button size="sm" variant="ghost" className="h-8" disabled={busy || !value.trim()} onClick={add}>
+      <Button size="sm" variant="ghost" className="h-8" disabled={busy || !value.trim()} onClick={add} aria-label="Add milestone">
         <FaPlus className="h-3.5 w-3.5" />
       </Button>
     </div>

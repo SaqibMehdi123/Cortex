@@ -1,6 +1,6 @@
 'use client'
 
-import { FaBell, FaBullseye, FaCalendarDays, FaCheck, FaChevronDown, FaChevronRight, FaClock, FaClone, FaEllipsis, FaList, FaPencil, FaPlus, FaSpinner, FaStopwatch, FaTableColumns, FaTrashCan, FaWandMagicSparkles, FaXmark } from 'react-icons/fa6'
+import { FaArrowTrendUp, FaBell, FaBullseye, FaCalendarDays, FaCalendarWeek, FaCheck, FaChevronDown, FaChevronRight, FaClock, FaClone, FaEllipsis, FaList, FaPencil, FaPlus, FaSpinner, FaStopwatch, FaSun, FaTableColumns, FaTrashCan, FaWandMagicSparkles, FaXmark } from 'react-icons/fa6'
 import { useCallback, useMemo, useState, useEffect, type FormEvent } from 'react'
 import { api, todayISO } from '@/lib/client'
 import type { Plan, Task, Goal, Reminder } from '@/lib/types'
@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
@@ -140,7 +141,7 @@ export function PlansView() {
   async function addDayTask(title: string, dueISO?: string) {
     try {
       await api.post('/api/tasks', { title, dueDate: dueISO })
-      toast({ title: dueISO ? 'Task added' : 'Task added', description: dueISO ? undefined : 'No date set — find it under Unscheduled.' })
+      toast({ title: 'Task added', description: dueISO ? undefined : 'No date set — find it under Unscheduled.' })
       reload()
       dayTasks.reload()
       unassignedTasks.reload()
@@ -480,39 +481,78 @@ function PlanTitleToggle({ node, onReload }: { node: PlanNode; onReload: () => v
 // menu: edit details / destination goal / save as template / delete
 function PlanRowMenu({ node, onReload, onSetGoal, onEditPlan, onSaveTemplate }: { node: PlanNode; onReload: () => void; onSetGoal: (node: PlanNode) => void; onEditPlan: (node: PlanNode) => void; onSaveTemplate: (node: PlanNode) => void }) {
   const { toast } = useToast()
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [busy, setBusy] = useState(false)
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground opacity-60 transition-opacity hover:bg-muted hover:opacity-100"
-          aria-label={`Actions for ${node.title}`}
-        >
-          <FaEllipsis className="h-4 w-4" />
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48">
-        <DropdownMenuItem onClick={() => onEditPlan(node)}>
-          <FaPencil className="mr-2 h-3.5 w-3.5" /> Edit details…
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => onSetGoal(node)}>
-          <FaBullseye className="mr-2 h-3.5 w-3.5" /> Destination goal…
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => onSaveTemplate(node)}>
-          <FaClone className="mr-2 h-3.5 w-3.5" /> Save as template…
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          onClick={async () => {
-            await api.del(`/api/plans/${node.id}`)
-            toast({ title: 'Plan deleted' })
-            onReload()
-          }}
-          className="text-danger focus:text-danger"
-        >
-          <FaTrashCan className="mr-2 h-3.5 w-3.5" /> Delete plan
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground opacity-60 transition-opacity hover:bg-muted hover:opacity-100"
+            aria-label={`Actions for ${node.title}`}
+          >
+            <FaEllipsis className="h-4 w-4" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-48">
+          <DropdownMenuItem onClick={() => onEditPlan(node)}>
+            <FaPencil className="mr-2 h-3.5 w-3.5" /> Edit details…
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => onSetGoal(node)}>
+            <FaBullseye className="mr-2 h-3.5 w-3.5" /> Destination goal…
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => onSaveTemplate(node)}>
+            <FaClone className="mr-2 h-3.5 w-3.5" /> Save as template…
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            // opens the confirm dialog (rendered outside the menu, which must
+            // close first) — deleting a plan cascade-kills its sub-plans & tasks
+            onSelect={(e) => {
+              e.preventDefault()
+              setConfirmDelete(true)
+            }}
+            className="text-danger focus:text-danger"
+          >
+            <FaTrashCan className="mr-2 h-3.5 w-3.5" /> Delete plan…
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete “{node.title}”?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently deletes this plan, its sub-plans and all their tasks. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="flex justify-end gap-2">
+            <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-danger text-white hover:bg-danger/90"
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true)
+                try {
+                  await api.del(`/api/plans/${node.id}`)
+                  toast({ title: 'Plan deleted' })
+                  onReload()
+                } catch (e) {
+                  toast({ title: 'Could not delete the plan', description: e instanceof Error ? e.message : undefined, variant: 'destructive' })
+                } finally {
+                  setBusy(false)
+                  setConfirmDelete(false)
+                }
+              }}
+            >
+              {busy ? <FaSpinner className="mr-1.5 h-4 w-4 animate-spin" /> : <FaTrashCan className="mr-1.5 h-4 w-4" />}
+              Delete plan
+            </AlertDialogAction>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   )
 }
 
@@ -538,6 +578,7 @@ function PlanNodeRow({
   const [newTask, setNewTask] = useState('')
   const [dueDate, setDueDate] = useState('')
   const [dueTime, setDueTime] = useState('')
+  const [sending, setSending] = useState(false)
   const { toast } = useToast()
   const setView = useUI((s) => s.setView)
   const hasChildren = (node.children?.length ?? 0) > 0
@@ -545,7 +586,13 @@ function PlanNodeRow({
   const tasks = node.tasks ?? []
   const doneCount = tasks.filter((t) => t.status === 'done').length
 
-  const TF_ICON: Record<string, string> = { year: '🎯', quarter: '📈', month: '📅', week: '🗓', day: '☀️' }
+  const TF_ICON: Record<string, React.ReactNode> = {
+    year: <FaBullseye className="h-3.5 w-3.5 text-primary" />,
+    quarter: <FaArrowTrendUp className="h-3.5 w-3.5 text-[var(--chart-3)]" />,
+    month: <FaCalendarDays className="h-3.5 w-3.5 text-[var(--chart-4)]" />,
+    week: <FaCalendarWeek className="h-3.5 w-3.5 text-[var(--chart-5)]" />,
+    day: <FaSun className="h-3.5 w-3.5 text-warning" />,
+  }
 
   function closeForm() {
     setAdding(false)
@@ -554,14 +601,19 @@ function PlanNodeRow({
     setDueTime('')
   }
 
-  function submitTask() {
+  async function submitTask() {
     const t = newTask.trim()
-    if (!t) return
-    // date + time compose into a real instant in the USER's timezone (a bare
-    // string would be parsed as UTC on the server and shift the clock)
-    const due = dueDate ? new Date(`${dueDate}T${dueTime || '09:00'}:00`).toISOString() : undefined
-    onAddTask(node.id, t, due)
-    closeForm()
+    if (!t || sending) return
+    setSending(true)
+    try {
+      // date + time compose into a real instant in the USER's timezone (a bare
+      // string would be parsed as UTC on the server and shift the clock)
+      const due = dueDate ? new Date(`${dueDate}T${dueTime || '09:00'}:00`).toISOString() : undefined
+      await onAddTask(node.id, t, due)
+      closeForm()
+    } finally {
+      setSending(false)
+    }
   }
 
   return (
@@ -573,7 +625,7 @@ function PlanNodeRow({
               {isCollapsed ? <FaChevronRight className="h-4 w-4" /> : <FaChevronDown className="h-4 w-4" />}
             </button>
           ) : (
-            <span className="w-6 text-center text-sm">{TF_ICON[node.timeframe]}</span>
+            <span className="flex w-6 justify-center text-muted-foreground">{TF_ICON[node.timeframe] ?? <FaCalendarDays className="h-3.5 w-3.5" />}</span>
           )}
           <PlanTitleToggle node={node} onReload={onReload} />
           <PlanSpanChip node={node} />
@@ -613,7 +665,8 @@ function PlanNodeRow({
                 className="h-9"
                 autoFocus
               />
-              <Button size="sm" className="h-9" onClick={submitTask}>
+              <Button size="sm" className="h-9" onClick={submitTask} disabled={sending}>
+                {sending ? <FaSpinner className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
                 Add
               </Button>
               <Button size="sm" variant="ghost" className="h-9" onClick={closeForm}>
@@ -749,7 +802,7 @@ function TaskRow({ task, onToggle, onSnooze, onEdit, draggable }: { task: Task; 
       )}
       <button
         onClick={() => setFocusTask({ id: task.id, title: task.title, goalId: task.goalId })}
-        className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground opacity-100 transition-opacity hover:bg-muted hover:text-primary sm:opacity-0 sm:group-hover:opacity-100"
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-muted-foreground opacity-100 transition-opacity hover:bg-muted hover:text-primary focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
         aria-label={`Pomodoro on ${task.title}`}
         title="Start a pomodoro on this task"
       >
@@ -757,13 +810,13 @@ function TaskRow({ task, onToggle, onSnooze, onEdit, draggable }: { task: Task; 
       </button>
       <button
         onClick={() => onEdit(task)}
-        className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground opacity-100 transition-opacity hover:bg-muted sm:opacity-0 sm:group-hover:opacity-100"
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-muted-foreground opacity-100 transition-opacity hover:bg-muted focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
         aria-label={`Edit ${task.title}`}
         title="Edit task"
       >
         <FaPencil className="h-3.5 w-3.5" />
       </button>
-      <button onClick={() => onSnooze(task)} className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground opacity-100 transition-opacity hover:bg-muted sm:opacity-0 sm:group-hover:opacity-100" aria-label="Snooze to tomorrow" title="Snooze to tomorrow">
+      <button onClick={() => onSnooze(task)} className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-muted-foreground opacity-100 transition-opacity hover:bg-muted focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100" aria-label="Snooze to tomorrow" title="Snooze to tomorrow">
         <FaClock className="h-3.5 w-3.5" />
       </button>
     </div>
@@ -842,8 +895,9 @@ function DayQuickAdd({ selectedDay, onAdd }: { selectedDay: string; onAdd: (titl
   )
 }
 
-// ─── Reminder row: complete (current occurrence), edit, delete ──────
+// ─── Reminder row: complete (current occurrence), edit, two-step delete ──
 function ReminderRow({ reminder, onDone, onDelete, onEdit }: { reminder: Reminder; onDone: (r: Reminder) => void; onDelete: (r: Reminder) => void; onEdit: (r: Reminder) => void }) {
+  const [armed, setArmed] = useState(false)
   return (
     <div className="group flex items-center gap-2.5 rounded-lg border bg-background px-3 py-2 transition-all hover:bg-muted/40">
       <Checkbox checked={false} onCheckedChange={() => onDone(reminder)} aria-label={`Done with ${reminder.title}`} />
@@ -859,17 +913,25 @@ function ReminderRow({ reminder, onDone, onDelete, onEdit }: { reminder: Reminde
       )}
       <button
         onClick={() => onEdit(reminder)}
-        className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground opacity-100 transition-opacity hover:bg-muted sm:opacity-0 sm:group-hover:opacity-100"
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-muted-foreground opacity-100 transition-opacity hover:bg-muted focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
         aria-label={`Edit ${reminder.title}`}
         title="Edit reminder"
       >
         <FaPencil className="h-3.5 w-3.5" />
       </button>
       <button
-        onClick={() => onDelete(reminder)}
-        className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground opacity-100 transition-opacity hover:bg-muted hover:text-danger sm:opacity-0 sm:group-hover:opacity-100"
-        aria-label={`Delete ${reminder.title}`}
-        title="Delete reminder"
+        onClick={() => {
+          // two-step confirm: first click arms, second (or blur-away) deletes
+          if (armed) onDelete(reminder)
+          else setArmed(true)
+        }}
+        onBlur={() => setArmed(false)}
+        className={cn(
+          'flex h-7 w-7 shrink-0 items-center justify-center rounded transition-opacity focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100',
+          armed ? 'bg-danger/10 text-danger opacity-100' : 'text-muted-foreground opacity-100 hover:bg-muted hover:text-danger'
+        )}
+        aria-label={armed ? `Click again to permanently delete ${reminder.title}` : `Delete ${reminder.title}`}
+        title={armed ? 'Click again to delete' : 'Delete reminder'}
       >
         <FaTrashCan className="h-3.5 w-3.5" />
       </button>
@@ -1096,6 +1158,7 @@ function EditTaskDialog({ open, task, plans, onClose, onSaved }: {
   const [estimate, setEstimate] = useState(30)
   const [planId, setPlanId] = useState('none')
   const [busy, setBusy] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const { toast } = useToast()
 
   // prefill from the task each time the dialog opens
@@ -1237,8 +1300,16 @@ function EditTaskDialog({ open, task, plans, onClose, onSaved }: {
           </div>
         </div>
         <div className="flex items-center justify-between gap-2">
-          <Button variant="ghost" className="text-danger hover:text-danger hover:bg-danger/10" onClick={remove} disabled={busy}>
-            <FaTrashCan className="mr-1.5 h-3.5 w-3.5" /> Delete
+          <Button
+            variant="ghost"
+            className={cn('hover:bg-danger/10', confirmDelete ? 'bg-danger/10 font-semibold text-danger hover:text-danger' : 'text-danger hover:text-danger')}
+            onClick={() => (confirmDelete ? remove() : setConfirmDelete(true))}
+            onBlur={() => setConfirmDelete(false)}
+            disabled={busy}
+            aria-label={confirmDelete ? 'Click again to permanently delete this task' : 'Delete task'}
+          >
+            <FaTrashCan className="mr-1.5 h-3.5 w-3.5" />
+            {confirmDelete ? 'Really delete?' : 'Delete'}
           </Button>
           <div className="flex gap-2">
             <Button variant="ghost" onClick={onClose}>Cancel</Button>
@@ -1254,6 +1325,7 @@ function EditTaskDialog({ open, task, plans, onClose, onSaved }: {
 
 // ─── Kanban board (todo / doing / done) ────────────────────────────
 function KanbanBoard({ plans, individual, cutoffMs, day, onToggle, onEditTask, onReload }: { plans: PlanNode[]; individual: Task[]; cutoffMs: number; day: string; onToggle: (t: Task) => void; onEditTask: (t: Task) => void; onReload: () => void }) {
+  const { toast } = useToast()
   const columns: { key: string; label: string }[] = [
     { key: 'todo', label: 'To do' },
     { key: 'doing', label: 'In progress' },
@@ -1302,8 +1374,12 @@ function KanbanBoard({ plans, individual, cutoffMs, day, onToggle, onEditTask, o
             e.preventDefault()
             const taskId = e.dataTransfer.getData('text/task-id')
             if (taskId) {
-              await api.patch(`/api/tasks/${taskId}`, { status: col.key })
-              onReload()
+              try {
+                await api.patch(`/api/tasks/${taskId}`, { status: col.key })
+                onReload()
+              } catch {
+                toast({ title: 'Could not move the task', variant: 'destructive' })
+              }
             }
           }}
         >
@@ -1317,7 +1393,14 @@ function KanbanBoard({ plans, individual, cutoffMs, day, onToggle, onEditTask, o
                   draggable
                   onDragStart={(e) => e.dataTransfer.setData('text/task-id', t.id)}
                   onClick={() => onEditTask(t)}
-                  className="cursor-pointer rounded-lg border bg-card p-3 transition-shadow hover:shadow-soft"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      onEditTask(t)
+                    }
+                  }}
+                  className="cursor-pointer rounded-lg border bg-card p-3 transition-shadow focus-visible:outline-2 focus-visible:outline-primary hover:shadow-soft"
                   role="button"
                   aria-label={`Edit ${t.title}`}
                 >
@@ -1344,13 +1427,40 @@ function KanbanBoard({ plans, individual, cutoffMs, day, onToggle, onEditTask, o
                           {planTitle ?? 'Individual'}
                         </span>
                       </div>
+                      {/* touch fallback: HTML5 drag never fires on phones, so a
+                          tap-friendly stage picker sits under the card meta */}
+                      <Select
+                        value={t.status}
+                        onValueChange={async (v) => {
+                          if (v === t.status) return
+                          try {
+                            await api.patch(`/api/tasks/${t.id}`, { status: v })
+                            onReload()
+                          } catch {
+                            toast({ title: 'Could not move the task', variant: 'destructive' })
+                          }
+                        }}
+                      >
+                        <SelectTrigger
+                          className="mt-2 h-7 w-full text-[11px] lg:hidden"
+                          aria-label={`Stage for ${t.title}`}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {columns.map((c) => (
+                            <SelectItem key={c.key} value={c.key}>{c.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                 </div>
               </motion.div>
             ))}
             {inColumn(col.key).length === 0 && (
-              <p className="py-6 text-center text-xs text-muted-foreground">Drag tasks here</p>
+              <p className="py-6 text-center text-xs text-muted-foreground">Drag tasks here — or use the stage picker on a card</p>
             )}
           </div>
         </div>
@@ -1758,6 +1868,7 @@ function TplPlanRow({ node, depth, isRoot, onChanged }: { node: TemplatePlanNode
   const { toast } = useToast()
   const [renaming, setRenaming] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [tplArmed, setTplArmed] = useState(false)
 
   async function saveRename(title: string) {
     const t = title.trim()
@@ -1775,7 +1886,6 @@ function TplPlanRow({ node, depth, isRoot, onChanged }: { node: TemplatePlanNode
   }
 
   async function removePlan() {
-    if (!window.confirm(`Remove “${node.title}” — and its sub-plans and tasks — from this template?`)) return
     setBusy(true)
     try {
       await api.del(`/api/plans/${node.id}`)
@@ -1814,7 +1924,21 @@ function TplPlanRow({ node, depth, isRoot, onChanged }: { node: TemplatePlanNode
           <button onClick={() => setRenaming(true)} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100" aria-label={`Rename ${node.title}`}><FaPencil className="h-3 w-3" /></button>
         )}
         {!isRoot && (
-          <button onClick={removePlan} disabled={busy} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:text-danger group-hover:opacity-100" aria-label={`Remove ${node.title} from template`}>
+          <button
+            onClick={() => {
+              // two-step confirm replaces the old native window.confirm
+              if (tplArmed) removePlan()
+              else setTplArmed(true)
+            }}
+            onBlur={() => setTplArmed(false)}
+            disabled={busy}
+            className={cn(
+              'flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition-opacity',
+              tplArmed ? 'bg-danger/10 text-danger opacity-100' : 'text-muted-foreground opacity-0 hover:text-danger group-hover:opacity-100'
+            )}
+            aria-label={tplArmed ? `Click again to remove ${node.title} and its sub-plans and tasks from the template` : `Remove ${node.title} from template`}
+            title={tplArmed ? 'Click again to remove' : 'Remove from template'}
+          >
             {busy ? <FaSpinner className="h-3 w-3 animate-spin" /> : <FaTrashCan className="h-3 w-3" />}
           </button>
         )}

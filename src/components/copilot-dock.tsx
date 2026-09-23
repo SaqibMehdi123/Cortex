@@ -1,7 +1,8 @@
 'use client'
 
-import { FaPaperPlane, FaQuoteLeft, FaSpinner, FaTrashCan, FaWandMagicSparkles, FaXmark } from 'react-icons/fa6'
+import { FaPaperPlane, FaQuoteLeft, FaRotate, FaSpinner, FaTrashCan, FaWandMagicSparkles, FaXmark } from 'react-icons/fa6'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
 import { useUI } from '@/lib/nav-config'
 import { useUI as useUIStore } from '@/lib/store'
 import { useMediaQuery } from '@/components/shared'
@@ -12,6 +13,8 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
+import { useToast } from '@/hooks/use-toast'
 import ReactMarkdown from 'react-markdown'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 
@@ -91,21 +94,37 @@ export function CopilotDock() {
   const openReader = useUI((s) => s.openReader)
   const setReaderJumpPage = useUIStore((s) => s.setReaderJumpPage)
   const isMobile = useMediaQuery('(max-width: 1279px)')
+  const { toast } = useToast()
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
+  const [loadError, setLoadError] = useState(false)
+  const [usage, setUsage] = useState<{ used: number; limit: number; isPro: boolean } | null>(null)
+  // last failed send — rendered as a retryable error card instead of a fake
+  // assistant bubble, so a network hiccup never looks like a wrong answer
+  const [sendError, setSendError] = useState<{ message: string; isLimit: boolean; retryText: string } | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
     if (!copilotOpen) return
-    api.get<{ messages: ChatMessage[] }>('/api/copilot')
-      .then((d) => setMessages(d.messages))
-      .catch(() => {})
+    setLoadError(false)
+    api.get<{ messages: ChatMessage[]; usage?: { used: number; limit: number; isPro: boolean } }>('/api/copilot')
+      .then((d) => {
+        setMessages(d.messages)
+        if (d.usage) setUsage(d.usage)
+      })
+      .catch(() => setLoadError(true))
   }, [copilotOpen])
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
-  }, [messages, busy])
+  }, [messages, busy, sendError])
+
+  // focus the composer when the desktop dock opens, and let Esc close it
+  useEffect(() => {
+    if (copilotOpen && !isMobile) setTimeout(() => inputRef.current?.focus(), 150)
+  }, [copilotOpen, isMobile])
 
   const send = useCallback(
     async (text?: string) => {
@@ -113,16 +132,24 @@ export function CopilotDock() {
       if (!msg || busy) return
       setInput('')
       setBusy(true)
+      setSendError(null)
       const optimistic: ChatMessage = { id: `tmp-${Date.now()}`, documentId: null, role: 'user', content: msg, citations: null, createdAt: new Date().toISOString() }
       setMessages((prev) => [...prev, optimistic])
       try {
-        const d = await api.post<{ userMessage: ChatMessage; assistantMessage: ChatMessage }>('/api/copilot', { message: msg })
+        const d = await api.post<{ userMessage: ChatMessage; assistantMessage: ChatMessage; usage?: { used: number; limit: number; isPro: boolean } }>('/api/copilot', { message: msg })
         setMessages((prev) => [...prev.filter((m) => m.id !== optimistic.id), d.userMessage, d.assistantMessage])
-      } catch {
-        setMessages((prev) => [
-          ...prev,
-          { id: `err-${Date.now()}`, documentId: null, role: 'assistant', content: 'Sorry, I hit an error. Please try again.', citations: null, createdAt: new Date().toISOString() },
-        ])
+        if (d.usage) setUsage(d.usage)
+      } catch (e) {
+        const err = e as Error & { status?: number }
+        const isLimit = err.status === 402
+        // surface the server's real message: for 402 that's the friendly
+        // "Free plan: 15 copilot messages today… upgrade" copy — swallowing it
+        // made a routine limit look like a bug
+        setSendError({
+          message: err.message || 'Sorry, I hit an error. Please try again.',
+          isLimit,
+          retryText: msg,
+        })
       } finally {
         setBusy(false)
       }
@@ -154,20 +181,35 @@ export function CopilotDock() {
         <div className="flex-1">
           <p className="text-sm font-semibold">Copilot</p>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8"
-          aria-label="Clear conversation"
-          onClick={async () => {
-            try {
-              await api.del('/api/copilot')
-              setMessages([])
-            } catch {}
-          }}
-        >
-          <FaTrashCan className="h-4 w-4" />
-        </Button>
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Clear conversation">
+              <FaTrashCan className="h-4 w-4" />
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Clear the whole conversation?</AlertDialogTitle>
+              <AlertDialogDescription>All Copilot messages will be permanently deleted. This cannot be undone.</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={async () => {
+                  try {
+                    await api.del('/api/copilot')
+                    setMessages([])
+                    setSendError(null)
+                  } catch {
+                    toast({ title: 'Could not clear the conversation', variant: 'destructive' })
+                  }
+                }}
+              >
+                Clear
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
         {/* Close — always visible. On <xl the dock renders inside a
             full-screen sheet, so this X is the only way back. */}
         <Button
@@ -181,7 +223,33 @@ export function CopilotDock() {
         </Button>
       </div>
 
-      <div ref={scrollRef} className="scroll-thin flex-1 overflow-y-auto px-4 py-4">
+      <div
+        ref={scrollRef}
+        className="scroll-thin flex-1 overflow-y-auto px-4 py-4"
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') setCopilotOpen(false)
+        }}
+      >
+        {loadError && (
+          <div className="mb-4 flex flex-col items-start gap-2 rounded-xl border border-destructive/40 bg-destructive/5 p-4">
+            <p className="text-sm text-destructive">Couldn&apos;t load your conversation.</p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setLoadError(false)
+                api.get<{ messages: ChatMessage[]; usage?: { used: number; limit: number; isPro: boolean } }>('/api/copilot')
+                  .then((d) => {
+                    setMessages(d.messages)
+                    if (d.usage) setUsage(d.usage)
+                  })
+                  .catch(() => setLoadError(true))
+              }}
+            >
+              <FaRotate className="mr-1.5 h-3.5 w-3.5" /> Retry
+            </Button>
+          </div>
+        )}
         {messages.length === 0 && (
           <div className="anim-fade-up space-y-4">
             <div className="rounded-xl border bg-card p-4">
@@ -226,12 +294,41 @@ export function CopilotDock() {
               <FaSpinner className="h-4 w-4 animate-spin" /> Thinking…
             </div>
           )}
+          {sendError && (
+            <div className="rounded-xl border border-destructive/40 bg-destructive/5 p-3">
+              <p className="text-sm leading-relaxed text-destructive">{sendError.message}</p>
+              <div className="mt-2 flex items-center gap-2">
+                {sendError.isLimit ? (
+                  <Button asChild size="sm" className="sheen">
+                    <Link href="/pricing">Upgrade to Pro</Link>
+                  </Button>
+                ) : (
+                  <Button variant="outline" size="sm" onClick={() => send(sendError.retryText)} disabled={busy}>
+                    <FaRotate className="mr-1.5 h-3.5 w-3.5" /> Retry
+                  </Button>
+                )}
+                <Button variant="ghost" size="sm" onClick={() => setSendError(null)}>
+                  Dismiss
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
       <div className="border-t p-3">
+        {usage && (
+          <p className="mb-1.5 px-1 text-[11px] text-muted-foreground" aria-live="polite">
+            {usage.isPro
+              ? 'Pro — unlimited messages'
+              : usage.used >= usage.limit
+                ? `Daily limit reached (${usage.used}/${usage.limit}) — upgrade for unlimited`
+                : `${usage.used}/${usage.limit} messages today`}
+          </p>
+        )}
         <div className="flex items-end gap-2">
           <Textarea
+            ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {

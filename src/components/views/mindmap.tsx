@@ -8,6 +8,7 @@ import { useApi } from '@/lib/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
@@ -29,12 +30,20 @@ export function MindmapView() {
   const [zoom, setZoom] = useState(1)
   const [pan, setPan] = useState({ x: 40, y: 40 })
   const [viewport, setViewport] = useState({ w: 800, h: 600 })
+  const [saveFailed, setSaveFailed] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleteBusy, setDeleteBusy] = useState(false)
 
   const containerRef = useRef<HTMLDivElement>(null)
   const svgRef = useRef<SVGSVGElement>(null)
   const dragRef = useRef<{ id: string; dx: number; dy: number } | null>(null)
   const panRef = useRef<{ x: number; y: number; px: number; py: number } | null>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // multi-touch pinch zoom: every active pointer + the gesture's starting state
+  const pointers = useRef(new Map<number, { x: number; y: number }>())
+  const pinchRef = useRef<{ dist: number; zoom: number } | null>(null)
+  const zoomRef = useRef(1)
+  zoomRef.current = zoom
 
   const activeMap = useMemo(() => data?.mindmaps.find((m) => m.id === activeId) ?? null, [data, activeId])
 
@@ -68,7 +77,13 @@ export function MindmapView() {
         try {
           await api.patch(`/api/mindmaps/${activeId}`, { nodes: next })
           setDirty(false)
-        } catch {}
+          setSaveFailed(false)
+        } catch {
+          // a failed PATCH used to leave the indicator on "Saving…" forever —
+          // the user would close the tab believing it saved and lose edits.
+          setDirty(false)
+          setSaveFailed(true)
+        }
       }, 700)
     },
     [activeId]
@@ -96,17 +111,37 @@ export function MindmapView() {
     dragRef.current = null
   }
 
-  // ── canvas pan ──
+  // ── canvas pan + touch pinch zoom ──
+  function pointerDist(): number {
+    const [a, b] = [...pointers.current.values()]
+    return Math.hypot(a.x - b.x, a.y - b.y)
+  }
   function onCanvasPointerDown(e: React.PointerEvent) {
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    if (pointers.current.size === 2) {
+      // second finger down → start pinch, cancel any pan/drag in progress
+      panRef.current = null
+      dragRef.current = null
+      pinchRef.current = { dist: pointerDist(), zoom: zoomRef.current }
+      return
+    }
     if ((e.target as Element).tagName !== 'svg' && !(e.target as Element).classList.contains('canvas-bg')) return
     setSelected(null)
     panRef.current = { x: pan.x, y: pan.y, px: e.clientX, py: e.clientY }
   }
   function onCanvasPointerMove(e: React.PointerEvent) {
+    if (pointers.current.has(e.pointerId)) pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    if (pinchRef.current && pointers.current.size >= 2) {
+      const next = Math.min(2.2, Math.max(0.3, pinchRef.current.zoom * (pointerDist() / pinchRef.current.dist)))
+      setZoom(next)
+      return
+    }
     if (!panRef.current) return
     setPan({ x: panRef.current.x + (e.clientX - panRef.current.px), y: panRef.current.y + (e.clientY - panRef.current.py) })
   }
-  function onCanvasPointerUp() {
+  function onCanvasPointerUp(e: React.PointerEvent) {
+    pointers.current.delete(e.pointerId)
+    if (pointers.current.size < 2) pinchRef.current = null
     panRef.current = null
   }
 
@@ -300,17 +335,21 @@ export function MindmapView() {
           variant="ghost"
           size="sm"
           className="h-8 text-xs text-danger"
-          onClick={async () => {
-            if (!activeId) return
-            await api.del(`/api/mindmaps/${activeId}`)
-            setActiveId(null)
-            reload()
-          }}
+          onClick={() => setConfirmDelete(true)}
           aria-label="Delete map"
         >
           <FaTrashCan className="h-3.5 w-3.5" />
         </Button>
-        <span className="ml-auto text-[10px] text-muted-foreground">{dirty ? 'Saving…' : 'Saved'}</span>
+        {saveFailed ? (
+          <button
+            onClick={() => scheduleSave(nodes)}
+            className="ml-auto rounded-full bg-danger/10 px-2.5 py-1 text-[10px] font-semibold text-danger transition-colors hover:bg-danger/20"
+          >
+            Save failed — tap to retry
+          </button>
+        ) : (
+          <span className="ml-auto text-[10px] text-muted-foreground">{dirty ? 'Saving…' : 'Saved'}</span>
+        )}
       </div>
 
       {/* canvas */}
@@ -322,8 +361,12 @@ export function MindmapView() {
           onCanvasPointerMove(e)
           onNodePointerMove(e)
         }}
-        onPointerUp={() => {
-          onCanvasPointerUp()
+        onPointerUp={(e) => {
+          onCanvasPointerUp(e)
+          onNodePointerUp()
+        }}
+        onPointerCancel={(e) => {
+          onCanvasPointerUp(e)
           onNodePointerUp()
         }}
         onWheel={onWheel}
@@ -363,6 +406,14 @@ export function MindmapView() {
                 transform={`translate(${n.x} ${n.y})`}
                 onPointerDown={(e) => onNodePointerDown(e, n)}
                 onClick={() => handleNodeClick(n)}
+                tabIndex={0}
+                onFocus={() => setSelected(n.id)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    setSelected(n.id)
+                  }
+                }}
                 style={{ cursor: 'grab' }}
               >
                 <rect
@@ -487,10 +538,46 @@ export function MindmapView() {
           </div>
         )}
 
-        <p className="pointer-events-none absolute right-3 top-3 text-[10px] text-muted-foreground">drag to pan · ⌘/Ctrl+scroll to zoom</p>
+        <p className="pointer-events-none absolute right-3 top-3 text-right text-[10px] leading-tight text-muted-foreground">drag to pan<br />pinch or ⌘/Ctrl+scroll to zoom</p>
       </div>
 
       <GenerateDialog open={genOpen} onOpenChange={setGenOpen} onCreated={(id) => { reload(); setActiveId(id); setTimeout(fitView, 400) }} />
+
+      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete “{activeMap?.title}”?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently removes the map and all its nodes. This can’t be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteBusy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-danger text-white hover:bg-danger/90"
+              disabled={deleteBusy}
+              onClick={async () => {
+                if (!activeId) return
+                setDeleteBusy(true)
+                try {
+                  await api.del(`/api/mindmaps/${activeId}`)
+                  setActiveId(null)
+                  setNodes([])
+                  setConfirmDelete(false)
+                  reload()
+                } catch {
+                  toast({ title: 'Could not delete the map', variant: 'destructive' })
+                } finally {
+                  setDeleteBusy(false)
+                }
+              }}
+            >
+              {deleteBusy ? <FaSpinner className="mr-1.5 h-4 w-4 animate-spin" /> : <FaTrashCan className="mr-1.5 h-4 w-4" />}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
@@ -580,8 +667,9 @@ function GenerateDialog({ open, onOpenChange, onCreated }: { open: boolean; onOp
           </Select>
         )}
         {mode === 'notes' && <p className="text-sm text-muted-foreground">Will build a tree overview from your most recent quick-capture notes.</p>}
+        <p className="text-xs text-muted-foreground">Generation usually takes 20–30 seconds — keep this open while the AI works.</p>
         <div className="flex justify-end gap-2">
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={busy}>Cancel</Button>
           <Button onClick={generate} disabled={busy || (mode === 'topic' && !topic.trim()) || (mode === 'document' && !docId)}>
             {busy && <FaSpinner className="mr-1.5 h-4 w-4 animate-spin" />}
             <FaWandMagicSparkles className="mr-1.5 h-4 w-4" /> Generate
