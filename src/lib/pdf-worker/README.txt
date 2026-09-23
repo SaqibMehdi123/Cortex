@@ -11,3 +11,12 @@
 // HERE, with a static relative specifier, bundles it with OUR code — always
 // present, nothing to trace. On import it registers itself as
 // globalThis.pdfjsWorker, which pdf.js checks before touching workerSrc.
+//
+// PATCH (scripts/patch-pdf-worker.py — re-run after every re-vendor):
+// Turbopack (Next 16's default bundler) hard-fails `next build` on the
+// worker's one fully-dynamic import() inside JpxImage's OpenJPEG loader
+// ("Module not found: Can't resolve '.'" — Vercel deploy broke 2026-09-23).
+// That import fetches openjpeg_nowasm_fallback.js (JPEG-2000) from a
+// computed URL — unused by Cortex and already degrade-gracefully wrapped.
+// The patch swaps it for a synchronous throw; failure-path behavior is
+// unchanged (warn + null module).

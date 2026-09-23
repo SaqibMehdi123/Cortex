@@ -2,14 +2,16 @@ import { NextResponse } from 'next/server'
 import net from 'node:net'
 import { activeMailProvider, configuredFromEmail } from '@/lib/mailer'
 import { r2Configured, r2ConnectionCheck } from '@/lib/storage'
+import { aiConfigured, aiProvider, AI_MODEL } from '@/lib/ai'
 
-// GET /api/ops/health — operator diagnostic for the two external services
-// Cortex depends on at runtime (transactional email + PDF Blob storage).
+// GET /api/ops/health — operator diagnostic for the external services
+// Cortex depends on at runtime (transactional email, PDF Blob storage, AI).
 //
 // Public by design (middleware allow-list): it returns ONLY booleans, coarse
-// error classes and a MASKED sender address — never API keys, tokens, or
-// account payloads. Its purpose is to answer "is production actually able to
-// send mail / use Blob right now?" without granting dashboard access.
+// error classes, provider/model NAMES and a MASKED sender address — never API
+// keys, tokens, or account payloads. Its purpose is to answer "is production
+// actually able to send mail / use Blob / call the AI provider right now?"
+// without granting dashboard access.
 //
 // Mail section reflects the active provider (first configured of
 // sendgrid → smtp → brevo, same order the mailer sends with).
@@ -332,8 +334,58 @@ async function checkR2() {
   }
 }
 
+/** Public-safe AI check: provider + model NAMES and booleans only (no keys).
+ *  Uses the OpenAI-compat GET /models endpoint — free, read-only — to prove
+ *  the key is accepted AND that the configured model actually exists there
+ *  (a wrong AI_MODEL otherwise only surfaces as a confusing chat failure). */
+async function checkAI() {
+  const provider = aiProvider()
+  const model = AI_MODEL
+  if (!aiConfigured()) {
+    return {
+      configured: false,
+      provider,
+      model,
+      keyValid: null as boolean | null,
+      modelAvailable: null as boolean | null,
+      note: 'OPENAI_API_KEY not set on this deployment — copilot, doc Q&A, summaries, flashcards and mindmaps all fail until it is set and the project is redeployed',
+    }
+  }
+  const base = (process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '')
+  try {
+    const res = await fetch(`${base}/models`, {
+      headers: { authorization: `Bearer ${(process.env.OPENAI_API_KEY || '').trim()}`, accept: 'application/json' },
+      signal: AbortSignal.timeout(10_000),
+    })
+    if (res.status === 401 || res.status === 403) {
+      return { configured: true, provider, model, keyValid: false, modelAvailable: null, note: 'API key rejected by the provider — re-copy it (for Gemini: aistudio.google.com/apikey, keys start with AIza) and redeploy' }
+    }
+    if (!res.ok) {
+      return { configured: true, provider, model, keyValid: null, modelAvailable: null, note: `models check returned ${res.status}` }
+    }
+    const data = (await res.json()) as { data?: Array<{ id?: string }> }
+    const ids = (data.data ?? []).map((m) => (m.id || '').replace(/^models\//, ''))
+    const available = ids.length === 0 ? null : ids.includes(model)
+    return {
+      configured: true,
+      provider,
+      model,
+      keyValid: true,
+      modelAvailable: available,
+      note:
+        available === false
+          ? `key valid, but model "${model}" is NOT in the provider's model list — set AI_MODEL to one of: ${ids.filter((i) => i.includes('gemini') || i.includes('gpt') || i.includes('llama')).slice(0, 6).join(', ') || '(see provider docs)'} and redeploy`
+          : available === true
+            ? 'ok — key accepted and model exists'
+            : 'key accepted; provider returned no model list to verify against — a real chat request is the only remaining proof',
+    }
+  } catch (e) {
+    return { configured: true, provider, model, keyValid: null, modelAvailable: null, note: `provider unreachable: ${e instanceof Error ? e.message : 'network error'}` }
+  }
+}
+
 export async function GET() {
-  const [mail, blob, r2] = await Promise.all([checkMail(), checkBlob(), checkR2()])
+  const [mail, blob, r2, ai] = await Promise.all([checkMail(), checkBlob(), checkR2(), checkAI()])
   const brevoEvents =
     mail.provider === 'brevo' && (process.env.BREVO_API_KEY || '').trim() && mail.keyValid
       ? await checkBrevoEvents((process.env.BREVO_API_KEY || '').trim())
@@ -358,6 +410,7 @@ export async function GET() {
       brevoEvents,
       blob,
       r2,
+      ai,
       checkedAt: new Date().toISOString(),
     },
     { headers: noStore }

@@ -26,14 +26,23 @@ In Vercel → your project → Settings → Environment Variables (and locally i
 | --- | --- |
 | `OPENAI_API_KEY` | your Gemini key, e.g. `AIzaSy…` (yes, it goes in the "OPENAI" slot — the client is OpenAI-*compatible*, not OpenAI-specific) |
 | `OPENAI_BASE_URL` | `https://generativelanguage.googleapis.com/v1beta/openai` |
-| `AI_MODEL` | `gemini-2.5-flash` |
+| `AI_MODEL` | `gemini-2.5-flash` — *optional* now: with the Gemini base URL set, the code defaults to `gemini-2.5-flash` even if this var is missing (Groq/OpenAI get their own sane defaults too) |
 
 Then **redeploy** (Vercel: Deployments → ⋯ → Redeploy) or restart the local
 dev server. That's it.
 
 ## 3. Verify
 
-- Open the app → the Copilot dock should answer a question.
+- **Deployment-wide check (recommended first):** after redeploying, open
+  <https://cortex.scrutinies.dev/api/ops/health> and look at the `ai` section —
+  `configured: true`, `provider: "gemini"`, `keyValid: true` and
+  `modelAvailable: true` means the key, base URL and model are all live in
+  production. If `configured` is still `false`, the env vars weren't picked up
+  (they only apply to deployments started *after* saving them — redeploy).
+- Open the app → the Copilot dock should answer a question. If it errors, the
+  dock now shows the **provider's own error message** (e.g. `API provider error
+  (429): …quota…`) instead of a generic failure — read it, it says exactly what
+  is wrong.
 - Or, from a terminal (any directory):
 
 ```bash

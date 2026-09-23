@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createAI } from '@/lib/ai'
+import { createAI, isAiUpstreamError } from '@/lib/ai'
 import { getSessionUser, unauthorized } from '@/lib/auth-server'
 
 // Long AI generations must not hit the default serverless timeout (Vercel Hobby caps at 60 s).
@@ -64,6 +64,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ result })
   } catch (e) {
     console.error('POST /api/opportunities/parse error', e)
+    if (isAiUpstreamError(e)) return NextResponse.json({ error: `${e.message} — fill the form manually instead.` }, { status: 502 })
     return NextResponse.json({ error: 'AI extraction failed. Fill the form manually instead.' }, { status: 500 })
   }
 }

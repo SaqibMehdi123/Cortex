@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { usedCitationNumbers } from '@/lib/citations'
-import { createAI } from '@/lib/ai'
+import { createAI, aiConfigured, isAiUpstreamError } from '@/lib/ai'
 import { getSessionUser, unauthorized } from '@/lib/auth-server'
 import { guardUsage, isActivePro, limitMessage, peekUsage, usageFields } from '@/lib/entitlements'
 
@@ -48,6 +48,16 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const message: string = body?.message?.trim()
     if (!message) return NextResponse.json({ error: 'Message is required' }, { status: 400 })
+
+    // Fail fast — before persisting anything — when AI cannot possibly answer.
+    // Without this, the user's message would be saved and then orphaned with
+    // no reply when the provider call is doomed anyway.
+    if (!aiConfigured()) {
+      return NextResponse.json(
+        { error: 'AI is not configured on this deployment — set OPENAI_API_KEY (and OPENAI_BASE_URL for non-OpenAI providers), then redeploy' },
+        { status: 503 }
+      )
+    }
 
     // Free plan: 15 copilot messages/day (doc Q&A counts toward the same pool).
     const verdict = await guardUsage(user.id, 'copilot', isActivePro(user))
@@ -147,14 +157,17 @@ export async function POST(req: NextRequest) {
         : null,
     ]
 
-    const userMsg = await db.chatMessage.create({
-      data: { userId: user.id, thread: 'copilot', role: 'user', content: message },
-    })
-
+    // History is fetched BEFORE persisting the new message, so the current
+    // message is only in the prompt once (via the explicit trailing entry),
+    // not duplicated.
     const history = await db.chatMessage.findMany({
       where: { userId: user.id, thread: 'copilot' },
       orderBy: { createdAt: 'asc' },
       take: 30,
+    })
+
+    const userMsg = await db.chatMessage.create({
+      data: { userId: user.id, thread: 'copilot', role: 'user', content: message },
     })
 
     const zai = await createAI()
@@ -196,6 +209,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ userMessage: userMsg, assistantMessage: { ...assistantMsg, citations: usedCitations }, usage: await peekUsage(user.id, 'copilot', isActivePro(user)) })
   } catch (e) {
     console.error('POST /api/copilot error', e)
+    if (isAiUpstreamError(e)) {
+      // The provider's own verdict (bad key, quota, wrong model, env not
+      // live) — pass it through so the operator can fix it without server
+      // log access. This is the user's own key failing, not a secret leak.
+      return NextResponse.json({ error: e.message }, { status: 502 })
+    }
     return NextResponse.json({ error: 'AI request failed. Please try again.' }, { status: 500 })
   }
 }

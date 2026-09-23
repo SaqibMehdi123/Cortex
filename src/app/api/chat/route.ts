@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { usedCitationNumbers } from '@/lib/citations'
-import { createAI } from '@/lib/ai'
+import { createAI, isAiUpstreamError } from '@/lib/ai'
 import { getSessionUser, unauthorized } from '@/lib/auth-server'
 import { guardUsage, isActivePro, limitMessage, usageFields } from '@/lib/entitlements'
 
@@ -196,6 +196,7 @@ export async function POST(req: NextRequest) {
     })
   } catch (e) {
     console.error('POST /api/chat error', e)
+    if (isAiUpstreamError(e)) return NextResponse.json({ error: e.message }, { status: 502 })
     return NextResponse.json({ error: 'AI request failed. Please try again.' }, { status: 500 })
   }
 }

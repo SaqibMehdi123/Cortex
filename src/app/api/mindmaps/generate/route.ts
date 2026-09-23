@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { createAI } from '@/lib/ai'
+import { createAI, isAiUpstreamError } from '@/lib/ai'
 import { getSessionUser, unauthorized } from '@/lib/auth-server'
 import { guardUsage, isActivePro, limitMessage, usageFields } from '@/lib/entitlements'
 
@@ -133,6 +133,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ mindmap: { ...map, nodes } }, { status: 201 })
   } catch (e) {
     console.error('POST /api/mindmaps/generate error', e)
+    if (isAiUpstreamError(e)) return NextResponse.json({ error: e.message }, { status: 502 })
     return NextResponse.json({ error: 'AI mindmap generation failed. Try again.' }, { status: 500 })
   }
 }

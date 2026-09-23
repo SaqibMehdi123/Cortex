@@ -1,4 +1,4 @@
-import { createAI } from '@/lib/ai'
+import { createAI, isAiUpstreamError } from '@/lib/ai'
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getAccessToken, googleGet } from '@/lib/google'
@@ -116,6 +116,7 @@ export async function POST() {
       if (start !== -1 && end !== -1) classified = JSON.parse(raw.slice(start, end + 1))
     } catch (aiErr) {
       console.error('gmail AI classification failed', aiErr)
+      if (isAiUpstreamError(aiErr)) return NextResponse.json({ error: aiErr.message }, { status: 502 })
       return NextResponse.json({ error: 'AI classification failed — try again.' }, { status: 500 })
     }
 
