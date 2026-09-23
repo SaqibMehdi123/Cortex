@@ -11,7 +11,7 @@ while time.time() < DEADLINE:
     try:
         with urllib.request.urlopen(URL, timeout=25) as r:
             data = json.loads(r.read().decode())
-        if "ai" in data:
+        if "billing" in data:
             print("NEW DEPLOYMENT IS LIVE")
             print(json.dumps(data["ai"], indent=2))
             print("mail:", json.dumps({k: data["mail"].get(k) for k in ("provider", "keyValid", "senderConfirmed")}))
