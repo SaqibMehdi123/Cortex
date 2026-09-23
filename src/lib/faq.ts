@@ -11,11 +11,11 @@ export interface FaqItem {
 export const FAQS: FaqItem[] = [
   {
     q: 'Is Cortex free?',
-    a: 'Yes — free while in beta. Create an account with email or Google and every module is unlocked: library, plans, goals, news, career, mindmaps, flashcards and analytics.',
+    a: 'Yes — the whole workspace is free, forever, with no time limit: library, plans, goals, news, career, mindmaps, flashcards and analytics. Pro only lifts the things that cost real money to run — heavy AI usage and a bigger PDF library.',
   },
   {
-    q: 'How does News & Papers stay current?',
-    a: 'It refreshes automatically every few hours (and the first time you open it if the feed is stale). A manual force-refresh is always one click away.',
+    q: 'How does the Radar stay current?',
+    a: 'The Radar refreshes automatically every few hours (and the first time you open it if the feed is stale). A manual force-refresh is always one click away.',
   },
   {
     q: 'Where does my data live?',
@@ -24,5 +24,13 @@ export const FAQS: FaqItem[] = [
   {
     q: 'Does it work on mobile?',
     a: 'Cortex is responsive with a dedicated mobile tab bar, and reading, reviews and capture all work offline — everything syncs when you reconnect.',
+  },
+  {
+    q: 'Can I get a refund?',
+    a: 'Yes — there is a 14-day guarantee on your first purchase. Email support@scrutinies.dev within 14 days of upgrading and you get your money back, no questions asked.',
+  },
+  {
+    q: 'How do I cancel?',
+    a: 'Anytime, in two minutes: use the manage link from your receipt email to cancel your subscription. You keep every Pro feature until the end of the period you already paid for.',
   },
 ]

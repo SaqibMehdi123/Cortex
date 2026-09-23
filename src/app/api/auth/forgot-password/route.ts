@@ -7,12 +7,20 @@ import {
   CODE_TTL_MINUTES,
 } from '@/lib/auth'
 import { sendCodeEmail, emailResponseFields } from '@/lib/mailer'
+import { clientIp, rateLimit } from '@/lib/rate-limit'
 
 // POST /api/auth/forgot-password { email } — step 1 of the reset flow.
 // Always answers 200 { sent: true } so the endpoint can't be used to discover
 // which emails have accounts. Existing users get a 6-digit code (10 min TTL).
 export async function POST(req: NextRequest) {
   try {
+    // code-spam guard: 5 reset emails per IP per 10 min (same 200 shape — no
+    // account-enumeration signal, the abuse just stops receiving emails)
+    const rl = rateLimit(`forgot:${clientIp(req.headers)}`, { limit: 5, windowMs: 10 * 60_000 })
+    if (!rl.allowed) {
+      return NextResponse.json({ sent: true, throttled: true })
+    }
+
     const body = await req.json()
     const email = String(body.email ?? '').trim().toLowerCase()
 

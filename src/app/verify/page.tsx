@@ -23,6 +23,8 @@ function VerifyForm() {
   const params = useSearchParams()
   const [email, setEmail] = useState(params.get('email') ?? '')
   const [hint] = useState(params.get('hint') ?? '')
+  // optional post-verify destination (e.g. /pricing when signup came from checkout)
+  const nextPath = params.get('next')?.startsWith('/') ? params.get('next') : null
   const [code, setCode] = useState('')
   const [error, setError] = useState<string | null>(null)
   // Dev fallback: signup forwards the code here when the server runs with
@@ -40,7 +42,9 @@ function VerifyForm() {
   }, [cooldown])
 
   useEffect(() => {
-    setCooldown(45)
+    // must match the server's CODE_RESEND_COOLDOWN_SECONDS (60) — a shorter
+    // client cooldown lets users hit a guaranteed 429 in the 45–60s window
+    setCooldown(60)
     // Warn up-front when this server can't send email at all — the user would
     // otherwise wait on a message that can never arrive.
     api
@@ -56,12 +60,8 @@ function VerifyForm() {
     setError(null)
     setBusy(true)
     try {
-      const res = await api.post<{ alreadyVerified?: boolean }>('/api/auth/verify-email', { email, code })
-      if (res.alreadyVerified) {
-        router.replace('/app')
-      } else {
-        router.replace('/app')
-      }
+      await api.post<{ alreadyVerified?: boolean }>('/api/auth/verify-email', { email, code })
+      router.replace(nextPath ?? '/app')
       router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Verification failed.')
@@ -116,6 +116,7 @@ function VerifyForm() {
                 id="email"
                 type="email"
                 required
+                autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
@@ -158,7 +159,7 @@ function VerifyForm() {
                 <span className="font-mono font-bold tracking-widest">{devCode}</span>
               </p>
             )}
-            {error && <p className="rounded-lg bg-danger/10 px-3 py-2 text-xs text-danger">{error}</p>}
+            {error && <p role="alert" className="rounded-lg bg-danger/10 px-3 py-2 text-xs text-danger">{error}</p>}
 
             <Button type="submit" disabled={busy || code.length !== 6 || !emailOk} className="w-full">
               {busy ? <FaSpinner className="mr-1.5 h-4 w-4 animate-spin" /> : <FaArrowRight className="mr-1.5 h-4 w-4" />}
@@ -181,7 +182,11 @@ function VerifyForm() {
         </div>
 
         <p className="mt-5 text-center text-xs text-muted-foreground">
-          Wrong email?{' '}
+          Already signed up?{' '}
+          <Link href="/login" className="font-medium text-primary hover:underline">
+            Sign in
+          </Link>
+          {' · '}Wrong email?{' '}
           <Link href="/signup" className="font-medium text-primary hover:underline">
             Sign up again
           </Link>

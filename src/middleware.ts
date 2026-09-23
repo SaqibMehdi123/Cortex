@@ -49,7 +49,10 @@ export async function middleware(req: NextRequest) {
   if (PUBLIC_PAGES.has(pathname)) return NextResponse.next()
 
   const login = new URL('/login', req.url)
-  if (pathname !== '/') login.searchParams.set('next', pathname)
+  if (pathname !== '/') {
+    // keep the query string — /app?view=career must land back on Career
+    login.searchParams.set('next', `${pathname}${req.nextUrl.search}`)
+  }
   return NextResponse.redirect(login)
 }
 

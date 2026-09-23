@@ -102,7 +102,7 @@ function LoginForm() {
               />
             </div>
 
-            {error && <p className="rounded-lg bg-danger/10 px-3 py-2 text-xs text-danger">{error}</p>}
+            {error && <p role="alert" className="rounded-lg bg-danger/10 px-3 py-2 text-xs text-danger">{error}</p>}
             {needsVerification && (
               <Button type="button" variant="outline" className="w-full" disabled={busy} onClick={sendVerifyCode}>
                 Send a verification code

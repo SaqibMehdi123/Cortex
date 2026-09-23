@@ -1,9 +1,9 @@
 'use client'
 
 import { FaArrowRight, FaSpinner } from 'react-icons/fa6'
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { CortexLogo } from '@/components/logo'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -11,7 +11,19 @@ import { Label } from '@/components/ui/label'
 import { api } from '@/lib/client'
 
 export default function SignupPage() {
+  return (
+    <Suspense fallback={null}>
+      <SignupForm />
+    </Suspense>
+  )
+}
+
+function SignupForm() {
   const router = useRouter()
+  const params = useSearchParams()
+  // where to send the user after signup+verify — checkout flows from /pricing
+  // set this so the upgrade intent survives account creation
+  const nextPath = params.get('next')?.startsWith('/') ? params.get('next') : null
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -33,7 +45,8 @@ export default function SignupPage() {
       // When the server runs with AUTH_DEV_CODE_FALLBACK=true and no mail
       // provider, the API returns the code so local testing can continue.
       const dev = res.devCode ? `&dev=${encodeURIComponent(res.devCode)}` : ''
-      router.replace(`/verify?email=${encodeURIComponent(email.trim())}${hint}${dev}`)
+      const next = nextPath ? `&next=${encodeURIComponent(nextPath)}` : ''
+      router.replace(`/verify?email=${encodeURIComponent(email.trim())}${hint}${dev}${next}`)
       router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not create the account.')
@@ -94,7 +107,7 @@ export default function SignupPage() {
               />
             </div>
 
-            {error && <p className="rounded-lg bg-danger/10 px-3 py-2 text-xs text-danger">{error}</p>}
+            {error && <p role="alert" className="rounded-lg bg-danger/10 px-3 py-2 text-xs text-danger">{error}</p>}
 
             <Button type="submit" disabled={busy} className="w-full">
               {busy ? <FaSpinner className="mr-1.5 h-4 w-4 animate-spin" /> : <FaArrowRight className="mr-1.5 h-4 w-4" />}

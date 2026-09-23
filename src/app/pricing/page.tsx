@@ -1,12 +1,16 @@
 import type { Metadata } from 'next'
+import Link from 'next/link'
 import { LandingFooter } from '@/components/landing/closing'
 import { CortexMark } from '@/components/logo'
+import { getSessionUser } from '@/lib/auth-server'
 import { SITE_URL } from '@/lib/site'
 import { PricingCards } from './pricing-cards'
 
 // Public pricing page — the billing skeleton's front door. Server-rendered
 // (crawlable, fast); only the CTA buttons hydrate (they POST to
 // /api/billing/checkout and redirect to Lemon Squeezy / Safepay).
+// Reads the session cookie to pick the right header CTA, so it must render
+// per-request rather than as fully static HTML.
 
 export const metadata: Metadata = {
   title: 'Pricing',
@@ -22,7 +26,8 @@ export const metadata: Metadata = {
   },
 }
 
-export default function PricingPage() {
+export default async function PricingPage() {
+  const user = await getSessionUser()
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
       <header className="border-b border-border/70">
@@ -31,12 +36,12 @@ export default function PricingPage() {
             <CortexMark size={18} />
             <span className="text-[14px] font-semibold tracking-[-0.01em]">Cortex</span>
           </a>
-          <a
-            href="/app"
+          <Link
+            href={user ? '/app' : '/signup'}
             className="text-[13px] text-foreground/75 transition-colors hover:text-foreground"
           >
-            Open app →
-          </a>
+            {user ? 'Open app →' : 'Create account →'}
+          </Link>
         </div>
       </header>
 
@@ -61,7 +66,7 @@ export default function PricingPage() {
             {[
               {
                 t: 'Students pay half',
-                d: 'Enrolled students get Pro at 50% off. Write from your account email with proof of enrolment and we will apply it manually within a day.',
+                d: 'Enrolled students get Pro at 50% off. Write to support@scrutinies.dev from your account email with proof of enrolment and we will apply it manually within a day.',
               },
               {
                 t: 'Cancel anytime',

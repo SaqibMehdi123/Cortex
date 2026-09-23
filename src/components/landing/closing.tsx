@@ -55,13 +55,14 @@ export function PricingSection() {
 /* ── FAQ — hairline rows with rotating plus, no accordion chrome ──────── */
 // Q&A content lives in @/lib/faq (shared with the landing's FAQPage JSON-LD)
 
-function FaqRow({ q, a, open, onToggle }: { q: string; a: string; open: boolean; onToggle: () => void }) {
+function FaqRow({ q, a, open, onToggle, id }: { q: string; a: string; open: boolean; onToggle: () => void; id: string }) {
   return (
     <div className="border-b border-border/70 last:border-0">
       <button
         type="button"
         onClick={onToggle}
         aria-expanded={open}
+        aria-controls={`${id}-panel`}
         className="group flex w-full items-center justify-between gap-4 py-5 text-left"
       >
         <span className="text-[15.5px] font-medium tracking-[-0.01em] text-foreground transition-colors group-hover:text-primary">
@@ -75,6 +76,8 @@ function FaqRow({ q, a, open, onToggle }: { q: string; a: string; open: boolean;
         />
       </button>
       <div
+        id={`${id}-panel`}
+        aria-hidden={!open}
         className={cn(
           'grid transition-all duration-300 ease-out',
           open ? 'grid-rows-[1fr] pb-5 opacity-100' : 'grid-rows-[0fr] opacity-0'
@@ -113,6 +116,7 @@ export function Faq() {
               {FAQS.map((f, i) => (
                 <FaqRow
                   key={i}
+                  id={`faq-${i}`}
                   q={f.q}
                   a={f.a}
                   open={open === i}
@@ -178,11 +182,11 @@ const FOOTER_COLS = [
   {
     label: 'Product',
     links: [
-      { label: 'Platform', href: '#platform' },
-      { label: 'Workflow', href: '#workflow' },
-      { label: 'Copilot', href: '#copilot' },
+      { label: 'Platform', href: '/#platform' },
+      { label: 'Workflow', href: '/#workflow' },
+      { label: 'Copilot', href: '/#copilot' },
       { label: 'Pricing', href: '/pricing' },
-      { label: 'FAQ', href: '#faq' },
+      { label: 'FAQ', href: '/#faq' },
     ],
   },
   {

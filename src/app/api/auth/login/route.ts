@@ -1,15 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { createSessionToken, verifyPassword, SESSION_COOKIE, SESSION_COOKIE_OPTIONS } from '@/lib/auth'
+import { clientIp, rateLimit } from '@/lib/rate-limit'
 
 // POST /api/auth/login — verify credentials and start a session.
 // Accounts that never finished email verification get 403 with a distinct
 // code so the login page can offer "send a new code" instead of a dead end.
 export async function POST(req: NextRequest) {
   try {
+    // Password-spray guard: 10 attempts per (IP, email) per 5 min.
     const body = await req.json()
     const email = String(body.email ?? '').trim().toLowerCase()
     const password = String(body.password ?? '')
+    const rl = rateLimit(`login:${clientIp(req.headers)}:${email}`, { limit: 10, windowMs: 5 * 60_000 })
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: `Too many sign-in attempts. Please try again in ${rl.retryAfter}s.` },
+        { status: 429, headers: { 'Retry-After': String(rl.retryAfter) } }
+      )
+    }
 
     if (!email || !password) {
       return NextResponse.json({ error: 'Email and password are required.' }, { status: 400 })

@@ -7,6 +7,7 @@ import {
   CODE_TTL_MINUTES,
 } from '@/lib/auth'
 import { sendCodeEmail, emailResponseFields } from '@/lib/mailer'
+import { clientIp, rateLimit } from '@/lib/rate-limit'
 
 // POST /api/auth/register — create an account, then require email verification.
 // The account starts unverified and NO session is issued: the client moves to
@@ -15,13 +16,22 @@ import { sendCodeEmail, emailResponseFields } from '@/lib/mailer'
 // created for the new user and no existing data is shared or adopted.
 export async function POST(req: NextRequest) {
   try {
+    // Signup spam / email-bombing guard: 5 registrations per IP per 10 min.
+    const rl = rateLimit(`register:${clientIp(req.headers)}`, { limit: 5, windowMs: 10 * 60_000 })
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: `Too many attempts. Please try again in ${rl.retryAfter}s.` },
+        { status: 429, headers: { 'Retry-After': String(rl.retryAfter) } }
+      )
+    }
+
     const body = await req.json()
     const name = String(body.name ?? '').trim()
     const email = String(body.email ?? '').trim().toLowerCase()
     const password = String(body.password ?? '')
 
     if (!name || name.length > 80) {
-      return NextResponse.json({ error: 'Please tell me your name.' }, { status: 400 })
+      return NextResponse.json({ error: 'Please enter your name.' }, { status: 400 })
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return NextResponse.json({ error: 'That email address does not look right.' }, { status: 400 })

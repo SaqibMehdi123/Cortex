@@ -99,7 +99,8 @@ export function LegalShell({
   )
 }
 
-/** Numbered section heading + body, the repeating unit of every legal page. */
+/** Numbered section heading + body, the repeating unit of every legal page.
+ *  Anchored (id="s-<n>") so the long privacy page supports deep links. */
 export function LegalSection({
   n,
   title,
@@ -110,7 +111,7 @@ export function LegalSection({
   children: React.ReactNode
 }) {
   return (
-    <section className="border-t border-border/70 pt-8 first:border-0 first:pt-0">
+    <section id={`s-${n.replace(/\./g, '-')}`} className="scroll-mt-20 border-t border-border/70 pt-8 first:border-0 first:pt-0">
       <div className="flex items-baseline gap-3">
         <span className="font-mono text-[11px] tabular-nums text-muted-foreground">{n}</span>
         <h2 className="font-display text-[21px] font-medium tracking-[-0.015em]">{title}</h2>

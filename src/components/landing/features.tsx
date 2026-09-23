@@ -16,7 +16,7 @@ export function SourcesMarquee() {
       <div className="mx-auto max-w-6xl px-5 py-10 sm:px-8">
         <Reveal>
           <p className="text-center text-[12.5px] font-medium uppercase tracking-[0.22em] text-muted-foreground">
-            The radar reads 97+ sources, so you don&rsquo;t have to
+            97+ sources across the AI world — labs, papers, newsletters &amp; job boards
           </p>
         </Reveal>
         <Reveal delay={100}>
@@ -28,7 +28,7 @@ export function SourcesMarquee() {
                   className="flex items-center gap-2.5 text-muted-foreground/55 transition-colors duration-300 hover:text-foreground"
                   title={logo.title}
                 >
-                  <BrandMark logo={logo} size={19} />
+                  <BrandMark logo={logo} size={19} decorative />
                   <span className="whitespace-nowrap text-[14px] font-medium">{logo.title}</span>
                 </span>
               ))}

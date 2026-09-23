@@ -87,7 +87,7 @@ export default function TermsPage() {
           items={[
             <span key="1"><strong>International payments</strong> are processed by Lemon Squeezy, which acts as Merchant of Record and handles tax receipts; your bank statement will show their name.</span>,
             <span key="2"><strong>Pakistan-local payments</strong> (cards, wallets, bank transfer) are processed by Safepay.</span>,
-            <span key="3">Subscriptions renew automatically each month until cancelled — cancel anytime from the billing portal or by writing to {SUPPORT_EMAIL}; access continues until the end of the paid period.</span>,
+            <span key="3">Subscriptions renew automatically at the billing interval you chose (monthly or annual) until cancelled — cancel anytime via the manage link in your receipt email or by writing to {SUPPORT_EMAIL}; access continues until the end of the paid period.</span>,
             <span key="4">Prices are shown before you pay, may include applicable taxes collected by the Merchant of Record, and can change with 30 days&apos; notice to existing subscribers.</span>,
             <span key="5">Students: discounted pricing is available — request it from {SUPPORT_EMAIL} with proof of enrolment, and keep the discount personal.</span>,
             <span key="6">Refunds follow the published <a className="underline underline-offset-2 hover:text-foreground" href="/refund">Refund Policy</a>.</span>,

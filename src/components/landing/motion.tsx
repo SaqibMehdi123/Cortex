@@ -56,7 +56,9 @@ export function useTilt<T extends HTMLElement>(max = 3) {
   return ref
 }
 
-/** Eased count-up that starts when `started` flips true. */
+/** Eased count-up that starts when `started` flips true.
+ *  Before the animation starts (SSR HTML included) the FINAL value is shown —
+ *  stat tiles must never render "0" to crawlers or no-JS visitors. */
 export function useCountUp(target: number, started: boolean, duration = 1300) {
   const [value, setValue] = useState(0)
 
@@ -74,7 +76,7 @@ export function useCountUp(target: number, started: boolean, duration = 1300) {
     return () => cancelAnimationFrame(raf)
   }, [started, target, duration])
 
-  return value
+  return started ? value : target
 }
 
 /**

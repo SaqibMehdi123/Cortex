@@ -7,6 +7,7 @@ import {
   CODE_TTL_MINUTES,
 } from '@/lib/auth'
 import { sendCodeEmail, emailResponseFields } from '@/lib/mailer'
+import { clientIp, rateLimit } from '@/lib/rate-limit'
 
 type Purpose = 'email_verify' | 'password_reset'
 
@@ -15,6 +16,16 @@ type Purpose = 'email_verify' | 'password_reset'
 // burns any previous unused code so only the newest one works.
 export async function POST(req: NextRequest) {
   try {
+    // per-IP cap on code emails (the per-account 60s cooldown below is the
+    // fine-grained control; this stops one IP spraying many accounts)
+    const ipRl = rateLimit(`resend-ip:${clientIp(req.headers)}`, { limit: 10, windowMs: 10 * 60_000 })
+    if (!ipRl.allowed) {
+      return NextResponse.json(
+        { error: `Too many requests. Please try again in ${ipRl.retryAfter}s.` },
+        { status: 429, headers: { 'Retry-After': String(ipRl.retryAfter) } }
+      )
+    }
+
     const body = await req.json()
     const email = String(body.email ?? '').trim().toLowerCase()
     const purpose: Purpose = body.purpose === 'password_reset' ? 'password_reset' : 'email_verify'

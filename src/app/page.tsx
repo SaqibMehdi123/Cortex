@@ -37,7 +37,6 @@ const jsonLd = {
       description: SITE_DESCRIPTION,
       slogan: SITE_TAGLINE,
       featureList: SITE_FEATURES,
-      isAccessibleForFree: true,
       // Both plans — lets Google show price context for the SoftwareApplication
       offers: [
         { '@type': 'Offer', name: 'Free', price: '0', priceCurrency: 'USD' },

@@ -151,7 +151,7 @@ function ForgotPasswordForm() {
                     printed in the server log.
                   </div>
                 )}
-                {error && <p className="rounded-lg bg-danger/10 px-3 py-2 text-xs text-danger">{error}</p>}
+                {error && <p role="alert" className="rounded-lg bg-danger/10 px-3 py-2 text-xs text-danger">{error}</p>}
                 <Button type="submit" disabled={busy} className="w-full">
                   {busy ? <FaSpinner className="mr-1.5 h-4 w-4 animate-spin" /> : <FaArrowRight className="mr-1.5 h-4 w-4" />}
                   Send reset code
@@ -232,7 +232,7 @@ function ForgotPasswordForm() {
                     <span className="font-mono font-bold tracking-widest">{devCode}</span>
                   </p>
                 )}
-                {error && <p className="rounded-lg bg-danger/10 px-3 py-2 text-xs text-danger">{error}</p>}
+                {error && <p role="alert" className="rounded-lg bg-danger/10 px-3 py-2 text-xs text-danger">{error}</p>}
 
                 <Button type="submit" disabled={busy || code.length !== 6} className="w-full">
                   {busy ? <FaSpinner className="mr-1.5 h-4 w-4 animate-spin" /> : <FaArrowRight className="mr-1.5 h-4 w-4" />}

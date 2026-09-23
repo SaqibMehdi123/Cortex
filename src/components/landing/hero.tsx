@@ -82,7 +82,7 @@ function MockWindow() {
         </div>
         <div className="mx-auto flex items-center gap-1.5 rounded-md border border-border bg-muted/60 px-3.5 py-1 font-mono text-[10px] text-muted-foreground">
           <FaLock className="h-2.5 w-2.5" />
-          cortex.app
+          cortex.scrutinies.dev
         </div>
         <div className="rounded-md border border-border bg-muted/60 px-1.5 py-0.5 font-mono text-[9.5px] text-muted-foreground">
           ⌘K
@@ -391,7 +391,7 @@ export function LandingHero({ authed, firstName }: { authed: boolean; firstName:
 
           <Reveal delay={310}>
             <p className="mt-4 font-mono text-[10.5px] tracking-wide text-muted-foreground/80">
-              FREE IN BETA · NO CREDIT CARD · OFFLINE-READY
+              FREE FOREVER · NO CREDIT CARD · OFFLINE-READY
             </p>
           </Reveal>
         </div>

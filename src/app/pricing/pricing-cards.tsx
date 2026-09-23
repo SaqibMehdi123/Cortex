@@ -115,8 +115,9 @@ export function PricingCards() {
       const status = (err as { status?: number }).status
       const message = err instanceof Error ? err.message : 'Could not start checkout.'
       if (status === 401) {
-        // Logged out — Pro checkout starts after an account exists.
-        router.push('/signup')
+        // Logged out — Pro checkout starts after an account exists. Carry the
+        // intent so signup → verify lands back here, ready to check out.
+        router.push('/signup?next=%2Fpricing')
         return
       }
       if (status === 501 && message.includes('annual_not_available')) {
@@ -205,7 +206,7 @@ export function PricingCards() {
             ))}
           </div>
 
-          <p className="mt-4 flex flex-wrap items-baseline gap-x-2 font-display text-[34px] font-medium tracking-[-0.02em]">
+          <p aria-live="polite" className="mt-4 flex flex-wrap items-baseline gap-x-2 font-display text-[34px] font-medium tracking-[-0.02em]">
             {cycle === 'annual' ? '$50' : '$5'}
             <span className="text-[14px] font-normal text-muted-foreground">
               {cycle === 'annual' ? '/ year' : '/ month'}
@@ -216,12 +217,12 @@ export function PricingCards() {
           </p>
           <p className="mt-1.5 font-mono text-[11px] text-muted-foreground">
             {cycle === 'annual'
-              ? '≈ PKR 15,000 · works out to $4.17/mo · students $25/yr'
-              : '≈ PKR 1,500 · students $2.50/mo'}
+              ? '≈ PKR 15,000/yr (FX at checkout) · works out to $4.17/mo · students $25/yr'
+              : '≈ PKR 1,500/mo (FX at checkout) · students $2.50/mo'}
           </p>
 
           <p className="mt-4 text-[13.5px] leading-relaxed text-muted-foreground">
-            Unlimited AI on top of everything free. Students pay half after verification.
+            Unlimited AI on top of everything free. Students pay half — <a href="mailto:support@scrutinies.dev" className="underline underline-offset-2">email support@scrutinies.dev</a> with proof of enrolment to get 50% off.
           </p>
 
           <FeatureList items={PRO_FEATURES} accent="var(--chart-3)" />

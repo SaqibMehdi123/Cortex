@@ -74,15 +74,18 @@ export function BrandMark({
   logo,
   size = 18,
   className,
+  // decorative: the marquee row already shows the brand name as visible text,
+  // so the svg must not announce the name a second time to screen readers
+  decorative = false,
 }: {
   logo: BrandLogo
   size?: number
   className?: string
+  decorative?: boolean
 }) {
   return (
     <svg
-      role="img"
-      aria-label={logo.title}
+      {...(decorative ? { 'aria-hidden': true as const } : { role: 'img' as const, 'aria-label': logo.title })}
       viewBox="0 0 24 24"
       width={size}
       height={size}
