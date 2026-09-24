@@ -662,10 +662,11 @@ function NavDropdown({ item, collapsed, active }: { item: (typeof NAV_ITEMS)[num
 }
 
 // ─── Sidebar sync row: offline/syncing stay functional; the resting
-// ─── "All synced" slot becomes a plan-aware chip — Free users get a
-// ─── centered Upgrade capsule, Pro users get a quiet gold "Pro" chip.
-// ─── Gold (--chart-2) is the app-wide crown accent, so Pro reads as Pro
-// ─── in the sidebar, the user chip and Settings alike ────────────────
+// ─── "All synced" slot becomes a plan-aware chip — Free users get an
+// ─── elongated full-width Upgrade capsule, Pro users get a quiet gold
+// ─── "Pro" capsule spanning the same width. Gold (--chart-2) is the
+// ─── app-wide crown accent, so Pro reads as Pro in the sidebar, the
+// ─── user chip and Settings alike ─────────────────────────────────────
 
 function SidebarSyncRow({ collapsed, online, synced }: { collapsed: boolean; online: boolean; synced: boolean }) {
   const router = useRouter()
@@ -698,39 +699,41 @@ function SidebarSyncRow({ collapsed, online, synced }: { collapsed: boolean; onl
   }
 
   if (pro) {
-    // Pro: ONE gold capsule — crown + "Pro" as a single centered chip,
-    // sized to sit quietly between Dark mode and the user chip.
+    // Pro: ONE gold capsule — crown + "Pro" as a single chip, stretched
+    // edge-to-edge with the sidebar rows around it (only the collapsed
+    // rail shrinks it back to a 32px icon button).
     return (
-      <div className="flex justify-center">
+      <div className={cn(collapsed && 'flex justify-center')}>
         <button
           onClick={() => router.push('/pricing')}
           className={cn(
-            'flex items-center justify-center gap-1.5 rounded-full border border-chart-2/35 bg-chart-2/10 font-semibold uppercase tracking-[0.1em] text-chart-2 transition-colors hover:bg-chart-2/20',
-            collapsed ? 'h-8 w-8' : 'min-h-[30px] px-3.5 py-1 text-[11px]'
+            'flex items-center justify-center gap-2 rounded-full border border-chart-2/35 bg-chart-2/10 font-semibold uppercase tracking-[0.1em] text-chart-2 transition-colors hover:bg-chart-2/20',
+            collapsed ? 'h-8 w-8' : 'min-h-[34px] w-full px-4 py-1.5 text-[11px]'
           )}
           title="Cortex Pro is active"
           aria-label="Cortex Pro is active"
         >
-          <FaCrown className={cn('shrink-0', collapsed ? 'h-3.5 w-3.5' : 'h-3 w-3')} aria-hidden />
+          <FaCrown className="h-3.5 w-3.5 shrink-0" aria-hidden />
           {!collapsed && 'Pro'}
         </button>
       </div>
     )
   }
 
-  // Free: the resting slot becomes a centered Upgrade capsule
+  // Free: the resting slot becomes an elongated Upgrade capsule that
+  // spans the sidebar width, matching the rows above it.
   return (
-    <div className="flex justify-center">
+    <div className={cn(collapsed && 'flex justify-center')}>
       <button
         onClick={() => router.push('/pricing')}
         className={cn(
-          'flex items-center justify-center gap-1.5 rounded-full bg-primary font-semibold text-primary-foreground shadow-sm transition-all duration-150 hover:shadow-md active:scale-[0.97]',
-          collapsed ? 'h-8 w-8' : 'min-h-[30px] px-3.5 py-1 text-[11.5px]'
+          'flex items-center justify-center gap-2 rounded-full bg-primary font-semibold text-primary-foreground shadow-sm transition-all duration-150 hover:bg-primary/90 hover:shadow-md active:scale-[0.99]',
+          collapsed ? 'h-8 w-8' : 'min-h-[34px] w-full px-4 py-1.5 text-xs'
         )}
         title="Upgrade to Cortex Pro"
         aria-label="Upgrade to Cortex Pro"
       >
-        <FaCrown className={cn('shrink-0', collapsed ? 'h-3.5 w-3.5' : 'h-3 w-3')} aria-hidden />
+        <FaCrown className="h-3.5 w-3.5 shrink-0" aria-hidden />
         {!collapsed && 'Upgrade'}
       </button>
     </div>
