@@ -103,11 +103,11 @@ function PlanCard({ billing, loading }: { billing?: BillingStatus | null; loadin
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-sm">
-          <FaCrown className="h-4 w-4 text-primary" /> Plan
+          <FaCrown className="h-4 w-4 text-chart-2" /> Plan
           <span
             className={cn(
               'ml-1 rounded-full border px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.14em]',
-              !known ? 'animate-pulse text-muted-foreground/60' : pro ? 'border-primary/40 bg-primary/10 text-primary' : 'text-muted-foreground'
+              !known ? 'animate-pulse text-muted-foreground/60' : pro ? 'border-chart-2/40 bg-chart-2/10 text-chart-2' : 'text-muted-foreground'
             )}
           >
             {!known ? '…' : pro ? 'Pro' : 'Free'}
@@ -176,7 +176,7 @@ function AccountCard({ user, pro }: { user: { id: string; name: string; email: s
               <p className="flex items-center gap-1.5 truncate text-sm font-semibold">
                 {user.name}
                 {pro && (
-                  <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-primary/10 px-1.5 py-px font-mono text-[9px] font-semibold uppercase tracking-[0.12em] text-primary" title="Cortex Pro">
+                  <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full border border-chart-2/35 bg-chart-2/10 px-1.5 py-px font-mono text-[9px] font-semibold uppercase tracking-[0.12em] text-chart-2" title="Cortex Pro">
                     <FaCrown className="h-2 w-2" /> Pro
                   </span>
                 )}

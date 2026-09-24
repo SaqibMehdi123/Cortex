@@ -662,8 +662,10 @@ function NavDropdown({ item, collapsed, active }: { item: (typeof NAV_ITEMS)[num
 }
 
 // ─── Sidebar sync row: offline/syncing stay functional; the resting
-// ─── "All synced" slot becomes a plan-aware chip — Free users get an
-// ─── Upgrade capsule, Pro users get a subtle Pro badge ───────────────
+// ─── "All synced" slot becomes a plan-aware chip — Free users get a
+// ─── centered Upgrade capsule, Pro users get a quiet gold "Pro" chip.
+// ─── Gold (--chart-2) is the app-wide crown accent, so Pro reads as Pro
+// ─── in the sidebar, the user chip and Settings alike ────────────────
 
 function SidebarSyncRow({ collapsed, online, synced }: { collapsed: boolean; online: boolean; synced: boolean }) {
   const router = useRouter()
@@ -696,30 +698,42 @@ function SidebarSyncRow({ collapsed, online, synced }: { collapsed: boolean; onl
   }
 
   if (pro) {
-    // Pro: a quiet crown badge — confirms the plan without shouting
+    // Pro: ONE gold capsule — crown + "Pro" as a single centered chip,
+    // sized to sit quietly between Dark mode and the user chip.
     return (
-      <button onClick={() => router.push('/pricing')} className={cn(base, 'text-muted-foreground transition-colors hover:bg-muted hover:text-foreground')} title="Cortex Pro is active">
-        <FaCrown className="h-4 w-4 text-primary" aria-label="Pro" />
-        {!collapsed && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-primary">
-            Pro plan
-          </span>
-        )}
-      </button>
+      <div className="flex justify-center">
+        <button
+          onClick={() => router.push('/pricing')}
+          className={cn(
+            'flex items-center justify-center gap-1.5 rounded-full border border-chart-2/35 bg-chart-2/10 font-semibold uppercase tracking-[0.1em] text-chart-2 transition-colors hover:bg-chart-2/20',
+            collapsed ? 'h-8 w-8' : 'min-h-[30px] px-3.5 py-1 text-[11px]'
+          )}
+          title="Cortex Pro is active"
+          aria-label="Cortex Pro is active"
+        >
+          <FaCrown className={cn('shrink-0', collapsed ? 'h-3.5 w-3.5' : 'h-3 w-3')} aria-hidden />
+          {!collapsed && 'Pro'}
+        </button>
+      </div>
     )
   }
 
-  // Free: the resting slot becomes an Upgrade capsule
+  // Free: the resting slot becomes a centered Upgrade capsule
   return (
-    <button
-      onClick={() => router.push('/pricing')}
-      className={cn(collapsed ? 'flex min-h-[32px] items-center justify-center px-0 py-1.5' : 'flex min-h-[32px] items-center gap-1.5 self-start rounded-full bg-primary px-3 py-1 text-[11px] font-semibold text-primary-foreground shadow-sm transition-transform hover:scale-[1.03] active:scale-95')}
-      title="Upgrade to Cortex Pro"
-      aria-label="Upgrade to Cortex Pro"
-    >
-      <FaCrown className="h-3.5 w-3.5" />
-      {!collapsed && 'Upgrade'}
-    </button>
+    <div className="flex justify-center">
+      <button
+        onClick={() => router.push('/pricing')}
+        className={cn(
+          'flex items-center justify-center gap-1.5 rounded-full bg-primary font-semibold text-primary-foreground shadow-sm transition-all duration-150 hover:shadow-md active:scale-[0.97]',
+          collapsed ? 'h-8 w-8' : 'min-h-[30px] px-3.5 py-1 text-[11.5px]'
+        )}
+        title="Upgrade to Cortex Pro"
+        aria-label="Upgrade to Cortex Pro"
+      >
+        <FaCrown className={cn('shrink-0', collapsed ? 'h-3.5 w-3.5' : 'h-3 w-3')} aria-hidden />
+        {!collapsed && 'Upgrade'}
+      </button>
+    </div>
   )
 }
 
@@ -801,7 +815,7 @@ function UserChip({ collapsed }: { collapsed: boolean }) {
             <span className="flex items-center gap-1.5">
               <span className="truncate text-xs font-semibold">{user.name}</span>
               {pro && (
-                <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-primary/10 px-1.5 py-px font-mono text-[8.5px] font-semibold uppercase tracking-[0.12em] text-primary" title="Cortex Pro">
+                <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full border border-chart-2/35 bg-chart-2/10 px-1.5 py-px font-mono text-[8.5px] font-semibold uppercase tracking-[0.12em] text-chart-2" title="Cortex Pro">
                   <FaCrown className="h-2 w-2" /> Pro
                 </span>
               )}
