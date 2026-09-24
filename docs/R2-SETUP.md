@@ -48,15 +48,26 @@ The browser PUTs files directly to R2 and the PDF viewer follows the signed
 download URL cross-origin. Without this rule uploads/downloads fail with a
 CORS error even though the bucket works.
 
+> **Symptom to watch for:** files sit in the library but the reader shows
+> "Could not open this PDF" (or blank pages) — while the health check below is
+> all green. That means the bucket CORS policy does not cover the CURRENT site
+> origin. This bites after every domain change. The viewer auto-retries once
+> through a same-origin proxy (`?proxy=1`), so reading still works — but fix
+> the rule to restore the zero-cost direct path.
+
 1. R2 → your bucket `cortex-pdfs` → **Settings** → **CORS policy** →
    **Add CORS policy** (or "Edit")
-2. Paste exactly this (replace `https://cortex-sync.vercel.app` if you use
-   another domain — keep `http://localhost:3000` for local dev):
+2. Paste exactly this — list EVERY origin the app is served from (the custom
+   domain AND the Vercel preview domain), plus localhost for dev:
 
 ```json
 [
   {
-    "AllowedOrigins": ["https://cortex-sync.vercel.app", "http://localhost:3000"],
+    "AllowedOrigins": [
+      "https://cortex.scrutinies.dev",
+      "https://cortex-sync.vercel.app",
+      "http://localhost:3000"
+    ],
     "AllowedMethods": ["GET", "PUT"],
     "AllowedHeaders": ["content-type", "range"],
     "ExposeHeaders": ["content-range", "content-length", "accept-ranges", "etag"],
@@ -65,7 +76,7 @@ CORS error even though the bucket works.
 ]
 ```
 
-3. Save.
+3. Save. CORS edits apply immediately — no redeploy needed.
 
 ## Step 4 — Add the env vars in Vercel
 

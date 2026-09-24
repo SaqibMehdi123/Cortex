@@ -13,12 +13,19 @@ import { parseStorageRef, presignR2Download } from '@/lib/storage'
 // owner's own browser session.
 //
 // Per backend:
-//   r2://…   → 302 to a short-lived (5 min) presigned GET on the private R2
-//              bucket. The owner's browser downloads straight from R2, so a
-//              100 MB book costs zero function time and Range seeking is
-//              handled natively by S3. The bucket needs one CORS rule for the
-//              app origin (see docs/R2-SETUP.md) because the viewer's fetch
-//              follows the redirect cross-origin.
+//   r2://…   → default: 302 to a short-lived (5 min) presigned GET on the
+//              private R2 bucket. The owner's browser downloads straight from
+//              R2, so a 100 MB book costs zero function time and Range seeking
+//              is handled natively by S3. The bucket needs one CORS rule for
+//              the app origin (see docs/R2-SETUP.md) because the viewer's
+//              fetch follows the redirect cross-origin.
+//              ?proxy=1 → stream the object THROUGH this function instead
+//              (Range-aware, same contract as the Vercel Blob branch). This is
+//              the viewer's automatic self-heal path for when the bucket's
+//              CORS policy doesn't cover the current site origin (e.g. after
+//              a domain change): the browser never leaves the same origin, so
+//              no bucket CORS is required. Costs function time — the viewer
+//              only falls back to it after a plain load failed.
 //   blob URL → proxy the bytes through this function (the public blob URL is
 //              never revealed), forwarding Range headers so the viewer can
 //              seek without re-downloading whole books.
@@ -39,11 +46,40 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     const ref = parseStorageRef(doc.filePath)
     const disposition = `inline; filename="${encodeURIComponent(doc.fileName ?? 'document.pdf')}"`
+    const proxy = req.nextUrl.searchParams.get('proxy') === '1'
 
     // ── Cloudflare R2: redirect to a presigned download ──────────────────
     if (ref.kind === 'r2') {
       try {
         const signedUrl = await presignR2Download(ref.key, doc.fileName)
+
+        // Self-heal path: same-origin streaming, no bucket CORS involved.
+        if (proxy) {
+          const range = req.headers.get('range')
+          const upstream = await fetch(signedUrl, {
+            ...(range ? { headers: { Range: range } } : {}),
+            cache: 'no-store',
+          }).catch(() => null)
+          if (!upstream || !upstream.ok || !upstream.body) {
+            return NextResponse.json({ error: 'File not found in storage' }, { status: 404 })
+          }
+          return new NextResponse(upstream.body as unknown as BodyInit, {
+            status: upstream.status, // 200, or 206 when a Range was honored
+            headers: {
+              'Content-Type': 'application/pdf',
+              ...(upstream.headers.get('content-length')
+                ? { 'Content-Length': upstream.headers.get('content-length')! }
+                : {}),
+              ...(upstream.headers.get('content-range')
+                ? { 'Content-Range': upstream.headers.get('content-range')! }
+                : {}),
+              'Accept-Ranges': 'bytes',
+              'Content-Disposition': disposition,
+              'Cache-Control': 'private, no-store',
+            },
+          })
+        }
+
         return NextResponse.redirect(signedUrl, {
           status: 302,
           headers: { 'Cache-Control': 'private, no-store' },

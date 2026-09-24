@@ -67,6 +67,8 @@ export const config = {
     // The trailing file-extension rule covers every public/ asset (PNG icons,
     // svg logos, worker files…) without enumerating each one — no protected
     // route ends with these extensions (document files live under /api/…).
-    '/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|manifest.webmanifest|opengraph-image|twitter-image|apple-icon|pdf.worker|[0-9a-f]{32,64}\\.txt|.*\\.(?:png|jpe?g|gif|webp|avif|svg|ico|txt|xml|webmanifest)$).*)',
+    // bcmap/pfb/ttf/wasm = the vendored pdf.js runtime assets (public/cmaps,
+    // public/standard_fonts, public/wasm) — fetched on demand by the Reader.
+    '/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|manifest.webmanifest|opengraph-image|twitter-image|apple-icon|pdf.worker|[0-9a-f]{32,64}\\.txt|.*\\.(?:png|jpe?g|gif|webp|avif|svg|ico|txt|xml|webmanifest|bcmap|pfb|ttf|wasm)$).*)',
   ],
 }

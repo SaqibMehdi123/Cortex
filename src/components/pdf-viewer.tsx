@@ -36,6 +36,38 @@ const PAD = 12 // px padding around pages inside the scroll area
 const ZOOMS = [0.5, 0.65, 0.8, 1, 1.25, 1.5, 1.75, 2, 2.5, 3]
 const DEFAULT_ZOOM_INDEX = 3
 
+// Why a document fails to load — drives both the self-heal fallback and the
+// specific message the reader shows instead of a generic dead end.
+type LoadFailure =
+  | { kind: 'missing' }      // 404 — file gone from storage
+  | { kind: 'password' }     // encrypted PDF
+  | { kind: 'invalid' }      // bytes are not a (readable) PDF
+  | { kind: 'server'; status: number } // 5xx/4xx from our own API
+  | { kind: 'network' }      // fetch itself failed — CORS/redirect/offline
+  | { kind: 'unknown' }
+
+function classifyLoadError(e: unknown): LoadFailure {
+  const name = (e as { name?: string })?.name ?? ''
+  if (name === 'MissingPDFException') return { kind: 'missing' }
+  if (name === 'PasswordException') return { kind: 'password' }
+  if (name === 'InvalidPDFException') return { kind: 'invalid' }
+  if (name === 'UnexpectedResponseException')
+    return { kind: 'server', status: (e as { status?: number }).status ?? 0 }
+  // A raw TypeError is what fetch throws when the request itself cannot
+  // complete — CORS rejection on a cross-origin redirect, DNS, offline.
+  if (name === 'TypeError' || e instanceof TypeError) return { kind: 'network' }
+  return { kind: 'unknown' }
+}
+
+const LOAD_FAILURE_TEXT: Record<LoadFailure['kind'], string> = {
+  missing: 'The file is no longer in storage. Re-upload it to read it here.',
+  password: 'This PDF is password-protected, so it cannot be opened in the reader.',
+  invalid: 'The file does not look like a readable PDF — it may be corrupted or the wrong format.',
+  server: 'The file could not be fetched from the library right now. Try again in a moment.',
+  network: 'The download was blocked before it could start (network or storage access). Retrying through the app usually fixes this.',
+  unknown: 'Something went wrong while opening the file. You can still download it with the buttons above.',
+}
+
 // Imperative API for the reader: jump to a page (citation clicks) and find
 // which page actually contains a cited passage (searches the real text layer,
 // correcting the proportional page estimate stored on citations).
@@ -66,6 +98,16 @@ export const PdfCanvasViewer = forwardRef<
 >(function PdfCanvasViewer({ url, className, initialPage = 1, onPageChange, jump, onFullscreenChange, escapeGuard }, ref) {
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null)
   const [error, setError] = useState(false)
+  const [loadFailure, setLoadFailure] = useState<LoadFailure | null>(null)
+  // Self-heal: when the direct load fails at the network level (the classic
+  // case is the R2 presigned-URL redirect being blocked by the bucket's CORS
+  // policy — e.g. after a domain change), retry once with ?proxy=1, which
+  // streams the bytes same-origin through our own API and needs no bucket
+  // CORS. The happy path keeps costing zero function time.
+  // Keyed by url so switching documents never inherits the previous doc's
+  // fallback state — every new document starts on the direct path.
+  const [proxyState, setProxyState] = useState<{ url: string; enabled: boolean }>({ url: '', enabled: false })
+  const [attempt, setAttempt] = useState(0) // manual Retry button
   const [loadPct, setLoadPct] = useState(0)
   const [containerWidth, setContainerWidth] = useState(0)
   const [ratio, setRatio] = useState(1.414) // page width/height — A4-ish until known
@@ -73,6 +115,8 @@ export const PdfCanvasViewer = forwardRef<
   const [currentPage, setCurrentPage] = useState(1)
   const [fullscreen, setFullscreen] = useState(false)
   const [TextLayerCls, setTextLayerCls] = useState<TextLayerCtor | null>(null)
+  // true only when the proxy fallback is armed FOR THIS document
+  const retryViaProxy = proxyState.url === url && proxyState.enabled
   const scrollRef = useRef<HTMLDivElement>(null)
   const pageRefs = useRef<(HTMLDivElement | null)[]>([])
   const jumpedRef = useRef(false)
@@ -116,7 +160,18 @@ export const PdfCanvasViewer = forwardRef<
       try {
         const pdfjs = await import('pdfjs-dist')
         pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'
-        const task = pdfjs.getDocument({ url })
+        const src = retryViaProxy ? `${url}${url.includes('?') ? '&' : '?'}proxy=1` : url
+        const task = pdfjs.getDocument({
+          url: src,
+          // Vendored pdf.js runtime assets (public/) — fetched only when a
+          // document actually needs them. Without these, books that use
+          // CJK encodings, non-embedded standard fonts or JBIG2/OpenJPEG
+          // images render blank or throw mid-page with no visible reason.
+          cMapUrl: '/cmaps/',
+          cMapPacked: true,
+          standardFontDataUrl: '/standard_fonts/',
+          wasmUrl: '/wasm/',
+        })
         loadTask = task
         // download progress — a 200 MB file on a slow link must not look frozen
         task.onProgress = ({ loaded: bytes, total }: { loaded: number; total: number }) => {
@@ -133,16 +188,27 @@ export const PdfCanvasViewer = forwardRef<
         // wrap in an updater fn — React would CALL a bare class stored via
         // setState ("cannot be invoked without 'new'")
         setTextLayerCls(() => pdfjs.TextLayer)
+        setLoadFailure(null)
         setPdf(loaded)
-      } catch {
-        if (!cancelled) setError(true)
+      } catch (e) {
+        if (cancelled) return
+        const failure = classifyLoadError(e)
+        // Network-level failure on the direct path → one automatic retry
+        // through the same-origin proxy before giving up.
+        if (failure.kind === 'network' && !retryViaProxy) {
+          setProxyState({ url, enabled: true })
+          return
+        }
+        console.warn('PDF viewer: document failed to load', failure, e)
+        setLoadFailure(failure)
+        setError(true)
       }
     })()
     return () => {
       cancelled = true
       loadTask?.destroy().catch(() => {})
     }
-  }, [url])
+  }, [url, retryViaProxy, attempt])
 
   // ── Track container width (re-attach after the loading branch swaps in the
   // scroll container — on first mount the ref is still null; `fullscreen` is
@@ -388,13 +454,25 @@ export const PdfCanvasViewer = forwardRef<
   useImperativeHandle(ref, () => ({ goToPage: scrollToPage, locate }), [scrollToPage, locate])
 
   if (error) {
+    const failure = loadFailure ?? { kind: 'unknown' as const }
     return (
       <div className={cn('flex min-h-0 flex-1 flex-col items-center justify-center gap-2 p-6 text-center', className)}>
         <FaFileCircleExclamation className="h-6 w-6 text-muted-foreground" />
-        <p className="text-sm font-medium">Could not render this PDF</p>
-        <p className="max-w-xs text-xs text-muted-foreground">
-          The file may be corrupted or password-protected. You can still open or save it with the buttons above.
-        </p>
+        <p className="text-sm font-medium">Could not open this PDF</p>
+        <p className="max-w-xs text-xs text-muted-foreground">{LOAD_FAILURE_TEXT[failure.kind]}</p>
+        <Button
+          variant="outline"
+          className="mt-1 h-8"
+          onClick={() => {
+            if (failure.kind === 'network' && !retryViaProxy) {
+              setProxyState({ url, enabled: true }) // first manual fallback attempt
+            } else {
+              setAttempt((a) => a + 1) // full reload — also re-uses proxy once set
+            }
+          }}
+        >
+          Try again
+        </Button>
       </div>
     )
   }
@@ -546,6 +624,10 @@ function PdfPage({
   const [near, setNear] = useState(pageNumber <= 2) // render first pages eagerly
   const [need, setNeed] = useState(0)               // bumped on re-entry after eviction
   const [painted, setPainted] = useState(false)
+  // A page whose render genuinely failed must never sit as an eternal blank
+  // placeholder — surface it. (Zoom churn cancels are NOT failures: pdf.js
+  // throws RenderingCancelledException with its own name for those.)
+  const [renderError, setRenderError] = useState(false)
 
   const displayRatio = ratio ?? fallbackRatio
   const displayHeight = Math.round(width / displayRatio)
@@ -605,6 +687,7 @@ function PdfPage({
         await task.promise
         if (cancelled) return
         setPainted(true)
+        setRenderError(false)
 
         // Text layer for selection & copy — laid out with the CSS-pixel
         // viewport (NOT the dpr-scaled bitmap viewport) so the transparent
@@ -623,8 +706,13 @@ function PdfPage({
           tlRef.current = tl
           try { await tl.render() } catch { /* cancelled by zoom churn / eviction */ }
         }
-      } catch {
+      } catch (e) {
         // RenderingCancelledException during zoom churn — ignore
+        if ((e as { name?: string })?.name === 'RenderingCancelledException') return
+        if (!cancelled) {
+          setRenderError(true)
+          console.warn(`PDF viewer: page ${pageNumber} failed to render`, e)
+        }
       }
     })()
     return () => {
@@ -647,9 +735,15 @@ function PdfPage({
       <canvas ref={canvasRef} className="block" aria-label={`Page ${pageNumber}`} />
       {/* invisible, exactly-aligned text spans — make the page text selectable/copyable */}
       <div ref={textWrapRef} className="textLayer" aria-hidden="true" />
-      {!painted && (
+      {!painted && !renderError && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
           <span className="text-xs tabular-nums text-neutral-400">{pageNumber}</span>
+        </div>
+      )}
+      {!painted && renderError && (
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1 px-3 text-center">
+          <FaFileCircleExclamation className="h-4 w-4 text-neutral-400" />
+          <span className="text-[10px] leading-tight text-neutral-400">Page {pageNumber} could not be rendered</span>
         </div>
       )}
     </div>
