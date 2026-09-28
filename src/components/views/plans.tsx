@@ -585,6 +585,10 @@ function PlanNodeRow({
   const isCollapsed = collapsed.has(node.id)
   const tasks = node.tasks ?? []
   const doneCount = tasks.filter((t) => t.status === 'done').length
+  // a node is collapsible when it has ANY hidden-able content — sub-plans
+  // OR tasks (a tasks-only plan used to be stuck expanded, which made long
+  // task lists impossible to tuck away)
+  const canCollapse = hasChildren || tasks.length > 0
 
   const TF_ICON: Record<string, React.ReactNode> = {
     year: <FaBullseye className="h-3.5 w-3.5 text-primary" />,
@@ -620,12 +624,12 @@ function PlanNodeRow({
     <div style={{ marginLeft: depth > 0 ? 16 : 0 }}>
       <div className={cn('rounded-xl border bg-card transition-shadow hover:shadow-soft', depth === 0 && 'shadow-soft')}>
         <div className="flex items-center gap-2 px-3 py-2.5">
-          {hasChildren ? (
-            <button onClick={() => toggleCollapse(node.id)} className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-muted" aria-label={isCollapsed ? 'Expand' : 'Collapse'}>
+          {canCollapse ? (
+            <button onClick={() => toggleCollapse(node.id)} className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted" aria-label={isCollapsed ? `Show ${tasks.length} task${tasks.length === 1 ? '' : 's'}${hasChildren ? ' and sub-plans' : ''}` : 'Hide tasks and sub-plans'}>
               {isCollapsed ? <FaChevronRight className="h-4 w-4" /> : <FaChevronDown className="h-4 w-4" />}
             </button>
           ) : (
-            <span className="flex w-6 justify-center text-muted-foreground">{TF_ICON[node.timeframe] ?? <FaCalendarDays className="h-3.5 w-3.5" />}</span>
+            <span className="flex w-6 shrink-0 justify-center text-muted-foreground">{TF_ICON[node.timeframe] ?? <FaCalendarDays className="h-3.5 w-3.5" />}</span>
           )}
           <PlanTitleToggle node={node} onReload={onReload} />
           <PlanSpanChip node={node} />
@@ -639,7 +643,11 @@ function PlanNodeRow({
               <span className="max-w-[140px] truncate">{node.goal.title}</span>
             </button>
           )}
-          <span className="ml-auto text-[10px] tabular-nums text-muted-foreground">{doneCount}/{tasks.length} tasks</span>
+          <span className="ml-auto shrink-0 text-[10px] tabular-nums text-muted-foreground">
+            {isCollapsed && canCollapse
+              ? `${[tasks.length ? `${tasks.length} task${tasks.length === 1 ? '' : 's'}` : '', hasChildren ? `${(node.children as PlanNode[]).length} sub-plan${(node.children as PlanNode[]).length === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · ')} hidden`
+              : `${doneCount}/${tasks.length} tasks${hasChildren ? ` · ${(node.children as PlanNode[]).length} sub` : ''}`}
+          </span>
           <PlanRowMenu node={node} onReload={onReload} onSetGoal={onSetGoal} onEditPlan={onEditPlan} onSaveTemplate={onSaveTemplate} />
           <button
             onClick={() => (adding ? closeForm() : setAdding(true))}
@@ -1334,15 +1342,22 @@ function KanbanBoard({ plans, individual, cutoffMs, day, onToggle, onEditTask, o
   // plan-tree tasks carry their plan's name; individual (planId=null) tasks
   // — quick capture, day-agenda adds — have none. Both belong on the board:
   // status lives on the task, not on the plan it may or may not have.
-  // Stale tasks don't clutter the board: a done task is hidden once it was
-  // completed before the selected day; an open task hides once its due date
-  // has passed. Unscheduled tasks are always current, future ones upcoming.
-  // The outline view above remains the complete archive either way.
+  // The board is a strict DAY lens: open tasks show only when scheduled
+  // INSIDE the selected day (future-dated ones used to leak in via a
+  // one-sided `>= cutoff` check); unscheduled tasks are always current;
+  // done tasks show only if completed within the day. Earlier/later days
+  // stay in the outline view, which remains the complete archive.
+  const DAY_MS = 86_400_000
   const kanbanVisible = (t: Task) => {
-    // done tasks without a completion timestamp (legacy rows) are treated as
-    // stale — the outline keeps the full archive.
-    if (t.status === 'done') return t.completedAt ? new Date(t.completedAt).getTime() >= cutoffMs : false
-    return !t.dueDate || new Date(t.dueDate).getTime() >= cutoffMs
+    const dueMs = t.dueDate ? new Date(t.dueDate).getTime() : null
+    if (t.status === 'done') {
+      // done tasks without a completion timestamp (legacy rows) are treated
+      // as stale — the outline keeps the full archive
+      if (!t.completedAt) return false
+      const doneMs = new Date(t.completedAt).getTime()
+      return doneMs >= cutoffMs && doneMs < cutoffMs + DAY_MS
+    }
+    return dueMs === null || (dueMs >= cutoffMs && dueMs < cutoffMs + DAY_MS)
   }
   const allTasks = useMemo(() => {
     const out: { t: Task; planTitle: string | null }[] = []
@@ -1362,7 +1377,7 @@ function KanbanBoard({ plans, individual, cutoffMs, day, onToggle, onEditTask, o
   return (
     <div className="space-y-2">
       <p className="text-xs text-muted-foreground">
-        Follows the selected day — tasks completed or scheduled before {day} stay in the outline view.
+        A strict day lens for {day} — tasks scheduled for this day, unscheduled tasks, and tasks completed today. Earlier or later days stay in the outline view.
       </p>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
       {columns.map((col) => (

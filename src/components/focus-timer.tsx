@@ -14,9 +14,15 @@
 //     choice) — they are never standing UI
 //   • a floating pill with inline play/pause so the countdown stays visible
 //     on every section
+//   • an optional Document Picture-in-Picture mini timer — a tiny ALWAYS-ON-
+//     TOP window that keeps the countdown visible while the student works in
+//     OTHER apps/sites (no more tab-hopping back to Cortex to check the
+//     clock). Chrome/Edge/Opera only; the button hides elsewhere (the live
+//     tab-title countdown remains the universal fallback).
 
-import { FaPause, FaPlay, FaStopwatch, FaForwardStep, FaXmark, FaBell, FaGear, FaXmark as FaClose } from 'react-icons/fa6'
-import { useEffect, useRef, useState } from 'react'
+import { FaPause, FaPlay, FaStopwatch, FaForwardStep, FaXmark, FaBell, FaGear, FaWindowRestore, FaXmark as FaClose } from 'react-icons/fa6'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -28,10 +34,90 @@ import type { PomodoroTaskLink } from '@/lib/pomodoro'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
 
+// ─── Document Picture-in-Picture plumbing ────────────────────────────
+// The API is not in TypeScript's lib.dom yet — declare the surface we use.
+interface DocumentPictureInPicture {
+  window: Window | null
+  requestWindow(options?: { width?: number; height?: number }): Promise<Window>
+}
+declare global {
+  interface Window {
+    documentPictureInPicture?: DocumentPictureInPicture
+  }
+}
+
+export function pomodoroPiPSupported(): boolean {
+  return typeof window !== 'undefined' && 'documentPictureInPicture' in window
+}
+
+// The PiP portal lives inside <FocusTimer /> (mounted once in app/page.tsx),
+// but the floating pill lives in the app-shell action stack. This module-
+// level handoff lets the pill's pop-out button trigger FocusTimer's opener
+// without threading state through two trees.
+let pipRequestHandler: (() => void) | null = null
+export function requestPomodoroPiP() {
+  pipRequestHandler?.()
+}
+
+// Clone the app's stylesheets into the PiP document — Tailwind classes and
+// theme variables then work inside the portal exactly as on the main page.
+function copyStylesTo(w: Window) {
+  for (const sheet of [...document.styleSheets]) {
+    try {
+      const css = [...sheet.cssRules].map((r) => r.cssText).join('\n')
+      const style = w.document.createElement('style')
+      style.textContent = css
+      w.document.head.appendChild(style)
+    } catch {
+      // cross-origin sheet without CORS — clone the <link> instead
+      if (sheet.href) {
+        const link = w.document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = sheet.href
+        w.document.head.appendChild(link)
+      }
+    }
+  }
+  // carry the theme (dark/light class on <html>) so tokens resolve
+  w.document.documentElement.className = document.documentElement.className
+}
+
 export function FocusTimer() {
   const { toast } = useToast()
   // two-step End guard: armed by clicking End mid-phase, auto-disarms
   const [endArmed, setEndArmed] = useState(false)
+
+  // ── Document PiP mini-timer state ──
+  const [pipWin, setPipWin] = useState<Window | null>(null)
+  const [pipSupported] = useState(pomodoroPiPSupported)
+  const openPiP = useCallback(async () => {
+    const dpip = window.documentPictureInPicture
+    if (!dpip) return
+    try {
+      // reuse the existing window if one is already floating
+      if (dpip.window && !dpip.window.closed) {
+        dpip.window.focus()
+        return
+      }
+      const w = await dpip.requestWindow({ width: 264, height: 168 })
+      copyStylesTo(w)
+      w.document.title = 'Cortex — Focus timer'
+      w.document.body.style.margin = '0'
+      w.document.body.className = 'bg-background text-foreground'
+      w.addEventListener('pagehide', () => setPipWin(null))
+      setPipWin(w)
+      // the dialog hands the timer off to the floating window
+      usePomodoro.getState().close()
+    } catch {
+      // request can be rejected (gesture/permission) — silently stay in-app
+    }
+  }, [])
+  useEffect(() => {
+    pipRequestHandler = () => void openPiP()
+    return () => {
+      pipRequestHandler = null
+    }
+  }, [openPiP])
 
   const phase = usePomodoro((s) => s.phase)
   const secondsLeft = usePomodoro((s) => s.secondsLeft)
@@ -223,6 +309,17 @@ export function FocusTimer() {
                       <FaForwardStep className="h-4 w-4" />
                     </Button>
                   )}
+                  {pipSupported && (
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => void openPiP()}
+                      aria-label="Pop out the timer"
+                      title="Pop out — the timer stays on top while you work in other apps or sites"
+                    >
+                      <FaWindowRestore className="h-4 w-4" />
+                    </Button>
+                  )}
                   <Button
                     variant="outline"
                     onClick={() => {
@@ -319,7 +416,98 @@ export function FocusTimer() {
       {/* floating pill moved into the app-shell action stacks (see
           <PomodoroPill /> below) so it can never sit on top of the
           quick-capture “+” — it is the top item of the same column */}
+
+      {/* ── Document PiP mini timer — renders into the always-on-top
+          window while it is open; the store's 1s tick drives it like the
+          dialog. Closing the Cortex tab closes the PiP window with it. ── */}
+      {pipWin && createPortal(<PipMiniTimer />, pipWin.document.body)}
     </>
+  )
+}
+
+// ── PiP mini timer: the pomodoro as an always-on-top companion ──────
+// Rendered via createPortal into the Document-PiP window's body. Shares the
+// same zustand store as the dialog/pill, so play/pause/end act on the ONE
+// real timer and the store's 1-second tick drives this view like any other.
+function PipMiniTimer() {
+  const secondsLeft = usePomodoro((s) => s.secondsLeft)
+  const running = usePomodoro((s) => s.running)
+  const phase = usePomodoro((s) => s.phase)
+  const completed = usePomodoro((s) => s.completed)
+  const taskLink = usePomodoro((s) => s.taskLink)
+  const settings = usePomodoro((s) => s.settings)
+  const breakChoicePending = usePomodoro((s) => s.breakChoicePending)
+
+  // safety net for background-tab timer throttling: tick() re-derives from
+  // the wall-clock deadline, so an extra 1s call here is idempotent and
+  // keeps the floating window's countdown exact even if the main page's
+  // interval is slowed down
+  useEffect(() => {
+    const t = setInterval(() => usePomodoro.getState().tick(), 1000)
+    return () => clearInterval(t)
+  }, [])
+
+  const isWork = phase === 'work'
+  const total = isWork ? settings.workMin * 60 : (phase === 'short' ? settings.shortMin : settings.longMin) * 60
+  const pct = total > 0 ? Math.min(1, 1 - secondsLeft / total) : 0
+
+  return (
+    <div className="flex h-screen select-none flex-col bg-background text-foreground">
+      {/* phase progress hairline across the top of the window */}
+      <div className="h-1 w-full shrink-0 bg-muted">
+        <div
+          className={cn('h-full transition-[width] duration-1000 ease-linear', isWork ? 'bg-primary' : 'bg-success')}
+          style={{ width: `${Math.round(pct * 100)}%` }}
+        />
+      </div>
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-1.5 p-3">
+        <div className="flex w-full items-center justify-between gap-2 text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+          <span className={cn(isWork ? 'text-primary' : 'text-success')}>
+            {breakChoicePending ? 'Break?' : phaseLabel(phase)}
+          </span>
+          {completed > 0 && <span className="tabular-nums normal-case tracking-normal">🍅 × {completed}</span>}
+        </div>
+        <span className="text-[2.75rem] font-bold leading-none tabular-nums tracking-tight">{mmss(secondsLeft)}</span>
+        {taskLink && <span className="max-w-full truncate text-[10px] text-muted-foreground" title={taskLink.title}>{taskLink.title}</span>}
+
+        {breakChoicePending ? (
+          <div className="mt-1 flex w-full gap-1.5">
+            <button
+              onClick={() => usePomodoro.getState().startBreak('short')}
+              className="flex-1 rounded-lg bg-success/15 px-2 py-1.5 text-xs font-semibold text-success transition-colors hover:bg-success/25"
+            >
+              Short {settings.shortMin}m
+            </button>
+            <button
+              onClick={() => usePomodoro.getState().startBreak('long')}
+              className="flex-1 rounded-lg bg-success/15 px-2 py-1.5 text-xs font-semibold text-success transition-colors hover:bg-success/25"
+            >
+              Long {settings.longMin}m
+            </button>
+          </div>
+        ) : (
+          <div className="mt-1 flex items-center gap-2">
+            <button
+              onClick={() => usePomodoro.getState().toggle()}
+              className={cn(
+                'flex h-9 w-9 items-center justify-center rounded-full text-primary-foreground shadow-sm transition-transform active:scale-95',
+                isWork ? 'bg-primary' : 'bg-success',
+              )}
+              aria-label={running ? 'Pause' : 'Resume'}
+            >
+              {running ? <FaPause className="h-3.5 w-3.5" /> : <FaPlay className="ml-0.5 h-3.5 w-3.5" />}
+            </button>
+            <button
+              onClick={() => usePomodoro.getState().stop()}
+              className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-danger/10 hover:text-danger"
+              aria-label="End pomodoro"
+            >
+              <FaClose className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
   )
 }
 
@@ -340,6 +528,7 @@ export function PomodoroPill() {
 
   const isWork = phase === 'work'
   const pillVisible = (running || phaseElapsed > 0 || completed > 0) && !dialogOpen
+  const [pipSupported] = useState(pomodoroPiPSupported)
   if (!pillVisible) return null
 
   return (
@@ -362,6 +551,16 @@ export function PomodoroPill() {
           >
             {running && !breakChoicePending ? <FaPause className="h-3 w-3" /> : <FaPlay className="h-3 w-3" />}
           </button>
+          {pipSupported && (
+            <button
+              onClick={() => requestPomodoroPiP()}
+              className="hidden h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:flex"
+              aria-label="Pop out the timer"
+              title="Pop out — stays on top while you work elsewhere"
+            >
+              <FaWindowRestore className="h-3 w-3" />
+            </button>
+          )}
           <button
             onClick={() => usePomodoro.getState().stop()}
             className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-danger/10 hover:text-danger"

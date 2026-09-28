@@ -6,8 +6,11 @@
 // clock face: pick the HOUR on the dial → it flips to MINUTES → pick a
 // minute chip. AM/PM toggle + a digital readout that doubles as a mode
 // switch (click hh / mm to jump back), and ±1min nudges for exact minutes
-// beyond the 5-minute dial grid. Value format stays "HH:MM" (24h) so every
-// existing caller keeps composing due instants the same way.
+// beyond the 5-minute dial grid. The dial stays OPEN after a minute pick —
+// closing it there used to strand the AM/PM toggle (users never got to
+// flip it) — so the value is only committed on Done / outside click.
+// Value format stays "HH:MM" (24h) so every existing caller keeps
+// composing due instants the same way.
 
 import { FaClock, FaMinus, FaPlus } from 'react-icons/fa6'
 import { useState } from 'react'
@@ -99,9 +102,8 @@ export function TimePicker({
   function pickMinute(m: number) {
     setMin(m)
     emit(h12, ampm, m)
-    // time is complete — close the dial
-    setOpen(false)
-    setMode('hour')
+    // dial deliberately stays open — the AM/PM flip and ±1min nudges live
+    // here, so closing now would lock users out of them (regression fixed)
   }
 
   function nudgeMinute(delta: number) {
@@ -276,6 +278,13 @@ export function TimePicker({
               Clear
             </button>
           )}
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="ml-auto rounded-lg bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground shadow-sm transition-all hover:bg-primary/90 active:scale-[0.97]"
+          >
+            Done
+          </button>
         </div>
       </PopoverContent>
     </Popover>
