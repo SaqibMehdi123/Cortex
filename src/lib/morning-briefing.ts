@@ -1,7 +1,11 @@
 // ─── Morning briefing: daily deadline + reminder email ────────────────────
 //
-// Assembled once a day by the Vercel cron ("0 4 * * *" = 09:00 Asia/Karachi)
-// through GET /api/cron/morning. For every verified account it collects:
+// Assembled by GET /api/cron/morning, which the scheduler hits every 15
+// minutes (vercel.json "*/15 * * * *"). Each account picks its own delivery
+// time in Settings (Setting.digestTime, the user's LOCAL "HH:MM") and the
+// route sends the briefing at the first hit at-or-after that time — at most
+// one digest per local calendar day (Setting.lastDigestSentAt is the
+// idempotency marker). For every verified account it collects:
 //
 //   • Due today      — open tasks whose dueDate falls inside the user's LOCAL
 //                      calendar day (same window maths as /api/dashboard)
@@ -17,8 +21,9 @@
 // Timezone: the serverless runtime is UTC-only. The browser reports
 // Date#getTimezoneOffset() on every dashboard visit, the route stores it in
 // Setting.tzOffset, and the cron reconstructs each user's local calendar from
-// it. No offset learned yet → UTC. (At 09:00 local the local date equals the
-// UTC date for every realistic offset, so the subject date is always right.)
+// it — for both the day windows and the chosen digest time. No offset learned
+// yet → UTC. (At 09:00 local the local date equals the UTC date for every
+// realistic offset, so the subject date is always right.)
 //
 // Everything except the two collect* functions at the bottom is pure — no DB
 // import — so scripts/verify-morning-notification.ts can unit-check the
@@ -84,6 +89,51 @@ export function fmtInDays(daysLeft: number): string {
   return `in ${daysLeft} days`
 }
 
+// ── Per-user digest delivery time ────────────────────────────────────────
+
+/** parse "HH:MM" (the Setting.digestTime format) → {h, m}; null when malformed */
+export function parseHm(hm: string | null | undefined): { h: number; m: number } | null {
+  if (!hm) return null
+  const match = /^([01]?\d|2[0-3]):([0-5]\d)$/.exec(hm.trim())
+  if (!match) return null
+  return { h: Number(match[1]), m: Number(match[2]) }
+}
+
+/**
+ * Should this account's daily briefing go out right now?
+ *
+ * digestTime is the user's LOCAL wall clock ("HH:MM", chosen in Settings).
+ * We compute TODAY's occurrence of that time on the user's calendar and the
+ * scheduler (15-minute cron) delivers at the first hit at-or-after it:
+ *
+ *   now < occurrence                        → not due yet
+ *   lastSentAt is today (user's calendar)   → already had today's digest
+ *   otherwise                               → due — including catch-up after
+ *                                             the scheduler missed the exact
+ *                                             minute
+ *
+ * "At most one digest per local day" is checked on the CALENDAR DAY, not by
+ * comparing against the slot instant, so moving the time later today never
+ * fires a second send — the new time simply applies from its next occurrence.
+ * Malformed/missing digestTime falls back to the schema default ("09:00").
+ */
+export function digestDueToday(
+  digestTime: string | null | undefined,
+  offsetMin: number,
+  now: Date,
+  lastSentAt: Date | null | undefined
+): boolean {
+  const slot = parseHm(digestTime) ?? { h: 9, m: 0 }
+  const safe = Number.isFinite(offsetMin) ? offsetMin : 0
+  const local = shifted(now, safe)
+  const occurrence = new Date(
+    Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate(), slot.h, slot.m) + safe * 60_000
+  )
+  if (now.getTime() < occurrence.getTime()) return false
+  if (lastSentAt && localDayLabel(lastSentAt, safe) === localDayLabel(now, safe)) return false
+  return true
+}
+
 // ── Cron authorization ───────────────────────────────────────────────────
 
 export type CronAuthInput = {
@@ -138,6 +188,7 @@ export type BriefingHorizon = {
 }
 
 export type Briefing = {
+  userId: string
   to: string
   name: string
   subject: string
@@ -230,7 +281,7 @@ export function briefingEmailHtml(b: Omit<Briefing, 'subject' | 'html' | 'text'>
     </div>
   </div>
   <p class="foot" style="max-width:480px;margin:12px auto 0;font-size:11px;line-height:1.6;color:#a1a1aa;text-align:center;">
-    Sent every morning while you have deadlines or reminders coming up.
+    Sent daily at your chosen time while you have deadlines or reminders coming up.
     <a href="${SITE_URL}/app" style="color:#a1a1aa;">Manage your agenda</a>.<br>
     Questions? Just reply, or write to <a href="mailto:${SUPPORT_EMAIL}" style="color:#a1a1aa;">${SUPPORT_EMAIL}</a>.
   </p>
@@ -401,6 +452,7 @@ export async function buildBriefingForUser(
   const offsetMin = Number.isFinite(tzOffset ?? NaN) ? (tzOffset as number) : 0
   const collected = await collectForUser(user.id, offsetMin, now)
   const base = {
+    userId: user.id,
     to: user.email,
     name: user.name,
     counts: {
@@ -422,25 +474,42 @@ export async function buildBriefingForUser(
 
 /**
  * Build briefings for every verified account (optionally just one email).
+ * Only accounts whose chosen delivery time has come up today are included —
+ * the 15-minute scheduler calls this repeatedly, so digestDueToday + the
+ * lastDigestSentAt marker keep each account to one digest per local day.
+ * opts.force bypasses the time gate for a single manual test run.
  * collectForUser swallows per-user failures — one broken account must not
- * block the rest of the morning run.
+ * block the rest of the run.
  */
 export async function buildAllBriefings(
   now: Date,
-  opts?: { email?: string }
-): Promise<{ briefings: Briefing[]; skipped: number; errors: string[] }> {
+  opts?: { email?: string; force?: boolean }
+): Promise<{ briefings: Briefing[]; skipped: number; notDue: number; errors: string[] }> {
   const { db } = await import('./db')
   const users = await db.user.findMany({
     where: { emailVerified: true, ...(opts?.email ? { email: opts.email } : {}) },
-    select: { id: true, email: true, name: true, setting: { select: { tzOffset: true } } },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      setting: { select: { tzOffset: true, digestTime: true, lastDigestSentAt: true } },
+    },
     take: 500,
   })
 
   const briefings: Briefing[] = []
   const errors: string[] = []
   let skipped = 0
+  let notDue = 0
   for (const u of users) {
     try {
+      const due =
+        opts?.force === true ||
+        digestDueToday(u.setting?.digestTime, u.setting?.tzOffset ?? 0, now, u.setting?.lastDigestSentAt)
+      if (!due) {
+        notDue++
+        continue
+      }
       const b = await buildBriefingForUser(u, u.setting?.tzOffset ?? 0, now)
       if (b) briefings.push(b)
       else skipped++
@@ -448,5 +517,15 @@ export async function buildAllBriefings(
       errors.push(`${u.email}: ${e instanceof Error ? e.message : String(e)}`)
     }
   }
-  return { briefings, skipped, errors }
+  return { briefings, skipped, notDue, errors }
+}
+
+/**
+ * Record that a digest was actually delivered — the marker digestDueToday
+ * reads on the next scheduler hit. Best-effort: a failed write at worst
+ * causes one duplicate email on the following run, never a lost digest.
+ */
+export async function markDigestSent(userId: string, at: Date): Promise<void> {
+  const { db } = await import('./db')
+  await db.setting.updateMany({ where: { userId }, data: { lastDigestSentAt: at } })
 }

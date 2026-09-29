@@ -473,7 +473,8 @@ model Setting {
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   name        String   @default("there")
   theme       String   @default("system") // light | dark | system
-  digestTime  String   @default("09:00") // daily morning briefing delivery time
+  digestTime  String   @default("09:00") // daily morning briefing delivery time — user's LOCAL wall clock "HH:MM", chosen in Settings
+  lastDigestSentAt DateTime? // when the user last actually received the briefing — idempotency marker so the 15-min cron sends each account at most one digest per local day
   tzOffset    Int? // browser Date#getTimezoneOffset() minutes (negative east of UTC) — learned from dashboard visits, lets the morning cron build day windows on the USER's calendar
   googleAuth  String? // JSON {access_token, refresh_token, expiry_date, scope}
   googleEmail String?

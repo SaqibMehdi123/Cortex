@@ -59,7 +59,7 @@ export function SettingsView() {
       <ProfileCard data={data?.setting} save={save} />
       <AppearanceCard mounted={mounted} theme={theme ?? 'system'} setTheme={setTheme} save={save} />
       <GoogleCard />
-      <DigestCard email={me?.user?.email} />
+      <DigestCard email={me?.user?.email} setting={data?.setting} />
 
       <Card>
         <CardHeader>
@@ -262,24 +262,97 @@ function AppearanceCard({
   )
 }
 
-function DigestCard({ email }: { email?: string }) {
+/** "HH:MM" → "9:05 AM" for the live preview; echoes back anything unparseable */
+function fmt12h(hm: string): string {
+  const [h, m] = hm.split(':').map(Number)
+  if (Number.isNaN(h) || Number.isNaN(m)) return hm
+  const ampm = h >= 12 ? 'PM' : 'AM'
+  const h12 = h % 12 === 0 ? 12 : h % 12
+  return `${h12}:${String(m).padStart(2, '0')} ${ampm}`
+}
+
+function DigestCard({ email, setting }: { email?: string; setting?: SettingsData }) {
+  const { toast } = useToast()
+  const mounted = useMounted()
+  const [time, setTime] = useState<string | null>(null) // null = untouched → follow the saved value
+  const [busy, setBusy] = useState(false)
+  const value = time ?? setting?.digestTime ?? '09:00'
+  const saved = setting?.digestTime ?? '09:00'
+  // IANA zone label — only after mount so SSR/client markup matches
+  const tzLabel = mounted
+    ? (() => {
+        try {
+          return Intl.DateTimeFormat().resolvedOptions().timeZone
+        } catch {
+          return null
+        }
+      })()
+    : null
+
+  async function saveTime() {
+    if (!/^\d{2}:\d{2}$/.test(value)) {
+      toast({ title: 'Pick a valid time first', variant: 'destructive' })
+      return
+    }
+    setBusy(true)
+    try {
+      await api.put('/api/settings', { digestTime: value })
+      toast({
+        title: 'Delivery time saved',
+        description: `Your morning notification now arrives around ${fmt12h(value)}.`,
+      })
+    } catch {
+      toast({ title: 'Failed to save settings', variant: 'destructive' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-sm"><FaBell className="h-4 w-4 text-primary" /> Morning notification</CardTitle>
-        <CardDescription>Your day&rsquo;s deadlines, in your inbox each morning.</CardDescription>
+        <CardDescription>Overdue tasks, today&apos;s deadlines and reminders — in your inbox when you choose.</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-2 text-sm">
+      <CardContent className="space-y-3 text-sm">
+        <form
+          className="flex flex-col gap-2 sm:flex-row sm:items-end"
+          onSubmit={(e) => {
+            e.preventDefault()
+            saveTime()
+          }}
+        >
+          <div className="flex-1">
+            <Label htmlFor="digestTime">Delivery time</Label>
+            {/* controlled so the preview below tracks the picker; native time
+                picker on mobile — any minute of the day is selectable */}
+            <Input
+              id="digestTime"
+              name="digestTime"
+              type="time"
+              step={60}
+              value={value}
+              onChange={(e) => setTime(e.target.value)}
+              className="mt-1"
+              disabled={!setting || busy}
+            />
+          </div>
+          <Button type="submit" disabled={!setting || busy || value === saved}>Save time</Button>
+        </form>
         <div className="flex items-center justify-between gap-3">
-          <span className="text-muted-foreground">Delivery time</span>
-          <span className="font-medium">Every morning · 09:00 (Asia/Karachi)</span>
+          <span className="text-muted-foreground">Delivers</span>
+          <span className="font-medium">Daily around {fmt12h(value)}</span>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-muted-foreground">Timezone</span>
+          <span className="font-medium">{tzLabel ?? 'your device’s timezone'}</span>
         </div>
         <div className="flex items-center justify-between gap-3">
           <span className="shrink-0 text-muted-foreground">Sent to</span>
           <span className="truncate font-medium" title={email}>{email ?? 'your account email'}</span>
         </div>
         <p className="border-t pt-3 text-xs text-muted-foreground">
-          Only sent when something is on your agenda.
+          One email a day — due today, overdue, reminders and what&apos;s on the horizon — and only when something is on your agenda. Times follow your device&apos;s timezone; a new time applies from its next occurrence.
         </p>
       </CardContent>
     </Card>

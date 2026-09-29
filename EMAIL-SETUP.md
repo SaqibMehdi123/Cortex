@@ -1,7 +1,7 @@
 # Email setup — receiving (name.com) & sending (provider chain)
 
 Cortex sends three kinds of email: signup verification codes, password-reset
-codes, and the 09:00 PKT morning briefing (plus the 08:30 feed sync cron that
+codes, and the per-user-timed morning briefing (plus the 08:30 feed sync cron that
 feeds it). This doc covers both halves of email:
 
 1. **Receiving** — mail sent TO brand addresses (`support@`, `hello@`)
@@ -176,12 +176,21 @@ impossible. **DEV ONLY — never on a reachable server.**
 
 ## Morning briefing — schedule & manual runs
 
-`vercel.json` registers two crons (Vercel reads it on every deploy):
+The morning briefing is **per-user scheduled**: every account picks its own
+delivery time in Settings → Morning notification (`Setting.digestTime`, the
+user's local "HH:MM"). `vercel.json` registers two crons (Vercel reads it on
+every deploy) — the morning route runs every 15 minutes so any chosen minute
+delivers within a quarter hour, at most one digest per local calendar day:
 
 | Path                | Schedule (UTC) | Local (PKT) | What it does                        |
 | ------------------- | -------------- | ----------- | ----------------------------------- |
-| `/api/cron/morning` | `0 4 * * *`    | 09:00       | Personal agenda email per verified user |
+| `/api/cron/morning` | `*/15 * * * *` | every 15 min | Personal agenda email, delivered at each account's chosen time |
 | `/api/cron/feeds`   | `30 3 * * *`   | 08:30       | Sync scholarships + exchange programmes |
+
+> **Vercel Hobby note:** Hobby only allows daily crons. Either run the
+> morning route hourly (`0 * * * *` — chosen times then round to the next
+> full hour) or point an external pinger (cron-job.org, UptimeRobot, a
+> system crontab on a VPS) at the endpoint every 15 minutes.
 
 Auth: with `CRON_SECRET` set (it is), Vercel signs each invocation with
 `Authorization: Bearer $CRON_SECRET` and the routes reject everything else
@@ -191,18 +200,22 @@ unset). Manual runs use the same secret:
 ```bash
 CRON_SECRET=<your value>
 
-# dry run — build everything, send nothing
+# dry run — build everything DUE RIGHT NOW, send nothing
 curl "https://cortex.scrutinies.dev/api/cron/morning?key=$CRON_SECRET&dryRun=1"
 
-# real run for one account
+# real run for one account (only if their chosen time is due)
 curl "https://cortex.scrutinies.dev/api/cron/morning?key=$CRON_SECRET&user=you@example.com"
 
-# full run (what the cron does at 09:00)
+# force-send one account now, ignoring their chosen time
+curl "https://cortex.scrutinies.dev/api/cron/morning?key=$CRON_SECRET&user=you@example.com&force=1"
+
+# full run (what the cron does every 15 minutes — only due accounts send)
 curl "https://cortex.scrutinies.dev/api/cron/morning?key=$CRON_SECRET"
 
 # feed sync (scholarships + exchange programmes)
 curl "https://cortex.scrutinies.dev/api/cron/feeds?key=$CRON_SECRET"
 ```
 
-Accounts with an empty agenda get no email. Each response lists per-account
-counts plus `sent / skipped / failed` on real runs.
+Accounts with an empty agenda get no email, and accounts whose chosen time
+has not come up yet report as `notDueYet`. Each response lists per-account
+counts plus `sent / notDueYet / skipped / failed` on real runs.
