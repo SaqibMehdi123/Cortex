@@ -190,47 +190,15 @@ function CompanyLogo({ company, url, logoUrl }: { company: string; url: string; 
 }
 
 export function CareerView() {
-  // Tab lives in the shared UI store so the sidebar dropdown, the mobile
-  // More sheet and the command bar can jump straight to any sub-page.
+  // Sub-page comes from the shared UI store — selected ONLY from the sidebar
+  // (or the mobile More sheet); there is deliberately no in-page switcher.
   const tab = useUI((s) => s.careerTab)
-  const setTab = useUI((s) => s.setCareerTab)
 
   return (
     <div className="anim-fade-up space-y-4 pb-8">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Career</h1>
-          <p className="text-sm text-muted-foreground">Track applications, browse live listings and save scholarships.</p>
-        </div>
-        <div className="flex items-center gap-1 rounded-xl border bg-muted/40 p-1">
-          <button
-            onClick={() => setTab('pipeline')}
-            className={cn(
-              'flex min-h-[32px] items-center gap-1.5 rounded-lg px-3 text-xs font-medium transition-colors',
-              tab === 'pipeline' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
-            )}
-          >
-            <FaBriefcase className="h-3.5 w-3.5" /> Pipeline
-          </button>
-          <button
-            onClick={() => setTab('discover')}
-            className={cn(
-              'flex min-h-[32px] items-center gap-1.5 rounded-lg px-3 text-xs font-medium transition-colors',
-              tab === 'discover' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
-            )}
-          >
-            <FaTowerBroadcast className="h-3.5 w-3.5" /> Discover
-          </button>
-          <button
-            onClick={() => setTab('scholarships')}
-            className={cn(
-              'flex min-h-[32px] items-center gap-1.5 rounded-lg px-3 text-xs font-medium transition-colors',
-              tab === 'scholarships' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
-            )}
-          >
-            <FaGraduationCap className="h-3.5 w-3.5" /> Scholarships
-          </button>
-        </div>
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Career</h1>
+        <p className="text-sm text-muted-foreground">Track applications, browse live listings and save scholarships.</p>
       </div>
 
       {tab === 'pipeline' ? <PipelineTab /> : tab === 'discover' ? <DiscoverTab /> : <ScholarshipsTab />}

@@ -11,7 +11,6 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { useToast } from '@/hooks/use-toast'
 import { useAutoSync } from '@/hooks/use-auto-sync'
 import { cn } from '@/lib/utils'
@@ -611,28 +610,17 @@ function PapersTab() {
 // ═══════════════════════════════ SHELL ══════════════════════════════════
 
 export function NewsView() {
-  // Controlled by the shared UI store — the sidebar dropdown / More sheet can
-  // deep-link straight to Papers without landing on News first.
+  // Sub-page comes from the shared UI store — it is selected ONLY from the
+  // sidebar (or the mobile More sheet); there is deliberately no in-page
+  // switcher anymore.
   const tab = useUI((s) => s.newsTab)
-  const setTab = useUI((s) => s.setNewsTab)
   return (
     <div className="anim-fade-up space-y-5 pb-8">
       <PageHeader
         title="News & Papers"
         description="Real stories from labs & newsletters, plus fresh research from Hugging Face and arXiv."
       />
-      <Tabs value={tab} onValueChange={(v) => setTab(v as 'news' | 'papers')}>
-        <TabsList>
-          <TabsTrigger value="news" className="gap-1.5"><FaNewspaper className="h-3.5 w-3.5" /> News</TabsTrigger>
-          <TabsTrigger value="papers" className="gap-1.5"><FaFlask className="h-3.5 w-3.5" /> Papers</TabsTrigger>
-        </TabsList>
-        <TabsContent value="news" className="mt-4">
-          <NewsTab />
-        </TabsContent>
-        <TabsContent value="papers" className="mt-4">
-          <PapersTab />
-        </TabsContent>
-      </Tabs>
+      <div className="mt-4">{tab === 'papers' ? <PapersTab /> : <NewsTab />}</div>
     </div>
   )
 }

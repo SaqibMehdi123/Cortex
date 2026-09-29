@@ -190,7 +190,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   {collapsed && group !== 'workspace' && <div className="mx-2 mb-2 border-t" />}
                   {items.map((item) =>
                     item.children ? (
-                      <NavDropdown key={item.key} item={item} collapsed={collapsed} active={view === item.key} />
+                      <NavSection key={item.key} item={item} collapsed={collapsed} active={view === item.key} />
                     ) : (
                       <Tooltip key={item.key}>
                         <TooltipTrigger asChild>
@@ -607,14 +607,28 @@ function NotificationPanel({ data, failed, onRetry, onNavigate }: { data: Dashbo
   )
 }
 
-/* ── Sidebar nav dropdown (Career / News & Papers) ──
-   The trigger no longer navigates — it opens a menu whose entries jump
-   straight to the sub-page (Pipeline, Discover, Scholarships, News, Papers),
-   so the user never has to open the view first and then pick a tab. */
-function NavDropdown({ item, collapsed, active }: { item: (typeof NAV_ITEMS)[number]; collapsed: boolean; active: boolean }) {
+/* ── Sidebar nav section (Career / News & Papers) ──
+   Clicking the parent row shows/hides its sub-pages INLINE in the sidebar —
+   no popup selector. The section auto-expands whenever one of its children
+   is the active sub-page (deep links from the mobile More sheet or command
+   bar), and the user can collapse it again at will. The icon-only collapsed
+   rail has no room for a tree, so there the parent keeps a flyout menu. */
+function NavSection({ item, collapsed, active }: { item: (typeof NAV_ITEMS)[number]; collapsed: boolean; active: boolean }) {
   const setView = useUI((s) => s.setView)
   const setCareerTab = useUI((s) => s.setCareerTab)
   const setNewsTab = useUI((s) => s.setNewsTab)
+  const careerTab = useUI((s) => s.careerTab)
+  const newsTab = useUI((s) => s.newsTab)
+  const currentTab = item.key === 'career' ? careerTab : newsTab
+  const [open, setOpen] = useState(false)
+  // deep link landed on a child → open the section. Adjusted during render
+  // (React's documented pattern) — the lint set-state-in-effect rule forbids
+  // doing this in an effect.
+  const [lastActive, setLastActive] = useState(active)
+  if (active !== lastActive) {
+    setLastActive(active)
+    if (active) setOpen(true)
+  }
 
   const openChild = (child: NavChild) => {
     if (item.key === 'career') setCareerTab(child.tab as 'pipeline' | 'discover' | 'scholarships')
@@ -622,42 +636,80 @@ function NavDropdown({ item, collapsed, active }: { item: (typeof NAV_ITEMS)[num
     setView(item.key)
   }
 
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          aria-current={active ? 'page' : undefined}
-          aria-haspopup="menu"
-          className={cn(
-            'group relative flex min-h-[36px] w-full items-center gap-2.5 rounded-lg px-3 py-1.5 text-[13px] font-medium transition-all duration-150 outline-none',
-            collapsed && 'justify-center px-0',
-            active
-              ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-          )}
-        >
-          {active && (
-            <span className="absolute left-0 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-full bg-primary" aria-hidden />
-          )}
-          <span className={cn(active && 'text-primary')}>{item.icon}</span>
-          {!collapsed && <span className="flex-1 text-left">{item.label}</span>}
-          {!collapsed ? (
-            <FaChevronDown className="h-3 w-3 shrink-0 opacity-50 transition-transform group-data-[state=open]:rotate-180" />
-          ) : (
+  // Collapsed rail: icon-only → flyout menu (an inline tree can't fit)
+  if (collapsed) {
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            aria-current={active ? 'page' : undefined}
+            aria-haspopup="menu"
+            className="group relative flex min-h-[36px] w-full items-center justify-center px-0 py-1.5 text-[13px] font-medium transition-all duration-150 outline-none"
+          >
+            {active && (
+              <span className="absolute left-0 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-full bg-primary" aria-hidden />
+            )}
+            <span className={cn(active && 'text-primary')}>{item.icon}</span>
             <span className="sr-only">{item.label} menu</span>
-          )}
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent side={collapsed ? 'right' : 'bottom'} align={collapsed ? 'start' : 'start'} sideOffset={4} className="w-48">
-        <DropdownMenuLabel className="text-xs text-muted-foreground">{item.label}</DropdownMenuLabel>
-        {item.children?.map((child) => (
-          <DropdownMenuItem key={child.tab} onSelect={() => openChild(child)} className="gap-2.5 text-[13px]">
-            <span className="text-primary">{child.icon}</span>
-            {child.label}
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent side="right" align="start" sideOffset={4} className="w-48">
+          <DropdownMenuLabel className="text-xs text-muted-foreground">{item.label}</DropdownMenuLabel>
+          {item.children?.map((child) => (
+            <DropdownMenuItem key={child.tab} onSelect={() => openChild(child)} className="gap-2.5 text-[13px]">
+              <span className="text-primary">{child.icon}</span>
+              {child.label}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    )
+  }
+
+  return (
+    <div>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-current={active ? 'page' : undefined}
+        className={cn(
+          'group relative flex min-h-[36px] w-full items-center gap-2.5 rounded-lg px-3 py-1.5 text-[13px] font-medium transition-all duration-150 outline-none',
+          active
+            ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+            : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+        )}
+      >
+        {active && (
+          <span className="absolute left-0 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-full bg-primary" aria-hidden />
+        )}
+        <span className={cn(active && 'text-primary')}>{item.icon}</span>
+        <span className="flex-1 text-left">{item.label}</span>
+        <FaChevronDown className={cn('h-3 w-3 shrink-0 opacity-50 transition-transform duration-150', open && 'rotate-180')} />
+      </button>
+      {open && (
+        <div role="group" aria-label={`${item.label} sections`} className="mt-0.5 space-y-0.5 pl-[30px]">
+          {item.children?.map((child) => {
+            const childActive = active && currentTab === child.tab
+            return (
+              <button
+                key={child.tab}
+                onClick={() => openChild(child)}
+                aria-current={childActive ? 'page' : undefined}
+                className={cn(
+                  'flex min-h-[32px] w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[12.5px] font-medium transition-colors',
+                  childActive
+                    ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                )}
+              >
+                <span className={cn(childActive && 'text-primary')}>{child.icon}</span>
+                {child.label}
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
   )
 }
 
