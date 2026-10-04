@@ -4,12 +4,15 @@ import { sendEmail } from '@/lib/mailer'
 
 // GET /api/cron/morning — the per-user-time notification run.
 //
-// The scheduler hits this every 15 minutes (vercel.json "*/15 * * * *"); each
-// verified account receives its daily briefing at the LOCAL time it chose in
-// Settings (Setting.digestTime), at most one digest per calendar day
-// (Setting.lastDigestSentAt marks what already went out — the 15-minute
-// cadence is what makes any chosen minute deliverable). Safe to curl by hand
-// for testing:
+// Frequency-agnostic: every hit scans the accounts and delivers each one
+// whose chosen LOCAL time has come up (Setting.digestTime), at most one
+// digest per calendar day (Setting.lastDigestSentAt marks what already went
+// out — the gate is what makes any hit cadence safe, so a pinger at any
+// frequency works). The Vercel cron is a DAILY fallback (vercel.json
+// "0 4 * * *" — Hobby plan caps crons at once per day; a */15 schedule fails
+// the whole deployment). For minute-accurate delivery at any chosen time,
+// an external pinger should hit this endpoint every 15 minutes. Safe to curl
+// by hand for testing:
 //
 //   curl "https://cortex.scrutinies.dev/api/cron/morning?key=$CRON_SECRET&dryRun=1"
 //   curl "…&user=you@example.com"              ← restrict to one account
@@ -81,7 +84,7 @@ export async function GET(req: NextRequest) {
       results.push({ to: b.to, delivered: res.delivered, reason: res.reason, counts: b.counts })
       if (res.delivered) {
         // mark today's digest as sent — the time gate reads this on the next
-        // 15-minute hit so the account gets exactly one email per day
+        // hit so the account gets exactly one email per day
         try {
           await markDigestSent(b.userId, now)
         } catch (e) {

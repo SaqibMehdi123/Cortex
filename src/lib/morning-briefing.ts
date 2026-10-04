@@ -1,10 +1,12 @@
 // ─── Morning briefing: daily deadline + reminder email ────────────────────
 //
-// Assembled by GET /api/cron/morning, which the scheduler hits every 15
-// minutes (vercel.json "*/15 * * * *"). Each account picks its own delivery
-// time in Settings (Setting.digestTime, the user's LOCAL "HH:MM") and the
-// route sends the briefing at the first hit at-or-after that time — at most
-// one digest per local calendar day (Setting.lastDigestSentAt is the
+// Assembled by GET /api/cron/morning — hit daily by the Vercel cron
+// (vercel.json "0 4 * * *"; Hobby caps Vercel crons at once per day) and
+// ideally every 15 minutes by an external pinger for minute-accurate
+// delivery. The route is frequency-agnostic: each account picks its own
+// delivery time in Settings (Setting.digestTime, the user's LOCAL "HH:MM")
+// and every hit sends the briefing at the first hit at-or-after that time —
+// at most one digest per local calendar day (Setting.lastDigestSentAt is the
 // idempotency marker). For every verified account it collects:
 //
 //   • Due today      — open tasks whose dueDate falls inside the user's LOCAL
@@ -104,7 +106,7 @@ export function parseHm(hm: string | null | undefined): { h: number; m: number }
  *
  * digestTime is the user's LOCAL wall clock ("HH:MM", chosen in Settings).
  * We compute TODAY's occurrence of that time on the user's calendar and the
- * scheduler (15-minute cron) delivers at the first hit at-or-after it:
+ * cron/pinger delivers at the first hit at-or-after it:
  *
  *   now < occurrence                        → not due yet
  *   lastSentAt is today (user's calendar)   → already had today's digest
@@ -475,7 +477,7 @@ export async function buildBriefingForUser(
 /**
  * Build briefings for every verified account (optionally just one email).
  * Only accounts whose chosen delivery time has come up today are included —
- * the 15-minute scheduler calls this repeatedly, so digestDueToday + the
+ * the cron/pinger calls this repeatedly, so digestDueToday + the
  * lastDigestSentAt marker keep each account to one digest per local day.
  * opts.force bypasses the time gate for a single manual test run.
  * collectForUser swallows per-user failures — one broken account must not

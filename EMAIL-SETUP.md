@@ -178,19 +178,26 @@ impossible. **DEV ONLY — never on a reachable server.**
 
 The morning briefing is **per-user scheduled**: every account picks its own
 delivery time in Settings → Morning notification (`Setting.digestTime`, the
-user's local "HH:MM"). `vercel.json` registers two crons (Vercel reads it on
-every deploy) — the morning route runs every 15 minutes so any chosen minute
-delivers within a quarter hour, at most one digest per local calendar day:
+user's local "HH:MM"). The route itself is frequency-agnostic — every hit
+scans all accounts and delivers each one whose chosen time has come up (at
+most one digest per local calendar day, guarded by `lastDigestSentAt`), so
+any hit cadence is safe.
+
+`vercel.json` registers two crons (Vercel reads it on every deploy):
 
 | Path                | Schedule (UTC) | Local (PKT) | What it does                        |
 | ------------------- | -------------- | ----------- | ----------------------------------- |
-| `/api/cron/morning` | `*/15 * * * *` | every 15 min | Personal agenda email, delivered at each account's chosen time |
+| `/api/cron/morning` | `0 4 * * *`    | 09:00 daily | Daily fallback — delivers to every account whose chosen time has already passed at that instant (time-gated per user) |
 | `/api/cron/feeds`   | `30 3 * * *`   | 08:30       | Sync scholarships + exchange programmes |
 
-> **Vercel Hobby note:** Hobby only allows daily crons. Either run the
-> morning route hourly (`0 * * * *` — chosen times then round to the next
-> full hour) or point an external pinger (cron-job.org, UptimeRobot, a
-> system crontab on a VPS) at the endpoint every 15 minutes.
+> **Vercel Hobby note (IMPORTANT):** Hobby allows cron jobs **once per day
+> only** — a `*/15 * * * *` schedule makes the whole DEPLOYMENT fail with
+> "Deployment failed" before any build starts. That is why the Vercel cron is
+> daily: at 04:00 UTC (= 09:00 PKT) it delivers everyone whose chosen local
+> time is at or before that moment. For minute-accurate delivery at any
+> chosen time, point an external pinger (cron-job.org, UptimeRobot, a system
+> crontab on a VPS) at the endpoint every 15 minutes — see "External pinger"
+> below. On Vercel Pro, `*/15 * * * *` can go straight back into vercel.json.
 
 Auth: with `CRON_SECRET` set (it is), Vercel signs each invocation with
 `Authorization: Bearer $CRON_SECRET` and the routes reject everything else
@@ -209,8 +216,14 @@ curl "https://cortex.scrutinies.dev/api/cron/morning?key=$CRON_SECRET&user=you@e
 # force-send one account now, ignoring their chosen time
 curl "https://cortex.scrutinies.dev/api/cron/morning?key=$CRON_SECRET&user=you@example.com&force=1"
 
-# full run (what the cron does every 15 minutes — only due accounts send)
+# full run (what the cron/pinger does — only due accounts send)
 curl "https://cortex.scrutinies.dev/api/cron/morning?key=$CRON_SECRET"
+
+# External pinger (Hobby plan): create a cron-job.org job (or crontab entry)
+# hitting this same URL every 15 minutes. The per-user time gate makes the
+# frequent hits safe — each account still gets at most one digest per day,
+# delivered at its own chosen minute.
+#   crontab: */15 * * * * curl -fsS "https://cortex.scrutinies.dev/api/cron/morning?key=$CRON_SECRET" >/dev/null
 
 # feed sync (scholarships + exchange programmes)
 curl "https://cortex.scrutinies.dev/api/cron/feeds?key=$CRON_SECRET"
