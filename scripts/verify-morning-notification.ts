@@ -3,7 +3,7 @@
 // Everything exercised here is pure (no DB): day-window maths, wall-clock
 // formatting, the cron auth matrix and the email template. The live
 // end-to-end check (DB + real send) runs on production via
-//   curl "https://cortex-sync.vercel.app/api/cron/morning?key=$CRON_SECRET&dryRun=1"
+//   curl "https://cortex.scrutinies.dev/api/cron/morning?key=$CRON_SECRET&dryRun=1"
 
 import {
   localDayLabel,
@@ -11,8 +11,7 @@ import {
   fmtTimeLocal,
   fmtDayLocal,
   fmtInDays,
-  parseHm,
-  digestDueToday,
+  digestAlreadySentToday,
   authorizeMorningCron,
   briefingEmailHtml,
   briefingEmailText,
@@ -57,30 +56,15 @@ check('fmtInDays 0', fmtInDays(0) === 'today')
 check('fmtInDays 1', fmtInDays(1) === 'tomorrow')
 check('fmtInDays 3', fmtInDays(3) === 'in 3 days')
 
-console.log('parseHm — Setting.digestTime format')
-check('plain 09:00', parseHm('09:00')?.h === 9 && parseHm('09:00')?.m === 0)
-check('23:59', parseHm('23:59')?.h === 23 && parseHm('23:59')?.m === 59)
-check('rejects 24:00', parseHm('24:00') === null)
-check('rejects 9:61', parseHm('9:61') === null)
-check('rejects prose and empties', parseHm('morning') === null && parseHm('') === null && parseHm(null) === null)
-
-console.log('digestDueToday — per-user delivery window (PKT: 09:00 local == 04:00Z)')
-const slot = (hm: string, iso: string, last?: string | null, offset = -300) =>
-  digestDueToday(hm, offset, new Date(iso), last ? new Date(last) : null)
-check('before the chosen slot → not due', slot('09:00', '2026-09-12T03:59:00Z') === false)
-check('at the slot, nothing sent yet → due', slot('09:00', '2026-09-12T04:00:00Z') === true)
-check('after the slot, nothing sent yet → catch-up send', slot('09:00', '2026-09-12T04:15:00Z') === true)
-check('already sent at the slot today → skip', slot('09:00', '2026-09-12T04:15:00Z', '2026-09-12T04:00:00Z') === false)
-check('sent yesterday only → due again', slot('09:00', '2026-09-12T04:00:00Z', '2026-09-11T04:00:00Z') === true)
-check('sent later yesterday, slot passed → due', slot('09:00', '2026-09-12T04:00:00Z', '2026-09-11T13:00:00Z') === true)
-check('custom minute 18:42 local = 13:42Z', slot('18:42', '2026-09-12T13:41:00Z') === false && slot('18:42', '2026-09-12T13:42:00Z') === true)
-check('mid-day move to a later time: no second send today', slot('15:00', '2026-09-12T05:00:00Z', '2026-09-12T04:00:00Z') === false)
-check('move earlier while new slot still ahead → sends at new slot', slot('08:00', '2026-09-12T02:59:00Z', null) === false && slot('08:00', '2026-09-12T03:00:00Z', null) === true)
-check('malformed digestTime falls back to 09:00', slot('25:99', '2026-09-12T04:00:00Z') === true && slot('25:99', '2026-09-12T03:59:00Z') === false)
-check('missing digestTime falls back to 09:00', slot('', '2026-09-12T04:00:00Z') === true)
-check('non-finite offset falls back to UTC (09:00Z)', digestDueToday('09:00', NaN, new Date('2026-09-12T08:59:00Z'), null) === false && digestDueToday('09:00', NaN, new Date('2026-09-12T09:00:00Z'), null) === true)
-check('US east (UTC+4): 09:00 local == 13:00Z', digestDueToday('09:00', 240, new Date('2026-09-12T12:59:00Z'), null) === false && digestDueToday('09:00', 240, new Date('2026-09-13T13:00:00Z'), null) === true)
-check('marker checked on the USER calendar, not UTC (force-send 01:00 local suppresses the 09:00 slot)', digestDueToday('09:00', -300, new Date('2026-09-12T04:00:00Z'), new Date('2026-09-11T20:00:00Z')) === false)
+console.log('digestAlreadySentToday — one send per local calendar day (08:00 PKT == 03:00Z)')
+const sent = (last: string | null | undefined, iso: string, offset = -300) =>
+  digestAlreadySentToday(last ? new Date(last) : null, offset, new Date(iso))
+check('never sent → not sent today', sent(null, '2026-09-12T03:00:00Z') === false)
+check('sent at this very run instant → already sent', sent('2026-09-12T03:00:00Z', '2026-09-12T03:00:00Z') === true)
+check('sent earlier today (01:30 PKT) → already sent', sent('2026-09-11T20:30:00Z', '2026-09-12T03:00:00Z') === true)
+check('sent yesterday at the same instant → due again', sent('2026-09-11T03:00:00Z', '2026-09-12T03:00:00Z') === false)
+check('non-finite offset falls back to UTC', digestAlreadySentToday(new Date('2026-09-11T23:59:00Z'), NaN, new Date('2026-09-12T00:00:00Z')) === false && digestAlreadySentToday(new Date('2026-09-12T00:00:00Z'), NaN, new Date('2026-09-12T00:00:00Z')) === true)
+check('marker read on the USER calendar, not UTC (01:00 PKT send suppresses the 08:00 PKT run)', sent('2026-09-11T20:00:00Z', '2026-09-12T03:00:00Z') === true)
 
 console.log('authorizeMorningCron — auth matrix')
 check('correct bearer accepted', authorizeMorningCron({ authHeader: 'Bearer s3cret', vercelCronHeader: null, keyParam: null, secret: 's3cret', isProd: true }).ok)
@@ -129,7 +113,7 @@ check('reminder row carries the cadence chip', b.html.includes('Monthly · day 1
 check('horizon row tags applications', b.html.includes('APPLICATION'))
 check('plain text lists every row', b.text.includes('• Rent payment <script>alert(1)</script> at 2:30 PM') && b.text.includes('• Pay internet bill (Monthly · day 1)') && b.text.includes('• Google — SWE — Sep 15 · in 3 days'))
 check('open-cortex CTA present', b.html.includes(`${SITE_URL}/app`))
-check('footer mentions the chosen delivery time', b.html.includes('Sent daily at your chosen time'))
+check('footer says the mail is sent every morning', b.html.includes('Sent every morning'))
 
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

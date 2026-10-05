@@ -1,13 +1,7 @@
 // ─── Morning briefing: daily deadline + reminder email ────────────────────
 //
-// Assembled by GET /api/cron/morning — hit daily by the Vercel cron
-// (vercel.json "0 4 * * *"; Hobby caps Vercel crons at once per day) and
-// ideally every 15 minutes by an external pinger for minute-accurate
-// delivery. The route is frequency-agnostic: each account picks its own
-// delivery time in Settings (Setting.digestTime, the user's LOCAL "HH:MM")
-// and every hit sends the briefing at the first hit at-or-after that time —
-// at most one digest per local calendar day (Setting.lastDigestSentAt is the
-// idempotency marker). For every verified account it collects:
+// Assembled once a day by the Vercel cron ("0 3 * * *" = 08:00 Asia/Karachi)
+// through GET /api/cron/morning. For every verified account it collects:
 //
 //   • Due today      — open tasks whose dueDate falls inside the user's LOCAL
 //                      calendar day (same window maths as /api/dashboard)
@@ -23,9 +17,9 @@
 // Timezone: the serverless runtime is UTC-only. The browser reports
 // Date#getTimezoneOffset() on every dashboard visit, the route stores it in
 // Setting.tzOffset, and the cron reconstructs each user's local calendar from
-// it — for both the day windows and the chosen digest time. No offset learned
-// yet → UTC. (At 09:00 local the local date equals the UTC date for every
-// realistic offset, so the subject date is always right.)
+// it — for the day windows only. No offset learned yet → UTC. (At 08:00 PKT
+// the local date equals the UTC date for every realistic offset, so the
+// subject date is always right.)
 //
 // Everything except the two collect* functions at the bottom is pure — no DB
 // import — so scripts/verify-morning-notification.ts can unit-check the
@@ -91,49 +85,23 @@ export function fmtInDays(daysLeft: number): string {
   return `in ${daysLeft} days`
 }
 
-// ── Per-user digest delivery time ────────────────────────────────────────
-
-/** parse "HH:MM" (the Setting.digestTime format) → {h, m}; null when malformed */
-export function parseHm(hm: string | null | undefined): { h: number; m: number } | null {
-  if (!hm) return null
-  const match = /^([01]?\d|2[0-3]):([0-5]\d)$/.exec(hm.trim())
-  if (!match) return null
-  return { h: Number(match[1]), m: Number(match[2]) }
-}
+// ── One digest per local calendar day ────────────────────────────────────
 
 /**
- * Should this account's daily briefing go out right now?
+ * Has this account already received today's briefing?
  *
- * digestTime is the user's LOCAL wall clock ("HH:MM", chosen in Settings).
- * We compute TODAY's occurrence of that time on the user's calendar and the
- * cron/pinger delivers at the first hit at-or-after it:
- *
- *   now < occurrence                        → not due yet
- *   lastSentAt is today (user's calendar)   → already had today's digest
- *   otherwise                               → due — including catch-up after
- *                                             the scheduler missed the exact
- *                                             minute
- *
- * "At most one digest per local day" is checked on the CALENDAR DAY, not by
- * comparing against the slot instant, so moving the time later today never
- * fires a second send — the new time simply applies from its next occurrence.
- * Malformed/missing digestTime falls back to the schema default ("09:00").
+ * The scheduled cron fires exactly once a day, so the lastDigestSentAt
+ * marker is a pure safety net — it keeps a manual test run (or any future
+ * extra hit) from doubling the daily email. "Today" is read on the USER's
+ * calendar via tzOffset, matching how the briefing's day windows are built.
  */
-export function digestDueToday(
-  digestTime: string | null | undefined,
+export function digestAlreadySentToday(
+  lastSentAt: Date | null | undefined,
   offsetMin: number,
-  now: Date,
-  lastSentAt: Date | null | undefined
+  now: Date
 ): boolean {
-  const slot = parseHm(digestTime) ?? { h: 9, m: 0 }
-  const safe = Number.isFinite(offsetMin) ? offsetMin : 0
-  const local = shifted(now, safe)
-  const occurrence = new Date(
-    Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate(), slot.h, slot.m) + safe * 60_000
-  )
-  if (now.getTime() < occurrence.getTime()) return false
-  if (lastSentAt && localDayLabel(lastSentAt, safe) === localDayLabel(now, safe)) return false
-  return true
+  if (!lastSentAt) return false
+  return localDayLabel(lastSentAt, offsetMin) === localDayLabel(now, offsetMin)
 }
 
 // ── Cron authorization ───────────────────────────────────────────────────
@@ -283,7 +251,7 @@ export function briefingEmailHtml(b: Omit<Briefing, 'subject' | 'html' | 'text'>
     </div>
   </div>
   <p class="foot" style="max-width:480px;margin:12px auto 0;font-size:11px;line-height:1.6;color:#a1a1aa;text-align:center;">
-    Sent daily at your chosen time while you have deadlines or reminders coming up.
+    Sent every morning while you have deadlines or reminders coming up.
     <a href="${SITE_URL}/app" style="color:#a1a1aa;">Manage your agenda</a>.<br>
     Questions? Just reply, or write to <a href="mailto:${SUPPORT_EMAIL}" style="color:#a1a1aa;">${SUPPORT_EMAIL}</a>.
   </p>
@@ -476,10 +444,10 @@ export async function buildBriefingForUser(
 
 /**
  * Build briefings for every verified account (optionally just one email).
- * Only accounts whose chosen delivery time has come up today are included —
- * the cron/pinger calls this repeatedly, so digestDueToday + the
- * lastDigestSentAt marker keep each account to one digest per local day.
- * opts.force bypasses the time gate for a single manual test run.
+ * The daily cron delivers each account's digest once per calendar day — the
+ * lastDigestSentAt marker is a safety net so repeated hits in the same day
+ * (manual test runs included) cannot double-email anyone.
+ * opts.force bypasses the marker for a single manual test run.
  * collectForUser swallows per-user failures — one broken account must not
  * block the rest of the run.
  */
@@ -494,7 +462,7 @@ export async function buildAllBriefings(
       id: true,
       email: true,
       name: true,
-      setting: { select: { tzOffset: true, digestTime: true, lastDigestSentAt: true } },
+      setting: { select: { tzOffset: true, lastDigestSentAt: true } },
     },
     take: 500,
   })
@@ -505,10 +473,8 @@ export async function buildAllBriefings(
   let notDue = 0
   for (const u of users) {
     try {
-      const due =
-        opts?.force === true ||
-        digestDueToday(u.setting?.digestTime, u.setting?.tzOffset ?? 0, now, u.setting?.lastDigestSentAt)
-      if (!due) {
+      const alreadySent = digestAlreadySentToday(u.setting?.lastDigestSentAt, u.setting?.tzOffset ?? 0, now)
+      if (alreadySent && opts?.force !== true) {
         notDue++
         continue
       }
@@ -523,9 +489,10 @@ export async function buildAllBriefings(
 }
 
 /**
- * Record that a digest was actually delivered — the marker digestDueToday
- * reads on the next scheduler hit. Best-effort: a failed write at worst
- * causes one duplicate email on the following run, never a lost digest.
+ * Record that a digest was actually delivered — the marker
+ * digestAlreadySentToday reads to hold back further sends on the same local
+ * calendar day. Best-effort: a failed write at worst causes one duplicate
+ * email on a repeated run, never a lost digest.
  */
 export async function markDigestSent(userId: string, at: Date): Promise<void> {
   const { db } = await import('./db')

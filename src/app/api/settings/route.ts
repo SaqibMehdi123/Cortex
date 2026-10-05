@@ -10,7 +10,6 @@ const PUBLIC_SETTING_SELECT = {
   userId: true,
   name: true,
   theme: true,
-  digestTime: true,
   googleEmail: true,
   updatedAt: true,
 } as const
@@ -51,7 +50,6 @@ export async function PUT(req: NextRequest) {
     const data: Record<string, unknown> = {}
     if ('name' in body) data.name = String(body.name || 'there').slice(0, 60)
     if ('theme' in body && ['light', 'dark', 'system'].includes(body.theme)) data.theme = body.theme
-    if ('digestTime' in body && /^([01]\d|2[0-3]):([0-5]\d)$/.test(String(body.digestTime))) data.digestTime = body.digestTime
 
     const setting = await db.setting.upsert({
       where: { userId: user.id },

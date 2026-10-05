@@ -2,21 +2,18 @@ import { NextRequest, NextResponse } from 'next/server'
 import { authorizeMorningCron, buildAllBriefings, markDigestSent } from '@/lib/morning-briefing'
 import { sendEmail } from '@/lib/mailer'
 
-// GET /api/cron/morning — the per-user-time notification run.
+// GET /api/cron/morning — the daily 8 AM (Asia/Karachi) notification run.
 //
-// Frequency-agnostic: every hit scans the accounts and delivers each one
-// whose chosen LOCAL time has come up (Setting.digestTime), at most one
-// digest per calendar day (Setting.lastDigestSentAt marks what already went
-// out — the gate is what makes any hit cadence safe, so a pinger at any
-// frequency works). The Vercel cron is a DAILY fallback (vercel.json
-// "0 4 * * *" — Hobby plan caps crons at once per day; a */15 schedule fails
-// the whole deployment). For minute-accurate delivery at any chosen time,
-// an external pinger should hit this endpoint every 15 minutes. Safe to curl
-// by hand for testing:
+// Called once a day by the Vercel cron defined in vercel.json ("0 3 * * *" =
+// 08:00 Asia/Karachi). Every verified account with something on its agenda
+// gets the email; accounts with nothing due are skipped silently. The
+// Setting.lastDigestSentAt marker holds back any repeat hit on the same
+// calendar day so the daily email can never double up. Safe to curl by hand
+// for testing:
 //
 //   curl "https://cortex.scrutinies.dev/api/cron/morning?key=$CRON_SECRET&dryRun=1"
 //   curl "…&user=you@example.com"              ← restrict to one account
-//   curl "…&user=you@example.com&force=1"      ← send now, ignoring their slot
+//   curl "…&user=you@example.com&force=1"      ← send now even if today's digest already went out
 //
 // force=1 only applies together with user= (a forced blast to every account
 // would spam the whole user base). Auth: CRON_SECRET (Vercel injects
@@ -24,7 +21,7 @@ import { sendEmail } from '@/lib/mailer'
 // env var, the scheduler's x-vercel-cron header is accepted as a fallback —
 // set CRON_SECRET to harden.
 //
-// dryRun=1 builds every DUE briefing but sends nothing — shows exactly who
+// dryRun=1 builds every due briefing but sends nothing — shows exactly who
 // would get what. Accounts with nothing due are skipped silently (no empty
 // emails).
 

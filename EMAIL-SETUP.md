@@ -1,7 +1,7 @@
 # Email setup — receiving (name.com) & sending (provider chain)
 
 Cortex sends three kinds of email: signup verification codes, password-reset
-codes, and the per-user-timed morning briefing (plus the 08:30 feed sync cron that
+codes, and the daily 8 AM morning briefing (plus the 08:30 feed sync cron that
 feeds it). This doc covers both halves of email:
 
 1. **Receiving** — mail sent TO brand addresses (`support@`, `hello@`)
@@ -176,28 +176,24 @@ impossible. **DEV ONLY — never on a reachable server.**
 
 ## Morning briefing — schedule & manual runs
 
-The morning briefing is **per-user scheduled**: every account picks its own
-delivery time in Settings → Morning notification (`Setting.digestTime`, the
-user's local "HH:MM"). The route itself is frequency-agnostic — every hit
-scans all accounts and delivers each one whose chosen time has come up (at
-most one digest per local calendar day, guarded by `lastDigestSentAt`), so
-any hit cadence is safe.
+The morning briefing is sent **once a day at a fixed time**: the Vercel cron
+hits GET /api/cron/morning at 03:00 UTC (= 08:00 Asia/Karachi) and every
+verified account with something on its agenda receives the email. The
+Setting.lastDigestSentAt marker holds back any repeat hit on the same local
+calendar day, so the daily email can never double up.
 
 `vercel.json` registers two crons (Vercel reads it on every deploy):
 
 | Path                | Schedule (UTC) | Local (PKT) | What it does                        |
 | ------------------- | -------------- | ----------- | ----------------------------------- |
-| `/api/cron/morning` | `0 4 * * *`    | 09:00 daily | Daily fallback — delivers to every account whose chosen time has already passed at that instant (time-gated per user) |
+| `/api/cron/morning` | `0 3 * * *`    | 08:00 daily | Personal agenda email — due today, overdue, reminders, on the horizon |
 | `/api/cron/feeds`   | `30 3 * * *`   | 08:30       | Sync scholarships + exchange programmes |
 
-> **Vercel Hobby note (IMPORTANT):** Hobby allows cron jobs **once per day
-> only** — a `*/15 * * * *` schedule makes the whole DEPLOYMENT fail with
-> "Deployment failed" before any build starts. That is why the Vercel cron is
-> daily: at 04:00 UTC (= 09:00 PKT) it delivers everyone whose chosen local
-> time is at or before that moment. For minute-accurate delivery at any
-> chosen time, point an external pinger (cron-job.org, UptimeRobot, a system
-> crontab on a VPS) at the endpoint every 15 minutes — see "External pinger"
-> below. On Vercel Pro, `*/15 * * * *` can go straight back into vercel.json.
+> **Vercel Hobby note:** Hobby allows cron jobs **once per day only** — which
+> is exactly what this design needs. Do NOT set the morning schedule to
+> `*/15 * * * *` or anything more frequent than daily: the whole DEPLOYMENT
+> fails with "Deployment failed" before any build starts. Daily + a fixed
+> hour is the supported shape on Hobby.
 
 Auth: with `CRON_SECRET` set (it is), Vercel signs each invocation with
 `Authorization: Bearer $CRON_SECRET` and the routes reject everything else
@@ -210,25 +206,17 @@ CRON_SECRET=<your value>
 # dry run — build everything DUE RIGHT NOW, send nothing
 curl "https://cortex.scrutinies.dev/api/cron/morning?key=$CRON_SECRET&dryRun=1"
 
-# real run for one account (only if their chosen time is due)
-curl "https://cortex.scrutinies.dev/api/cron/morning?key=$CRON_SECRET&user=you@example.com"
-
-# force-send one account now, ignoring their chosen time
+# real run for one account (regardless of the once-a-day marker)
 curl "https://cortex.scrutinies.dev/api/cron/morning?key=$CRON_SECRET&user=you@example.com&force=1"
 
-# full run (what the cron/pinger does — only due accounts send)
+# full run (what the daily cron does — only accounts with content send)
 curl "https://cortex.scrutinies.dev/api/cron/morning?key=$CRON_SECRET"
-
-# External pinger (Hobby plan): create a cron-job.org job (or crontab entry)
-# hitting this same URL every 15 minutes. The per-user time gate makes the
-# frequent hits safe — each account still gets at most one digest per day,
-# delivered at its own chosen minute.
-#   crontab: */15 * * * * curl -fsS "https://cortex.scrutinies.dev/api/cron/morning?key=$CRON_SECRET" >/dev/null
 
 # feed sync (scholarships + exchange programmes)
 curl "https://cortex.scrutinies.dev/api/cron/feeds?key=$CRON_SECRET"
 ```
 
-Accounts with an empty agenda get no email, and accounts whose chosen time
-has not come up yet report as `notDueYet`. Each response lists per-account
-counts plus `sent / notDueYet / skipped / failed` on real runs.
+Accounts with an empty agenda get no email. On a real run each account that
+already received today's briefing reports as `notDueYet` (the once-a-day
+marker). Each response lists per-account counts plus
+`sent / notDueYet / skipped / failed`.
