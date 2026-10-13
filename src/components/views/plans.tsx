@@ -1,6 +1,6 @@
 'use client'
 
-import { FaArrowTrendUp, FaBell, FaBullseye, FaCalendarDays, FaCalendarWeek, FaCheck, FaChevronDown, FaChevronRight, FaClock, FaClone, FaEllipsis, FaList, FaPencil, FaPlus, FaSpinner, FaStopwatch, FaSun, FaTableColumns, FaTrashCan, FaWandMagicSparkles, FaXmark } from 'react-icons/fa6'
+import { FaArrowTrendUp, FaBell, FaBullseye, FaCalendarDays, FaCalendarWeek, FaCheck, FaChevronDown, FaChevronLeft, FaChevronRight, FaClock, FaClone, FaEllipsis, FaList, FaPencil, FaPlus, FaSpinner, FaStopwatch, FaSun, FaTableColumns, FaTrashCan, FaWandMagicSparkles, FaXmark } from 'react-icons/fa6'
 import { useCallback, useMemo, useState, useEffect, type FormEvent } from 'react'
 import { api, todayISO } from '@/lib/client'
 import type { Plan, Task, Goal, Reminder } from '@/lib/types'
@@ -40,6 +40,10 @@ export function PlansView() {
   // themselves are NOT repeated there; they live in the outline below.
   const [mode, setMode] = useState<'outline' | 'kanban'>('outline')
   const [selectedDay, setSelectedDay] = useState(todayISO())
+  // Week navigation: 0 = the current week, -1 = last week, +1 = next — so a
+  // past day stays reachable (on a Monday you can still open last Sunday's
+  // agenda and kanban to review what was planned and what got done).
+  const [weekOffset, setWeekOffset] = useState(0)
   const [addOpen, setAddOpen] = useState(false)
   const [templatesOpen, setTemplatesOpen] = useState(false)
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
@@ -54,13 +58,38 @@ export function PlansView() {
     const now = new Date()
     const day = (now.getDay() + 6) % 7 // Monday=0
     const monday = new Date(now)
-    monday.setDate(now.getDate() - day)
+    monday.setDate(now.getDate() - day + weekOffset * 7)
     return Array.from({ length: 7 }).map((_, i) => {
       const d = new Date(monday)
       d.setDate(monday.getDate() + i)
       return d
     })
-  }, [])
+  }, [weekOffset])
+  // "Sep 8 – 14" for the week pager (same-month weeks collapse the range).
+  const weekLabel = useMemo(() => {
+    const a = week[0]
+    const b = week[6]
+    const sameMonth = a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear()
+    const left = a.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    const right = b.toLocaleDateString('en-US', sameMonth ? { day: 'numeric' } : { month: 'short', day: 'numeric' })
+    return `${left} – ${right}`
+  }, [week])
+  // Step a whole week back/forward and carry the selected weekday along, so
+  // the day agenda and kanban immediately show the week you navigated to.
+  // Noon anchor: adding 7×24h at midnight can clip a day across DST.
+  const shiftWeek = (dir: number) => {
+    setWeekOffset((o) => o + dir)
+    setSelectedDay((iso) => {
+      const d = new Date(`${iso}T12:00:00`)
+      d.setDate(d.getDate() + dir * 7)
+      return todayISO(d)
+    })
+  }
+  // Back to the current week + today.
+  const goToday = () => {
+    setWeekOffset(0)
+    setSelectedDay(todayISO())
+  }
 
   // tzOffset (Date#getTimezoneOffset, minutes) lets the server build the day
   // window on the USER's calendar instead of the server's UTC clock.
@@ -240,44 +269,63 @@ export function PlansView() {
         </div>
       </div>
 
-      {/* Week strip — drag tasks here to reschedule */}
-      <div className="grid grid-cols-7 gap-1 sm:gap-2">
-        {week.map((d) => {
-          // local calendar date (NOT toISOString — that slices the UTC date)
-          const iso = todayISO(d)
-          const isToday = iso === todayISO()
-          const isSel = iso === selectedDay
-          return (
-            <button
-              key={iso}
-              onClick={() => setSelectedDay(iso)}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => {
-                e.preventDefault()
-                const taskId = e.dataTransfer.getData('text/task-id')
-                if (taskId) {
-                  // 09:00 in the USER's timezone, as a real instant — a bare
-                  // `${iso}T09:00:00` is parsed as UTC by the server and
-                  // landed at 14:00 for UTC+5 users.
-                  const due = new Date(`${iso}T09:00:00`).toISOString()
-                  api.patch(`/api/tasks/${taskId}`, { dueDate: due })
-                    .then(() => { reload(); dayTasks.reload(); unassignedTasks.reload(); toast({ title: `Rescheduled to ${d.toLocaleDateString('en-US', { weekday: 'short' })}` }) })
-                    .catch(() => toast({ title: 'Reschedule failed', variant: 'destructive' }))
-                }
-              }}
-              className={cn(
-                'flex min-h-[58px] flex-col items-center justify-center gap-0.5 rounded-xl border bg-card p-1 transition-colors sm:min-h-[72px] sm:p-1.5',
-                isSel && 'border-primary bg-primary/5',
-                isToday && !isSel && 'border-primary/40'
-              )}
-            >
-              {/* narrow single letter on phones, short name from sm up */}
-              <span className="text-[10px] font-medium uppercase text-muted-foreground sm:hidden" aria-hidden>{d.toLocaleDateString('en-US', { weekday: 'narrow' })}</span>
-              <span className="hidden text-[10px] font-medium uppercase text-muted-foreground sm:inline">{d.toLocaleDateString('en-US', { weekday: 'short' })}</span>
-              <span className={cn('text-base font-bold sm:text-lg', isToday && 'text-primary')}>{d.getDate()}</span>
-            </button>
-          )
-        })}
+      {/* Week strip — step back/forward between weeks to review any past day
+          (last Sunday included); drag a task onto a day to reschedule it. */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" className="h-8 w-8 p-0" onClick={() => shiftWeek(-1)} aria-label="Previous week">
+              <FaChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="min-w-[104px] text-center text-xs font-semibold tabular-nums text-muted-foreground" aria-live="polite">{weekLabel}</span>
+            <Button variant="ghost" className="h-8 w-8 p-0" onClick={() => shiftWeek(1)} aria-label="Next week">
+              <FaChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+          {(weekOffset !== 0 || selectedDay !== todayISO()) && (
+            <Button variant="outline" className="h-8 gap-1.5 px-2.5 text-xs" onClick={goToday}>
+              <FaSun className="h-3.5 w-3.5" /> Today
+            </Button>
+          )}
+        </div>
+        <div className="grid grid-cols-7 gap-1 sm:gap-2">
+          {week.map((d) => {
+            // local calendar date (NOT toISOString — that slices the UTC date)
+            const iso = todayISO(d)
+            const isToday = iso === todayISO()
+            const isSel = iso === selectedDay
+            return (
+              <button
+                key={iso}
+                onClick={() => setSelectedDay(iso)}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault()
+                  const taskId = e.dataTransfer.getData('text/task-id')
+                  if (taskId) {
+                    // 09:00 in the USER's timezone, as a real instant — a bare
+                    // `${iso}T09:00:00` is parsed as UTC by the server and
+                    // landed at 14:00 for UTC+5 users.
+                    const due = new Date(`${iso}T09:00:00`).toISOString()
+                    api.patch(`/api/tasks/${taskId}`, { dueDate: due })
+                      .then(() => { reload(); dayTasks.reload(); unassignedTasks.reload(); toast({ title: `Rescheduled to ${d.toLocaleDateString('en-US', { weekday: 'short' })}` }) })
+                      .catch(() => toast({ title: 'Reschedule failed', variant: 'destructive' }))
+                  }
+                }}
+                className={cn(
+                  'flex min-h-[58px] flex-col items-center justify-center gap-0.5 rounded-xl border bg-card p-1 transition-colors sm:min-h-[72px] sm:p-1.5',
+                  isSel && 'border-primary bg-primary/5',
+                  isToday && !isSel && 'border-primary/40'
+                )}
+              >
+                {/* narrow single letter on phones, short name from sm up */}
+                <span className="text-[10px] font-medium uppercase text-muted-foreground sm:hidden" aria-hidden>{d.toLocaleDateString('en-US', { weekday: 'narrow' })}</span>
+                <span className="hidden text-[10px] font-medium uppercase text-muted-foreground sm:inline">{d.toLocaleDateString('en-US', { weekday: 'short' })}</span>
+                <span className={cn('text-base font-bold sm:text-lg', isToday && 'text-primary')}>{d.getDate()}</span>
+              </button>
+            )
+          })}
+        </div>
       </div>
 
       {/* ── Day agenda (OUTLINE lens only) — individual tasks due on the
@@ -1377,7 +1425,7 @@ function KanbanBoard({ plans, individual, cutoffMs, day, onToggle, onEditTask, o
   return (
     <div className="space-y-2">
       <p className="text-xs text-muted-foreground">
-        A strict day lens for {day} — tasks scheduled for this day, unscheduled tasks, and tasks completed today. Earlier or later days stay in the outline view.
+        A strict day lens for {day} — tasks scheduled for this day, unscheduled tasks, and tasks completed on it. Use the week arrows above the strip to review other days.
       </p>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
       {columns.map((col) => (
