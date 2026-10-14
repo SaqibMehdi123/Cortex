@@ -53,12 +53,26 @@ export async function GET(req: NextRequest) {
   const now = new Date()
 
   try {
+    // Apply Agent daily shortlist — runs BEFORE the emails so the Top-5 card
+    // is fresh in the agent chat and the briefing's "Top matches" section
+    // reads scores written minutes ago. Strictly bounded inside (users/run,
+    // batches/user); every failure is isolated to its account.
+    let shortlist: { ran: number; failed: number } | null = null
+    try {
+      const { runDailyShortlists } = await import('@/lib/agent/match')
+      const r = await runDailyShortlists(now)
+      shortlist = { ran: r.ran.length, failed: r.failed.length }
+    } catch (e) {
+      console.error('cron/morning: agent shortlist pass failed (ignored)', e)
+    }
+
     const { briefings, skipped, notDue, errors } = await buildAllBriefings(now, { email: emailFilter, force })
 
     if (dryRun) {
       return NextResponse.json({
         mode: 'dryRun',
         ranAt: now.toISOString(),
+        agentShortlist: shortlist,
         accounts: briefings.length,
         notDueYet: notDue,
         skippedNothingDue: skipped,
@@ -71,6 +85,7 @@ export async function GET(req: NextRequest) {
           overdue: b.overdue.map((t) => `${t.title} (was due ${t.wasDue})`),
           reminders: b.reminders.map((r) => `${r.title} (${r.cadence})`),
           horizon: b.horizon.map((h) => `${h.title} — ${h.when}`),
+          agent: { topMatches: b.agent.topMatches.map((m) => `${m.role} @ ${m.company} (${m.score}%)`), draftsAwaiting: b.agent.draftsAwaiting },
         })),
       })
     }

@@ -16,6 +16,7 @@ import { useTheme } from 'next-themes'
 import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
 import type { GoogleStatus } from '@/lib/types'
+import { AgentCard } from '@/components/views/settings-agent-card'
 
 interface SettingsData {
   id: string
@@ -58,6 +59,7 @@ export function SettingsView() {
       <ProfileCard data={data?.setting} save={save} />
       <AppearanceCard mounted={mounted} theme={theme ?? 'system'} setTheme={setTheme} save={save} />
       <GoogleCard />
+      <AgentCard />
       <DigestCard email={me?.user?.email} />
 
       <Card>

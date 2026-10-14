@@ -1,7 +1,10 @@
 # Apply Agent — Feature Plan (v1)
 
-> **Status: planning only.** Nothing in this document has been implemented. No schema changes,
-> no code, no commits. This doc is the blueprint to review and approve before any build starts.
+> **Status: IMPLEMENTED (Phases 0–4).** The full v1 feature set shipped: CV parse →
+> profile confirmation, shortlist scoring + Discover badges, per-job drafts with
+> grouped intake, Tier A packages, Tier B direct submission for Greenhouse/Lever
+> (opt-in, capped, audited), outcome learning, and the morning-briefing agent
+> section. The original plan is preserved below; build decisions are recorded at the bottom.
 >
 > The idea, as agreed: agents working inside Cortex shortlist jobs based on the user's needs and
 > skill set, ask the user for missing information (starting with their resume/CV) **in the chat**,
@@ -348,3 +351,42 @@ Phases are independently shippable — Tier A alone (Phases 0–2) is a complete
 5. **Free vs Pro limits** for agent features (shortlist runs/day, drafts, submissions).
 6. **Tailored CV variants** — strictly reorder/highlight existing bullets, or allow light
    rephrasing? *(Integrity vs strength trade-off.)*
+
+---
+
+## 13. Build decisions (how the open questions were resolved)
+
+Recorded 2026-10-14, during implementation. Each maps to §12's open decisions.
+
+1. **Agent chat home** — CopilotDock gained a two-tab switcher (Copilot / Apply Agent). Same
+   optimistic send, markdown, usage counter; agent thread is `ChatMessage.thread = 'agent'`.
+2. **Auto-submit without approval** — never. Both submission paths run through
+   `POST /api/agent/drafts/[id]/approve`, and direct submission additionally requires the
+   Settings opt-in (`prefs.atsOptIn`).
+3. **Cover letters** — opt-in per job via a checkbox on the checklist card (≤350 words, grounded
+   in CV text + JD only).
+4. **Priority boards** — Greenhouse (public form schema + multipart submit) and Lever (standard
+   fields; custom-question rejections fall back to Tier A).
+5. **Limits** — metered `agent` feature: 10 actions/day free (parses, shortlist runs, cover
+   letters, draft creates, submits), unlimited on Pro. Tier B direct submissions capped at 5/day
+   for every account (`ATS_DAILY_CAP`).
+6. **Tailored CV variants** — none in v1 (integrity-first): the package carries the default CV
+   file + cover letter + answers sheet; no rewriting of CV content.
+
+Additional implementation notes (deviations worth knowing):
+
+- **Single agent thread** — cards are self-contained (draftId inside), so per-draft threads
+  (`agent:draft:<id>`) proved unnecessary; the thread format stays reserved.
+- **Packages render on demand** (`GET /api/agent/drafts/[id]/package`) — nothing stored, so no
+  stale-package failure mode; `ApplicationDraft.packageRef` stays reserved.
+- **"Not interested"** is a persisted signal (`JobListing.matchScore = -1`) honored by every
+  later shortlist run.
+- **Outcome learning (v0)** — companies with agent-submitted applications get ±10/±8/±15 score
+  adjustments (rejected/interview/offer) within a 60-day window, with the adjustment disclosed in
+  the match "why" text.
+- **Daily Top-5** — the morning cron runs bounded shortlists (10 accounts/hit) before building
+  emails; the briefing email gains an "Apply Agent" section read from persisted scores (no LLM
+  work at email time).
+- **ATS base-URL env overrides** (`ATS_API_BASE_GREENHOUSE`, `ATS_SUBMIT_BASE_LEVER`,
+  `ATS_DAILY_CAP`) exist solely for deterministic tests against a local mock; production never
+  sets them.

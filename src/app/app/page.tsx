@@ -17,7 +17,7 @@ import { MindmapView } from '@/components/views/mindmap'
 import { FlashcardsView } from '@/components/views/flashcards'
 import { AnalyticsView } from '@/components/views/analytics'
 import { SettingsView } from '@/components/views/settings'
-import { useUI, NAV_ITEMS } from '@/lib/nav-config'
+import { useUI, NAV_ITEMS, type ViewKey } from '@/lib/nav-config'
 import { useViewScroll } from '@/hooks/use-view-scroll'
 import { useToast } from '@/hooks/use-toast'
 import { clearApiCache } from '@/lib/client'
@@ -38,6 +38,19 @@ export default function Home() {
       .then(() => useUI.persist.rehydrate())
       .catch(() => {})
       .finally(() => {
+        // Apply Agent / briefing deep links: /app?view=career&tab=discover
+        // lands the user straight on the referenced section. Runs inside the
+        // rehydrate chain so the persisted view is overridden intentionally.
+        const params = new URLSearchParams(window.location.search)
+        const deepView = params.get('view')
+        if (deepView && NAV_ITEMS.some((n) => n.key === deepView)) {
+          useUI.setState({ view: deepView as ViewKey })
+          const tab = params.get('tab')
+          if (deepView === 'career' && (tab === 'pipeline' || tab === 'discover' || tab === 'scholarships')) {
+            useUI.setState({ careerTab: tab })
+          }
+          window.history.replaceState({}, '', window.location.pathname)
+        }
         const v = useUI.getState().view
         // guard against a stale/unknown view key from an older build
         if (!NAV_ITEMS.some((n) => n.key === v)) useUI.setState({ view: 'dashboard' })

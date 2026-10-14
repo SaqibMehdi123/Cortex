@@ -1,6 +1,6 @@
 'use client'
 
-import { FaBookmark, FaBriefcase, FaClock, FaEnvelope, FaFileLines, FaGraduationCap, FaGripVertical, FaInbox, FaLandmark, FaLocationDot, FaMagnifyingGlass, FaPlus, FaRegBookmark, FaRotate, FaSpinner, FaTowerBroadcast, FaTrashCan, FaTriangleExclamation, FaUpRightFromSquare } from 'react-icons/fa6'
+import { FaBookmark, FaBriefcase, FaClock, FaEnvelope, FaFileLines, FaGraduationCap, FaGripVertical, FaInbox, FaLandmark, FaLocationDot, FaMagnifyingGlass, FaPlus, FaRegBookmark, FaRotate, FaSpinner, FaTowerBroadcast, FaTrashCan, FaTriangleExclamation, FaUpRightFromSquare, FaWandMagicSparkles, FaXmark } from 'react-icons/fa6'
 import { useEffect, useMemo, useState } from 'react'
 import { api, fmtDate, daysUntil, useApi } from '@/lib/client'
 import type { Opportunity, JobListing, ListingIndex, ListingFetchResult, Scholarship, ScholarshipIndex, ScholarshipFetchResult } from '@/lib/types'
@@ -210,11 +210,20 @@ function PipelineTab() {
   const { toast } = useToast()
   const setView = useUI((s) => s.setView)
   const { data, loading, reload } = useApi<{ opportunities: Opportunity[] }>('/api/opportunities')
+  // Apply Agent draft chips — one fetch, mapped by opportunityId
+  const { data: draftData } = useApi<{ drafts: Array<{ id: string; opportunityId: string | null; status: string }> }>('/api/agent/drafts')
   const [addOpen, setAddOpen] = useState(false)
   const [dragId, setDragId] = useState<string | null>(null)
   const [scanning, setScanning] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState<Opportunity | null>(null)
   const [deleteBusy, setDeleteBusy] = useState(false)
+
+  const draftByOpportunity = new Map<string, string>()
+  for (const d of draftData?.drafts ?? []) {
+    if (d.opportunityId && ['collecting', 'ready', 'approved'].includes(d.status)) {
+      draftByOpportunity.set(d.opportunityId, d.status)
+    }
+  }
 
   async function deleteApplication(o: Opportunity) {
     setDeleteBusy(true)
@@ -354,6 +363,11 @@ function PipelineTab() {
                             {o.classification && o.classification !== 'opportunity' && (
                               <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-medium capitalize', CLASSIFICATION_STYLE[o.classification])}>
                                 {o.classification}
+                              </span>
+                            )}
+                            {draftByOpportunity.get(o.id) && (
+                              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                                Agent draft · {draftByOpportunity.get(o.id) === 'approved' ? 'awaiting submission' : 'awaiting your approval'}
                               </span>
                             )}
                           </div>
@@ -582,6 +596,7 @@ const TYPE_LABELS: Array<{ key: string; label: string }> = [
 
 function DiscoverTab() {
   const { toast } = useToast()
+  const setCopilotOpen = useUI((s) => s.setCopilotOpen)
   const [type, setType] = useState('')
   const [family, setFamily] = useState('')
   const [source, setSource] = useState('')
@@ -589,6 +604,8 @@ function DiscoverTab() {
   const [search, setSearch] = useState('')
   const [q, setQ] = useState('')
   const [savedOnly, setSavedOnly] = useState(false)
+  const [shortlistedOnly, setShortlistedOnly] = useState(false)
+  const [whyOpenId, setWhyOpenId] = useState<string | null>(null)
   const [fetching, setFetching] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
 
@@ -666,7 +683,42 @@ function DiscoverTab() {
     }
   }
 
-  const listings = data?.listings ?? []
+  // Persisted dismissal — matchScore −1 keeps the listing out of every future
+  // shortlist run and the card disappears from the board.
+  async function notInterested(l: JobListing) {
+    setBusyId(l.id)
+    try {
+      await api.patch(`/api/opportunities/listings/${l.id}`, { notInterested: true })
+      toast({ title: 'Not interested', description: `${l.role} at ${l.company} will not be shortlisted again.` })
+      reload()
+    } catch {
+      toast({ title: 'Could not update listing', variant: 'destructive' })
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  // Start an application draft — the checklist lands in the agent chat
+  async function prepareApplication(l: JobListing) {
+    setBusyId(l.id)
+    try {
+      await api.post('/api/agent/drafts', { listingId: l.id })
+      toast({ title: 'Draft started', description: `The agent is preparing ${l.role} at ${l.company} — open the Apply Agent chat.` })
+      setCopilotOpen(true)
+    } catch (e) {
+      toast({ title: 'Could not start the draft', description: (e as Error).message, variant: 'destructive' })
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  const listings = (data?.listings ?? [])
+    .filter((l) => (shortlistedOnly ? typeof l.matchScore === 'number' : true))
+    .sort((a, b) =>
+      shortlistedOnly && a.matchScore != null && b.matchScore != null
+        ? b.matchScore - a.matchScore
+        : 0
+    )
   const counts = data?.counts ?? {}
   const total = data?.total ?? 0
   const roleFamilies = data?.roleFamilies ?? []
@@ -721,6 +773,15 @@ function DiscoverTab() {
             )}
           >
             <FaBookmark className="h-3.5 w-3.5" /> Saved
+          </button>
+          <button
+            onClick={() => setShortlistedOnly(!shortlistedOnly)}
+            className={cn(
+              'flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
+              shortlistedOnly ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted',
+            )}
+          >
+            <FaWandMagicSparkles className="h-3.5 w-3.5" /> Shortlisted
           </button>
         </div>
         <div className="ml-auto flex w-full min-w-0 items-center gap-2 sm:w-auto">
@@ -847,13 +908,46 @@ function DiscoverTab() {
                   >
                     {l.saved ? <FaBookmark className="h-3.5 w-3.5" /> : <FaRegBookmark className="h-3.5 w-3.5" />}
                   </button>
+                  <button
+                    onClick={() => notInterested(l)}
+                    disabled={busyId === l.id}
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    aria-label="Not interested"
+                    title="Not interested — the agent will not shortlist this again"
+                  >
+                    <FaXmark className="h-3.5 w-3.5" />
+                  </button>
                 </div>
                 <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
                   <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-medium capitalize', TYPE_STYLE[l.type] ?? 'bg-muted text-muted-foreground')}>
                     {l.type}
                   </span>
                   <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">{l.source}</span>
+                  {typeof l.matchScore === 'number' && l.matchScore >= 60 && (
+                    <button
+                      onClick={() => setWhyOpenId(whyOpenId === l.id ? null : l.id)}
+                      className={cn(
+                        'ml-auto rounded-full px-2 py-0.5 text-[10px] font-semibold',
+                        l.matchScore >= 80 ? 'bg-success/15 text-success' : l.matchScore >= 70 ? 'bg-primary/10 text-primary' : 'bg-warning/10 text-warning',
+                      )}
+                      title="Why this match?"
+                    >
+                      {l.matchScore}% match
+                    </button>
+                  )}
                 </div>
+                {whyOpenId === l.id && l.matchWhy && (
+                  <div className="mt-2 rounded-lg bg-muted/60 p-2 text-[11px] leading-relaxed text-muted-foreground">
+                    <p>{l.matchWhy}</p>
+                    {(() => {
+                      try {
+                        const gaps = l.matchGaps ? (JSON.parse(l.matchGaps) as string[]) : []
+                        if (gaps.length > 0) return <p className="mt-1 text-warning">Missing: {gaps.join(' · ')}</p>
+                      } catch {}
+                      return null
+                    })()}
+                  </div>
+                )}
                 <div className="mt-2 flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
                   <span className="flex min-w-0 items-center gap-1">
                     {l.location && <><FaLocationDot className="h-3 w-3 shrink-0" /><span className="truncate">{l.location}</span></>}
@@ -867,6 +961,15 @@ function DiscoverTab() {
                   >
                     Apply <FaUpRightFromSquare className="h-3 w-3" />
                   </a>
+                  <button
+                    onClick={() => prepareApplication(l)}
+                    disabled={busyId === l.id}
+                    className="flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 font-medium text-primary transition-colors hover:bg-primary/10 disabled:opacity-50"
+                    title="Let the agent prepare this application"
+                  >
+                    {busyId === l.id ? <FaSpinner className="h-3 w-3 animate-spin" /> : <FaWandMagicSparkles className="h-3 w-3" />}
+                    Prepare
+                  </button>
                 </div>
               </CardContent>
             </Card>

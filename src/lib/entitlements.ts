@@ -22,7 +22,7 @@
 
 import { db } from '@/lib/db'
 
-export type UsageFeature = 'copilot' | 'summary' | 'cards' | 'mindmap'
+export type UsageFeature = 'copilot' | 'summary' | 'cards' | 'mindmap' | 'agent'
 
 export interface PlanFields {
   plan: string
@@ -40,6 +40,10 @@ export const FREE_LIMITS: Record<UsageFeature, { limit: number; window: 'day' | 
   summary: { limit: 5, window: 'month' },
   cards: { limit: 2, window: 'month' },
   mindmap: { limit: 2, window: 'month' },
+  // One "agent action" = one metered agent turn (CV parse, shortlist run,
+  // cover letter, ATS submit prep). Keep generous enough to finish onboarding
+  // + a few applications in a day; caps protect LLM cost from runaway loops.
+  agent: { limit: 10, window: 'day' },
 }
 
 /** Window start key for a feature: UTC midnight (day) or 1st of month (month). */
@@ -114,7 +118,8 @@ export function limitMessage(feature: UsageFeature, limit: number): string {
   const label =
     feature === 'copilot' ? 'Copilot messages' :
     feature === 'summary' ? 'AI summaries' :
-    feature === 'cards' ? 'AI flashcards' : 'AI mind maps'
+    feature === 'cards' ? 'AI flashcards' :
+    feature === 'agent' ? 'Apply Agent actions' : 'AI mind maps'
   return `Free plan: ${limit} ${label.toLowerCase()} ${span}. Upgrade to Pro on the Pricing page for unlimited use.`
 }
 

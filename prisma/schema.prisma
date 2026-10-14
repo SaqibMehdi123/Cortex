@@ -76,11 +76,17 @@ model ChatMessage {
   user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   documentId String?
   document   Document? @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  thread     String    @default("copilot") // "copilot" | "doc:<documentId>"
+  thread     String    @default("copilot") // "copilot" | "doc:<documentId>" | "agent" | "agent:draft:<draftId>"
   role       String // user | assistant
   content    String
   citations  String? // JSON [{n, label, documentId?, url?}]
+  payload    Json? // structured agent card (profile_confirmation | prefs_prompt | shortlist | checklist | approval | package)
+  attachmentRef   String? // storage ref when this message carries a CV upload
+  attachmentName  String? // original file name shown as a chip in chat
+  attachmentKind  String? // resume
   createdAt  DateTime  @default(now())
+
+  @@index([userId, thread])
 }
 
 model Note {
@@ -151,6 +157,8 @@ model Task {
   goal         Goal?          @relation(fields: [goalId], references: [id], onDelete: Cascade)
   planId       String?
   plan         Plan?          @relation(fields: [planId], references: [id], onDelete: Cascade)
+  opportunityId String?
+  opportunity   Opportunity?   @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
   completedAt  DateTime?
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
@@ -267,11 +275,14 @@ model Opportunity {
   status      String    @default("saved") // saved | applied | interview | offer | rejected | archived
   deadline    DateTime?
   nextAction  String?
-  resume      String? // resume/CV version linked to this application
+  resume      String? // resume/CV version linked to this application (legacy free-text label)
+  resumeId    String? // Apply Agent: Resume row linked to this application
   notes       String?
   gmailId     String? // Gmail message id when imported via OAuth
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+  tasks       Task[]
+  drafts      ApplicationDraft[]
 
   @@unique([userId, gmailId])
 }
@@ -296,11 +307,21 @@ model JobListing {
   publishedAt DateTime?
   saved       Boolean   @default(false)
   fetchedAt   DateTime  @default(now())
+  // Apply Agent: job description text (fetched from Greenhouse/Lever content
+  // APIs where available) + cached match results from the last shortlist run.
+  descriptionText      String?
+  descriptionFetchedAt DateTime?
+  matchScore           Int?      // 0-100, null = never scored
+  matchWhy             String?   // ≤2-line human reason from the scorer
+  matchGaps            String?   // JSON string[] — what the candidate is missing
+  matchRunAt           DateTime?
+  drafts               ApplicationDraft[]
 
   @@unique([userId, url])
   @@index([type])
   @@index([roleFamily])
   @@index([source])
+  @@index([userId, matchScore])
 }
 
 // Masters/PhD scholarships & fully-funded opportunities, pulled from curated
@@ -341,6 +362,79 @@ model MindMap {
   updatedAt   DateTime @updatedAt
 
   @@index([sourceDocId])
+}
+
+// ─── Apply Agent ───────────────────────────────────────────────
+// One structured candidate profile per user, parsed from their CV and
+// corrected/extended by hand. Every agent answer is grounded here — never in
+// the model's imagination. prefs drives shortlist hard filters; answers holds
+// reusable screening answers ("remember for next time").
+model CandidateProfile {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  headline     String?
+  summary      String?
+  skills       Json? // string[]
+  experience   Json? // parsed CV blocks [{company,title,start,end,current,bullets[]}]
+  education    Json?
+  links        Json? // {linkedin,github,portfolio}
+  phone        String?
+  location     String?
+  workAuth     String?
+  salaryTarget String?
+  prefs        Json? // {roleFamilies[],locations[],remote,types[],keywords[]}
+  answers      Json? // [{question,answer}] reusable screening answers
+  resumeId     String? // default CV — plain ref (no FK) so Resume deletion never cascades into the profile
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// An uploaded CV file (private storage ref + extracted text + cached parse).
+// Multiple labeled versions per user; exactly one isDefault.
+model Resume {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label     String
+  fileRef   String // private storage ref (r2://… / blob URL / resumes/<name> on disk)
+  fileName  String
+  mimeType  String
+  sizeBytes Int?
+  rawText   String?
+  parsed    Json?
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+// One job application being assembled by the agent. resumeId is a plain ref
+// (no FK) so the audit trail survives a later Resume delete.
+model ApplicationDraft {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  opportunityId String?
+  opportunity   Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  listingId     String?
+  listing       JobListing?  @relation(fields: [listingId], references: [id], onDelete: SetNull)
+  resumeId      String
+  status        String   @default("collecting") // collecting | ready | approved | submitted | submitted_manually | failed | skipped
+  coverLetter   String?
+  answers       Json? // [{question,answer,source: profile|user}]
+  missingItems  Json? // string[] still needed from the user
+  packageRef    String? // generated Tier-A package file (storage ref)
+  method        String? // ats_greenhouse | ats_lever | manual
+  failureReason String?
+  audit         Json? // what was actually sent (fields snapshot + file refs + timestamps)
+  approvedAt    DateTime?
+  submittedAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId, status])
+  @@index([opportunityId])
 }
 
 // ─── Spaced repetition ─────────────────────────────────────────────
@@ -425,6 +519,9 @@ model User {
   shelves           Shelf[]
   highlights        Highlight[]
   chatMessages      ChatMessage[]
+  candidateProfile  CandidateProfile?
+  resumes           Resume[]
+  applicationDrafts ApplicationDraft[]
   notes             Note[]
   goals             Goal[]
   milestones        Milestone[]
@@ -509,7 +606,7 @@ model DailyUsage {
   id        String   @id @default(cuid())
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  feature   String // copilot | summary | cards | mindmap
+  feature   String // copilot | summary | cards | mindmap | agent
   day       DateTime // window start: UTC midnight for daily features, 1st-of-month 00:00 for monthly
   count     Int      @default(0)
   updatedAt DateTime @updatedAt

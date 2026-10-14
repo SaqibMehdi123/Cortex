@@ -59,6 +59,11 @@ export interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
   citations: Citation[] | null
+  /** Apply Agent: structured card when this message renders one */
+  payload?: import('@/lib/agent/types').AgentCard | null
+  attachmentRef?: string | null
+  attachmentName?: string | null
+  attachmentKind?: string | null
   createdAt: string
 }
 
@@ -241,6 +246,11 @@ export interface JobListing {
   publishedAt: string | null
   saved: boolean
   fetchedAt: string
+  descriptionText?: string | null
+  matchScore?: number | null // 0-100 from the Apply Agent shortlist run
+  matchWhy?: string | null
+  matchGaps?: string | null // JSON string[]
+  matchRunAt?: string | null
 }
 
 export interface ListingFetchResult {

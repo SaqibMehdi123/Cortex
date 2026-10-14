@@ -1,6 +1,6 @@
 'use client'
 
-import { FaPaperPlane, FaQuoteLeft, FaRotate, FaSpinner, FaTrashCan, FaWandMagicSparkles, FaXmark } from 'react-icons/fa6'
+import { FaPaperclip, FaPaperPlane, FaQuoteLeft, FaRobot, FaRotate, FaSpinner, FaTrashCan, FaWandMagicSparkles, FaXmark } from 'react-icons/fa6'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useUI } from '@/lib/nav-config'
@@ -10,13 +10,14 @@ import { api } from '@/lib/client'
 import { splitCitationParts } from '@/lib/citations'
 import type { ChatMessage, Citation } from '@/lib/types'
 import { cn } from '@/lib/utils'
+import { useToast } from '@/hooks/use-toast'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
-import { useToast } from '@/hooks/use-toast'
 import ReactMarkdown from 'react-markdown'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { ProfileConfirmationCardView, PrefsPromptCardView, AttachmentChip, ShortlistCardView, ChecklistCardView, ApprovalCardView, PackageCardView } from '@/components/agent-cards'
+import type { AgentCard } from '@/lib/agent/types'
 
 const SUGGESTIONS = [
   'What did that paper say about attention?',
@@ -24,6 +25,9 @@ const SUGGESTIONS = [
   'Which goals are at risk?',
   'Summarize what I read this week',
 ]
+
+type ThreadKey = 'copilot' | 'agent'
+const CV_MAX_BYTES = 10 * 1024 * 1024
 
 // Render assistant markdown and turn [n] citation markers into clickable chips
 function MarkdownWithCitations({
@@ -95,9 +99,13 @@ export function CopilotDock() {
   const setReaderJumpPage = useUIStore((s) => s.setReaderJumpPage)
   const isMobile = useMediaQuery('(max-width: 1279px)')
   const { toast } = useToast()
-  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [thread, setThread] = useState<ThreadKey>('copilot')
+  const [copilotMessages, setCopilotMessages] = useState<ChatMessage[]>([])
+  const [agentMessages, setAgentMessages] = useState<ChatMessage[]>([])
+  const [agentStatus, setAgentStatus] = useState<{ hasProfile: boolean; hasResume: boolean; headline: string | null }>({ hasProfile: false, hasResume: false, headline: null })
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [loadError, setLoadError] = useState(false)
   const [usage, setUsage] = useState<{ used: number; limit: number; isPro: boolean } | null>(null)
   // last failed send — rendered as a retryable error card instead of a fake
@@ -105,21 +113,42 @@ export function CopilotDock() {
   const [sendError, setSendError] = useState<{ message: string; isLimit: boolean; retryText: string } | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => {
-    if (!copilotOpen) return
+  const messages = thread === 'copilot' ? copilotMessages : agentMessages
+  const setMessages = thread === 'copilot' ? setCopilotMessages : setAgentMessages
+
+  const loadAgent = useCallback(() => {
     setLoadError(false)
-    api.get<{ messages: ChatMessage[]; usage?: { used: number; limit: number; isPro: boolean } }>('/api/copilot')
+    return api
+      .get<{ messages: ChatMessage[]; hasProfile: boolean; hasResume: boolean; profileHeadline: string | null; usage?: { used: number; limit: number; isPro: boolean } }>('/api/agent/chat')
       .then((d) => {
-        setMessages(d.messages)
+        setAgentMessages(d.messages)
+        setAgentStatus({ hasProfile: d.hasProfile, hasResume: d.hasResume, headline: d.profileHeadline })
         if (d.usage) setUsage(d.usage)
       })
       .catch(() => setLoadError(true))
-  }, [copilotOpen])
+  }, [])
+
+  useEffect(() => {
+    if (!copilotOpen) return
+    if (thread === 'copilot') {
+      setLoadError(false)
+      api
+        .get<{ messages: ChatMessage[]; usage?: { used: number; limit: number; isPro: boolean } }>('/api/copilot')
+        .then((d) => {
+          setCopilotMessages(d.messages)
+          if (d.usage) setUsage(d.usage)
+        })
+        .catch(() => setLoadError(true))
+    } else {
+      loadAgent()
+    }
+  }, [copilotOpen, thread, loadAgent])
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
-  }, [messages, busy, sendError])
+  }, [messages, busy, sendError, uploading])
 
   // focus the composer when the desktop dock opens, and let Esc close it
   useEffect(() => {
@@ -133,18 +162,21 @@ export function CopilotDock() {
       setInput('')
       setBusy(true)
       setSendError(null)
+      const endpoint = thread === 'copilot' ? '/api/copilot' : '/api/agent/chat'
       const optimistic: ChatMessage = { id: `tmp-${Date.now()}`, documentId: null, role: 'user', content: msg, citations: null, createdAt: new Date().toISOString() }
       setMessages((prev) => [...prev, optimistic])
       try {
-        const d = await api.post<{ userMessage: ChatMessage; assistantMessage: ChatMessage; usage?: { used: number; limit: number; isPro: boolean } }>('/api/copilot', { message: msg })
+        const d = await api.post<{ userMessage: ChatMessage; assistantMessage: ChatMessage; usage?: { used: number; limit: number; isPro: boolean } }>(endpoint, { message: msg })
         setMessages((prev) => [...prev.filter((m) => m.id !== optimistic.id), d.userMessage, d.assistantMessage])
         if (d.usage) setUsage(d.usage)
+        if (thread === 'agent') loadAgent()
       } catch (e) {
         const err = e as Error & { status?: number }
         const isLimit = err.status === 402
         // surface the server's real message: for 402 that's the friendly
         // "Free plan: 15 copilot messages today… upgrade" copy — swallowing it
         // made a routine limit look like a bug
+        setMessages((prev) => prev.filter((m) => m.id !== optimistic.id))
         setSendError({
           message: err.message || 'Sorry, I hit an error. Please try again.',
           isLimit,
@@ -154,7 +186,7 @@ export function CopilotDock() {
         setBusy(false)
       }
     },
-    [input, busy]
+    [input, busy, thread, loadAgent, setMessages]
   )
 
   const handleCite = useCallback(
@@ -172,15 +204,113 @@ export function CopilotDock() {
     [openReader, setCopilotOpen, setReaderJumpPage]
   )
 
+  // ── CV upload (agent thread paperclip) ────────────────────────────────
+  const uploadCv = useCallback(
+    async (file: File) => {
+      if (file.size > CV_MAX_BYTES) {
+        toast({ title: 'CV is too large', description: 'The current limit is 10 MB — try exporting a lighter PDF.', variant: 'destructive' })
+        return
+      }
+      setUploading(true)
+      setSendError(null)
+      // optimistic attachment bubble
+      const optimistic: ChatMessage = { id: `tmp-up-${Date.now()}`, documentId: null, role: 'user', content: `Uploading CV: ${file.name}`, citations: null, attachmentName: file.name, createdAt: new Date().toISOString() }
+      setAgentMessages((prev) => [...prev, optimistic])
+      try {
+        const probe = await api.get<{ mode: 'r2' | 'blob' | 'disk' }>('/api/agent/resumes/upload-url')
+        let result: { messages: ChatMessage[]; warning?: string | null }
+        if (probe.mode === 'r2') {
+          // big-file path: browser PUTs straight to R2, server pulls bytes back
+          const ticket = await api.post<{ uploadUrl: string; fileRef: string; contentType: string }>('/api/agent/resumes/upload-url', {
+            name: file.name,
+            size: file.size,
+            contentType: file.type || undefined,
+          })
+          const put = await fetch(ticket.uploadUrl, { method: 'PUT', body: file, headers: { 'Content-Type': ticket.contentType } })
+          if (!put.ok) throw new Error(`Upload failed (${put.status})`)
+          result = await api.post('/api/agent/profile/parse-cv', {
+            fileRef: ticket.fileRef,
+            fileName: file.name,
+            mimeType: ticket.contentType,
+            size: file.size,
+          })
+        } else {
+          const form = new FormData()
+          form.append('file', file)
+          const res = await fetch('/api/agent/profile/parse-cv', { method: 'POST', body: form })
+          const data = await res.json().catch(() => ({}))
+          if (!res.ok) {
+            const err = new Error(data.error || 'Upload failed') as Error & { status?: number }
+            err.status = res.status
+            throw err
+          }
+          result = data
+        }
+        setAgentMessages((prev) => [...prev.filter((m) => m.id !== optimistic.id), ...result.messages])
+        if (result.warning) toast({ title: 'CV parsed with a caveat', description: result.warning })
+        else toast({ title: 'CV parsed', description: 'Check the profile card — correct anything off before we apply anywhere.' })
+      } catch (e) {
+        setAgentMessages((prev) => prev.filter((m) => m.id !== optimistic.id))
+        setSendError({ message: (e as Error).message || 'CV upload failed.', isLimit: (e as { status?: number }).status === 402, retryText: '' })
+      } finally {
+        setUploading(false)
+        if (fileRef.current) fileRef.current.value = ''
+      }
+    },
+    [toast]
+  )
+
+  function AgentCardView({ card, m, onRefresh }: { card: AgentCard | null; m: ChatMessage; onRefresh: () => void }) {
+    switch (card?.kind) {
+      case 'profile_confirmation':
+        return <ProfileConfirmationCardView card={card} onDone={onRefresh} />
+      case 'prefs_prompt':
+        return <PrefsPromptCardView card={card} onPicked={onRefresh} />
+      case 'shortlist':
+        return <ShortlistCardView card={card} onPrepare={onRefresh} />
+      case 'checklist':
+        return <ChecklistCardView card={card} onDone={onRefresh} />
+      case 'approval':
+        return <ApprovalCardView card={card} onDone={onRefresh} />
+      case 'package':
+        return <PackageCardView card={card} />
+      default:
+        return <MarkdownWithCitations content={m.content} citations={m.citations} onCite={handleCite} />
+    }
+  }
+
   const body = (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-2.5 border-b px-4 py-3">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-          <FaWandMagicSparkles className="h-4 w-4" />
+          {thread === 'copilot' ? <FaWandMagicSparkles className="h-4 w-4" /> : <FaRobot className="h-4 w-4" />}
         </div>
-        <div className="flex-1">
-          <p className="text-sm font-semibold">Copilot</p>
+        {/* thread switcher — Copilot (second brain) / Apply Agent */}
+        <div className="flex rounded-lg bg-muted p-0.5" role="tablist" aria-label="Assistant threads">
+          {(
+            [
+              { key: 'copilot', label: 'Copilot' },
+              { key: 'agent', label: 'Apply Agent' },
+            ] as const
+          ).map((t) => (
+            <button
+              key={t.key}
+              role="tab"
+              aria-selected={thread === t.key}
+              onClick={() => {
+                setThread(t.key)
+                setSendError(null)
+              }}
+              className={cn(
+                'rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
+                thread === t.key ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              {t.label}
+            </button>
+          ))}
         </div>
+        <div className="flex-1" />
         <AlertDialog>
           <AlertDialogTrigger asChild>
             <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Clear conversation">
@@ -190,15 +320,23 @@ export function CopilotDock() {
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>Clear the whole conversation?</AlertDialogTitle>
-              <AlertDialogDescription>All Copilot messages will be permanently deleted. This cannot be undone.</AlertDialogDescription>
+              <AlertDialogDescription>
+                {thread === 'copilot'
+                  ? 'All Copilot messages will be permanently deleted. This cannot be undone.'
+                  : 'All Apply Agent messages will be permanently deleted. Your profile and CVs are kept — manage those in Settings.'}
+              </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
               <AlertDialogAction
                 onClick={async () => {
                   try {
-                    await api.del('/api/copilot')
-                    setMessages([])
+                    await api.del(thread === 'copilot' ? '/api/copilot' : '/api/agent/chat')
+                    if (thread === 'copilot') setCopilotMessages([])
+                    else {
+                      setAgentMessages([])
+                      loadAgent()
+                    }
                     setSendError(null)
                   } catch {
                     toast({ title: 'Could not clear the conversation', variant: 'destructive' })
@@ -230,94 +368,129 @@ export function CopilotDock() {
           if (e.key === 'Escape') setCopilotOpen(false)
         }}
       >
-        {loadError && (
-          <div className="mb-4 flex flex-col items-start gap-2 rounded-xl border border-destructive/40 bg-destructive/5 p-4">
-            <p className="text-sm text-destructive">Couldn&apos;t load your conversation.</p>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setLoadError(false)
-                api.get<{ messages: ChatMessage[]; usage?: { used: number; limit: number; isPro: boolean } }>('/api/copilot')
-                  .then((d) => {
-                    setMessages(d.messages)
-                    if (d.usage) setUsage(d.usage)
-                  })
-                  .catch(() => setLoadError(true))
-              }}
-            >
-              <FaRotate className="mr-1.5 h-3.5 w-3.5" /> Retry
-            </Button>
-          </div>
-        )}
-        {messages.length === 0 && (
-          <div className="anim-fade-up space-y-4">
-            <div className="rounded-xl border bg-card p-4">
-              <p className="text-sm font-semibold">Ask my second brain</p>
-              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                I can see your documents, highlights, notes, goals, tasks, plans, career pipeline and news. Try one of these:
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {SUGGESTIONS.map((s) => (
-                <button
-                  key={s}
-                  onClick={() => send(s)}
-                  className="rounded-full border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div className="space-y-4">
-          {messages.map((m) => (
-            <div key={m.id} className={cn('flex', m.role === 'user' ? 'justify-end' : 'justify-start')}>
-              <div
-                className={cn(
-                  'max-w-[92%] rounded-2xl px-3.5 py-2.5',
-                  m.role === 'user' ? 'rounded-br-md bg-primary text-primary-foreground' : 'rounded-bl-md border bg-card'
-                )}
+          {loadError && (
+            <div className="mb-4 flex flex-col items-start gap-2 rounded-xl border border-destructive/40 bg-destructive/5 p-4">
+              <p className="text-sm text-destructive">Couldn&apos;t load your conversation.</p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (thread === 'copilot') {
+                    setLoadError(false)
+                    api
+                      .get<{ messages: ChatMessage[]; usage?: { used: number; limit: number; isPro: boolean } }>('/api/copilot')
+                      .then((d) => {
+                        setCopilotMessages(d.messages)
+                        if (d.usage) setUsage(d.usage)
+                      })
+                      .catch(() => setLoadError(true))
+                  } else {
+                    loadAgent()
+                  }
+                }}
               >
-                {m.role === 'user' ? (
-                  <p className="whitespace-pre-wrap text-sm">{m.content}</p>
-                ) : (
-                  <MarkdownWithCitations content={m.content} citations={m.citations} onCite={handleCite} />
-                )}
-              </div>
-            </div>
-          ))}
-          {busy && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <FaSpinner className="h-4 w-4 animate-spin" /> Thinking…
+                <FaRotate className="mr-1.5 h-3.5 w-3.5" /> Retry
+              </Button>
             </div>
           )}
-          {sendError && (
-            <div className="rounded-xl border border-destructive/40 bg-destructive/5 p-3">
-              <p className="text-sm leading-relaxed text-destructive">{sendError.message}</p>
-              <div className="mt-2 flex items-center gap-2">
-                {sendError.isLimit ? (
-                  <Button asChild size="sm" className="sheen">
-                    <Link href="/pricing">Upgrade to Pro</Link>
-                  </Button>
-                ) : (
-                  <Button variant="outline" size="sm" onClick={() => send(sendError.retryText)} disabled={busy}>
-                    <FaRotate className="mr-1.5 h-3.5 w-3.5" /> Retry
-                  </Button>
-                )}
-                <Button variant="ghost" size="sm" onClick={() => setSendError(null)}>
-                  Dismiss
-                </Button>
+          {messages.length === 0 && thread === 'copilot' && (
+            <div className="anim-fade-up space-y-4">
+              <div className="rounded-xl border bg-card p-4">
+                <p className="text-sm font-semibold">Ask my second brain</p>
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                  I can see your documents, highlights, notes, goals, tasks, plans, career pipeline and news. Try one of these:
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {SUGGESTIONS.map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => send(s)}
+                    className="rounded-full border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  >
+                    {s}
+                  </button>
+                ))}
               </div>
             </div>
           )}
-        </div>
+          {messages.length === 0 && thread === 'agent' && (
+            <div className="anim-fade-up space-y-4">
+              <div className="rounded-xl border bg-card p-4">
+                <p className="text-sm font-semibold">Apply Agent</p>
+                <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+                  I shortlist jobs from your Discover board against your profile, prepare complete application drafts, and submit —
+                  <span className="font-medium text-foreground"> only after you approve exactly what will be sent.</span> I never fabricate
+                  experience and never apply anywhere on my own.
+                </p>
+                <p className="mt-2.5 text-xs leading-relaxed text-muted-foreground">
+                  {agentStatus.hasResume
+                    ? agentStatus.hasProfile
+                      ? `Your profile is ready${agentStatus.headline ? `: ${agentStatus.headline}` : ''}. Upload an updated CV anytime with the paperclip.`
+                      : 'Parsing your CV…'
+                    : 'Start by attaching your CV (PDF or DOCX, up to 10 MB) with the paperclip — I will read it and build your profile.'}
+                </p>
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-4">
+            {messages.map((m) => {
+              const card = (m.payload ?? null) as AgentCard | null
+              return (
+                <div key={m.id} className={cn('flex', m.role === 'user' ? 'justify-end' : 'justify-start')}>
+                  <div
+                    className={cn(
+                      'max-w-[92%] rounded-2xl px-3.5 py-2.5',
+                      m.role === 'user' ? 'rounded-br-md bg-primary text-primary-foreground' : 'w-full rounded-bl-md border bg-card'
+                    )}
+                  >
+                    {m.role === 'user' ? (
+                      <>
+                        <p className="whitespace-pre-wrap text-sm">{m.content}</p>
+                        {m.attachmentName && <AttachmentChip name={m.attachmentName} />}
+                      </>
+                    ) : (
+                      <AgentCardView card={card} m={m} onRefresh={loadAgent} />
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+            {(busy || uploading) && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <FaSpinner className="h-4 w-4 animate-spin" /> {uploading ? 'Reading your CV…' : 'Thinking…'}
+              </div>
+            )}
+            {sendError && (
+              <div className="rounded-xl border border-destructive/40 bg-destructive/5 p-3">
+                <p className="text-sm leading-relaxed text-destructive">{sendError.message}</p>
+                <div className="mt-2 flex items-center gap-2">
+                  {sendError.isLimit ? (
+                    <Button asChild size="sm" className="sheen">
+                      <Link href="/pricing">Upgrade to Pro</Link>
+                    </Button>
+                  ) : sendError.retryText ? (
+                    <Button variant="outline" size="sm" onClick={() => send(sendError.retryText)} disabled={busy}>
+                      <FaRotate className="mr-1.5 h-3.5 w-3.5" /> Retry
+                    </Button>
+                  ) : null}
+                  <Button variant="ghost" size="sm" onClick={() => setSendError(null)}>
+                    Dismiss
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
       </div>
 
       <div className="border-t p-3">
-        {usage && (
+        {usage && thread === 'agent' && (
+          <p className="mb-1.5 px-1 text-[11px] text-muted-foreground" aria-live="polite">
+            {usage.isPro ? 'Pro — unlimited agent actions' : `${usage.used}/${usage.limit} agent actions today`}
+          </p>
+        )}
+        {usage && thread === 'copilot' && (
           <p className="mb-1.5 px-1 text-[11px] text-muted-foreground" aria-live="polite">
             {usage.isPro
               ? 'Pro — unlimited messages'
@@ -327,6 +500,32 @@ export function CopilotDock() {
           </p>
         )}
         <div className="flex items-end gap-2">
+          {thread === 'agent' && (
+            <>
+              <input
+                ref={fileRef}
+                type="file"
+                accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                className="hidden"
+                aria-label="Attach CV"
+                onChange={(e) => {
+                  const f = e.target.files?.[0]
+                  if (f) uploadCv(f)
+                }}
+              />
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-11 w-11 shrink-0"
+                aria-label="Attach CV (PDF or DOCX)"
+                title="Attach CV (PDF or DOCX, ≤10 MB)"
+                onClick={() => fileRef.current?.click()}
+                disabled={busy || uploading}
+              >
+                {uploading ? <FaSpinner className="h-4 w-4 animate-spin" /> : <FaPaperclip className="h-4 w-4" />}
+              </Button>
+            </>
+          )}
           <Textarea
             ref={inputRef}
             value={input}
@@ -337,10 +536,10 @@ export function CopilotDock() {
                 send()
               }
             }}
-            placeholder="Ask anything…"
+            placeholder={thread === 'copilot' ? 'Ask anything…' : 'Talk to your apply agent…'}
             className="min-h-[44px] flex-1 resize-none"
             rows={1}
-            aria-label="Message Copilot"
+            aria-label={thread === 'copilot' ? 'Message Copilot' : 'Message Apply Agent'}
           />
           <Button size="icon" className="h-11 w-11 shrink-0" onClick={() => send()} disabled={busy || !input.trim()} aria-label="Send">
             <FaPaperPlane className="h-4 w-4" />

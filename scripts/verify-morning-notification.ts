@@ -91,6 +91,7 @@ const synthetic = {
     { id: 'h1', kind: 'opportunity' as const, title: 'Google — SWE', when: 'Sep 15 · in 3 days', daysLeft: 3 },
     { id: 'h2', kind: 'goal' as const, title: 'Finish thesis', when: 'tomorrow', daysLeft: 1 },
   ],
+  agent: { topMatches: [{ id: 'm1', company: 'Careem', role: 'Frontend Engineer', score: 87 }], draftsAwaiting: 2 },
 }
 const now = new Date('2026-09-12T04:00:00Z')
 const b: Briefing = {
@@ -114,6 +115,13 @@ check('horizon row tags applications', b.html.includes('APPLICATION'))
 check('plain text lists every row', b.text.includes('• Rent payment <script>alert(1)</script> at 2:30 PM') && b.text.includes('• Pay internet bill (Monthly · day 1)') && b.text.includes('• Google — SWE — Sep 15 · in 3 days'))
 check('open-cortex CTA present', b.html.includes(`${SITE_URL}/app`))
 check('footer says the mail is sent every morning', b.html.includes('Sent every morning'))
+check('agent section renders top match chip', b.html.includes('87% MATCH') && b.html.includes('Frontend Engineer') && b.html.includes('Careem'))
+check('agent section renders drafts-awaiting line', b.html.includes('2 application drafts waiting for your approval'))
+check('agent section in plain text', b.text.includes('Frontend Engineer at Careem — 87% match') && b.text.includes('2 application draft(s) waiting for your approval'))
+check('agent section absent when empty', (() => {
+  const empty = briefingEmailHtml({ ...synthetic, agent: { topMatches: [], draftsAwaiting: 0 } })
+  return !empty.includes('Apply Agent</h2>') || !empty.includes('% MATCH')
+})())
 
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

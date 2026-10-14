@@ -157,6 +157,19 @@ export type BriefingHorizon = {
   daysLeft: number
 }
 
+// Apply Agent section — yesterday's shortlist winners + drafts waiting on the user
+export type BriefingMatch = {
+  id: string
+  company: string
+  role: string
+  score: number
+}
+
+export type BriefingAgent = {
+  topMatches: BriefingMatch[]
+  draftsAwaiting: number
+}
+
 export type Briefing = {
   userId: string
   to: string
@@ -169,6 +182,7 @@ export type Briefing = {
   overdue: BriefingTask[]
   reminders: BriefingReminder[]
   horizon: BriefingHorizon[]
+  agent: BriefingAgent
 }
 
 // ── Email template (inline styles — email clients strip <style>) ─────────
@@ -221,6 +235,22 @@ export function briefingEmailHtml(b: Omit<Briefing, 'subject' | 'html' | 'text'>
   if (b.overdue.length) sections.push(sectionHeader('Overdue', b.overdue.length, '#e11d48') + b.overdue.map(taskRow).join(''))
   if (b.reminders.length) sections.push(sectionHeader('Reminders for today', b.reminders.length, '#d97706') + b.reminders.map(reminderRow).join(''))
   if (b.horizon.length) sections.push(sectionHeader('On the horizon', b.horizon.length, '#7c3aed') + b.horizon.map(horizonRow).join(''))
+  if (b.agent.topMatches.length || b.agent.draftsAwaiting) {
+    const rows = b.agent.topMatches
+      .map(
+        (m) =>
+          `<div class="row" style="margin:0 0 6px;padding:9px 12px;border:1px solid #e4e4e7;border-left:3px solid #059669;border-radius:10px;">\n    <div style="font-size:14px;font-weight:600;color:#18181b;line-height:1.4;">${escapeHtml(m.role)} <span style="color:#71717a;">at ${escapeHtml(m.company)}</span>${PRIORITY_CHIP(`${m.score}% MATCH`, '#d1fae5', '#047857')}</div>\n  </div>`
+      )
+      .join('')
+    const draftLine = b.agent.draftsAwaiting
+      ? `<p style="margin:6px 0 0;font-size:12px;color:#92400e;">${b.agent.draftsAwaiting} application draft${b.agent.draftsAwaiting === 1 ? '' : 's'} waiting for your approval in the Apply Agent chat.</p>`
+      : ''
+    sections.push(
+      sectionHeader('Apply Agent', b.agent.topMatches.length + (b.agent.draftsAwaiting ? 1 : 0), '#059669') +
+        (rows || '<p style="margin:0 0 6px;font-size:13px;color:#71717a;">Your agent is ready when you are.</p>') +
+        draftLine
+    )
+  }
 
   // Mobile: clients like iOS Mail / Gmail auto-inflate text on narrow
   // viewports (the "everything looks huge on my phone" effect) and the
@@ -280,6 +310,17 @@ export function briefingEmailText(b: Omit<Briefing, 'subject' | 'html' | 'text'>
     for (const h of b.horizon) lines.push(`  • ${h.title} — ${h.when}`)
     lines.push('')
   }
+  if (b.agent.topMatches.length || b.agent.draftsAwaiting) {
+    if (b.agent.topMatches.length) {
+      lines.push(`Top matches for you (${b.agent.topMatches.length}):`)
+      for (const m of b.agent.topMatches) lines.push(`  • ${m.role} at ${m.company} — ${m.score}% match`)
+      lines.push('')
+    }
+    if (b.agent.draftsAwaiting) {
+      lines.push(`Apply Agent: ${b.agent.draftsAwaiting} application draft(s) waiting for your approval.`)
+      lines.push('')
+    }
+  }
   lines.push(`Open Cortex: ${SITE_URL}/app`)
   lines.push(`Questions or need help? support@scrutinies.dev`)
   return lines.join('\n')
@@ -302,6 +343,7 @@ type CollectResult = {
   overdue: BriefingTask[]
   reminders: BriefingReminder[]
   horizon: BriefingHorizon[]
+  agent: BriefingAgent
 }
 
 async function toBriefingTask(
@@ -325,8 +367,9 @@ async function collectForUser(userId: string, offsetMin: number, now: Date): Pro
   const { start: todayStart, end: todayEnd } = userDayWindow(offsetMin, now)
   const in3 = new Date(now.getTime() + 3 * DAY_MS)
   const in7 = new Date(now.getTime() + 7 * DAY_MS)
+  const matchWindow = new Date(now.getTime() - 36 * 3_600_000)
 
-  const [dueTodayRows, overdueRows, reminderRows, horizonTaskRows, opportunities, goals] = await Promise.all([
+  const [dueTodayRows, overdueRows, reminderRows, horizonTaskRows, opportunities, goals, matchRows, draftsAwaiting] = await Promise.all([
     db.task.findMany({
       where: { userId, status: { not: 'done' }, dueDate: { gte: todayStart, lte: todayEnd } },
       orderBy: [{ priority: 'desc' }, { dueDate: 'asc' }],
@@ -355,6 +398,15 @@ async function collectForUser(userId: string, offsetMin: number, now: Date): Pro
       orderBy: { deadline: 'asc' },
       take: 6,
     }),
+    // Apply Agent: top matches from the last shortlist run (persisted — no
+    // LLM work at email time), plus drafts waiting for approval
+    db.jobListing.findMany({
+      where: { userId, matchScore: { gte: 70 }, matchRunAt: { gte: matchWindow } },
+      orderBy: { matchScore: 'desc' },
+      take: 3,
+      select: { id: true, company: true, role: true, matchScore: true },
+    }),
+    db.applicationDraft.count({ where: { userId, status: 'ready' } }),
   ])
 
   const dueToday: BriefingTask[] = []
@@ -405,7 +457,16 @@ async function collectForUser(userId: string, offsetMin: number, now: Date): Pro
   }
   horizon.sort((a, b) => a.daysLeft - b.daysLeft)
 
-  return { dueToday, overdue, reminders, horizon: horizon.slice(0, 10) }
+  return {
+    dueToday,
+    overdue,
+    reminders,
+    horizon: horizon.slice(0, 10),
+    agent: {
+      topMatches: matchRows.map((m) => ({ id: m.id, company: m.company, role: m.role, score: m.matchScore ?? 0 })),
+      draftsAwaiting,
+    },
+  }
 }
 
 // ── Public builders ──────────────────────────────────────────────────────

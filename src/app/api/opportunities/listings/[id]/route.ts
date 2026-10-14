@@ -3,18 +3,33 @@ import { db } from '@/lib/db'
 import { getSessionUser, unauthorized } from '@/lib/auth-server'
 
 // PATCH /api/opportunities/listings/[id] — save one of the user's listings into
-// their pipeline (creates an Opportunity card) or un-save it. Body: { saved: boolean }
+// their pipeline (creates an Opportunity card), un-save it, or mark it "not
+// interested" (persisted agent signal: matchScore = -1 keeps it out of every
+// future shortlist). Body: { saved?: boolean, notInterested?: boolean }
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const user = await getSessionUser()
     if (!user) return unauthorized()
 
     const { id } = await params
-    const body = await req.json()
-    const saved = Boolean(body.saved)
+    const body = (await req.json().catch(() => ({}))) as { saved?: boolean; notInterested?: boolean }
 
     const listing = await db.jobListing.findFirst({ where: { id, userId: user.id } })
     if (!listing) return NextResponse.json({ error: 'Listing not found' }, { status: 404 })
+
+    if (typeof body.notInterested === 'boolean') {
+      const updated = await db.jobListing.update({
+        where: { id },
+        data: {
+          matchScore: body.notInterested ? -1 : null,
+          matchWhy: body.notInterested ? 'Marked not interested' : null,
+          matchGaps: null,
+        },
+      })
+      return NextResponse.json({ listing: updated })
+    }
+
+    const saved = Boolean(body.saved)
 
     if (saved) {
       // avoid duplicates in the pipeline when the same listing is saved twice
