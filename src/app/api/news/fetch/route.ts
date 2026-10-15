@@ -4,12 +4,16 @@ import { db } from '@/lib/db'
 import { createAI } from '@/lib/ai'
 import { CURATED_FEEDS, stripHtml, type FeedSource } from '@/lib/feeds'
 import { getSessionUser, unauthorized } from '@/lib/auth-server'
+import { safeFetch } from '@/lib/safe-fetch'
+import { rateLimit } from '@/lib/rate-limit'
 
 export const maxDuration = 120
 
 // Auto-refresh guardrails: one fetch per user at a time, and auto (non-forced)
 // calls are rate-limited so a stuck interval or multiple tabs can't hammer the
-// RSS feeds or burn AI summary tokens. Manual clicks always send force:true.
+// RSS feeds or burn AI summary tokens. Manual clicks always send force:true —
+// and even those are capped per hour below, so a scripted caller cannot turn
+// this endpoint into an RSS/AI-cost amplifier.
 const AUTO_COOLDOWN_MS = 5 * 60_000
 const runningFetches = new Set<string>()
 
@@ -46,6 +50,17 @@ export async function POST(req: NextRequest) {
     if (!user) return unauthorized()
     userId = user.id
 
+    // Hard ceiling independent of the auto-refresh cooldown: 6 full pulls per
+    // hour per account (the daily cron pull + normal manual refreshes sit far
+    // below this; it only bites scripted/abusive callers).
+    const rl = rateLimit(`news-fetch:${user.id}`, { limit: 6, windowMs: 60 * 60_000 })
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: `Too many fetches — try again in ${Math.ceil(rl.retryAfter / 60)} min.` },
+        { status: 429, headers: { 'Retry-After': String(rl.retryAfter) } }
+      )
+    }
+
     let force = false
     try {
       const body = (await req.json()) as { force?: boolean }
@@ -74,9 +89,20 @@ export async function POST(req: NextRequest) {
     ]
 
     // Fetch all feeds in parallel — one failure must not break the rest.
+    // Every URL (curated OR user-added) goes through safeFetch, which enforces
+    // the SSRF policy per hop; rss-parser only ever sees an already-fetched
+    // XML string (its own parseURL would bypass every private-network check).
     const results = await Promise.allSettled(
       sources.map(async (src): Promise<RawItem[]> => {
-        const feed = await parser.parseURL(src.url)
+        const res = await safeFetch(src.url, {
+          timeoutMs: 20_000,
+          headers: {
+            Accept: 'application/rss+xml, application/xml, text/xml, */*',
+          },
+        })
+        if (!res.ok) throw new Error(`Feed returned ${res.status}`)
+        const xml = await res.text()
+        const feed = await parser.parseString(xml)
         const items: RawItem[] = []
         const cutoff = Date.now() - MAX_AGE_DAYS * 86_400_000
         for (const item of feed.items ?? []) {

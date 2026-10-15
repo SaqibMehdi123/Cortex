@@ -3,6 +3,7 @@ import net from 'node:net'
 import { activeMailProvider, configuredFromEmail } from '@/lib/mailer'
 import { r2Configured, r2ConnectionCheck } from '@/lib/storage'
 import { aiConfigured, aiProvider, AI_MODEL } from '@/lib/ai'
+import { clientIp, rateLimit } from '@/lib/rate-limit'
 
 // GET /api/ops/health — operator diagnostic for the external services
 // Cortex depends on at runtime (transactional email, PDF Blob storage, AI).
@@ -457,7 +458,19 @@ async function checkBilling() {
   }
 }
 
-export async function GET() {
+export async function GET(req: Request) {
+  // Public diagnostic — keep it that way for pre-login setup checks, but cap
+  // per-IP: each hit fires live probes at several third-party APIs (mail
+  // providers, Polar, AI /models), so an unbounded caller could burn provider
+  // quotas and fingerprint the deployment at will.
+  const rl = rateLimit(`ops-health:${clientIp(new Headers(req.headers))}`, { limit: 10, windowMs: 60_000 })
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: 'Too many health checks — slow down.' },
+      { status: 429, headers: { 'Retry-After': String(rl.retryAfter) } }
+    )
+  }
+
   const [mail, blob, r2, ai, billing] = await Promise.all([checkMail(), checkBlob(), checkR2(), checkAI(), checkBilling()])
   const brevoEvents =
     mail.provider === 'brevo' && (process.env.BREVO_API_KEY || '').trim() && mail.keyValid

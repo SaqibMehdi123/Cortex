@@ -108,29 +108,42 @@ export function digestAlreadySentToday(
 
 export type CronAuthInput = {
   authHeader: string | null // full Authorization header
-  vercelCronHeader: string | null // x-vercel-cron, set by the Vercel scheduler
-  keyParam: string | null // ?key= — manual curl convenience
+  keyParam: string | null // ?key= — manual curl convenience (dev only)
   secret: string | null // the configured CRON_SECRET (null = not set)
   isProd: boolean
 }
 
 /**
  * CRON_SECRET is the strong gate: Vercel automatically sends
- * "Authorization: Bearer $CRON_SECRET" when the env var exists. Without the
- * env var we fall back to the scheduler's x-vercel-cron header (documented as
- * spoofable — set CRON_SECRET to harden) and allow everything in dev.
+ * "Authorization: Bearer $CRON_SECRET" when the env var exists.
+ *
+ * Production fails CLOSED: without CRON_SECRET there is no acceptable proof
+ * of scheduler identity — the scheduler's x-vercel-cron header is sent by the
+ * platform but can also be sent by anyone else, so it is never sufficient in
+ * production (the previous header fallback let any caller trigger mass
+ * briefing emails and feed syncs when the env var was missing). Dev keeps the
+ * open path so local testing without an env var still works. The secret is
+ * compared in constant time; the ?key= convenience parameter is dev-only
+ * (secrets in URLs leak into access logs).
  */
 export function authorizeMorningCron(p: CronAuthInput): { ok: boolean; status: number; reason: string } {
   const expected = (p.secret || '').trim()
   const bearer = p.authHeader?.startsWith('Bearer ') ? p.authHeader.slice(7).trim() : null
   if (expected) {
-    if (bearer && bearer === expected) return { ok: true, status: 200, reason: 'bearer' }
-    if (p.keyParam && p.keyParam.trim() === expected) return { ok: true, status: 200, reason: 'key' }
+    // constant-time compare — the secret gates mass email sends
+    if (bearer && timingSafeEq(bearer, expected)) return { ok: true, status: 200, reason: 'bearer' }
+    if (!p.isProd && p.keyParam && timingSafeEq(p.keyParam.trim(), expected)) return { ok: true, status: 200, reason: 'key' }
     return { ok: false, status: 401, reason: 'bad_secret' }
   }
   if (!p.isProd) return { ok: true, status: 200, reason: 'dev' }
-  if (p.vercelCronHeader) return { ok: true, status: 200, reason: 'vercel_header_fallback' }
   return { ok: false, status: 401, reason: 'no_secret_configured' }
+}
+
+function timingSafeEq(a: string, b: string): boolean {
+  if (a.length !== b.length) return false
+  let diff = 0
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i)
+  return diff === 0
 }
 
 /** Same CRON_SECRET contract, shared by the daily feed sync (/api/cron/feeds). */
@@ -195,7 +208,9 @@ function sectionHeader(title: string, count: number, accent: string): string {
 }
 
 function taskRow(t: BriefingTask): string {
-  const meta = [t.when, t.wasDue ? `was due ${t.wasDue}` : null, t.plan ? `Plan · ${t.plan}` : null]
+  // plan titles are user input — every interpolated string in this template
+  // must pass escapeHtml (PRIORITY_CHIP's arguments are internal constants).
+  const meta = [t.when ? escapeHtml(t.when) : null, t.wasDue ? `was due ${escapeHtml(t.wasDue)}` : null, t.plan ? `Plan · ${escapeHtml(t.plan)}` : null]
     .filter(Boolean)
     .join(' · ')
   return `<div class="row" style="margin:0 0 6px;padding:9px 12px;border:1px solid ${t.wasDue ? '#fecdd3' : '#e4e4e7'};border-left:3px solid ${t.wasDue ? '#e11d48' : '#a1a1aa'};border-radius:10px;">

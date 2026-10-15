@@ -24,7 +24,8 @@ function VerifyForm() {
   const [email, setEmail] = useState(params.get('email') ?? '')
   const [hint] = useState(params.get('hint') ?? '')
   // optional post-verify destination (e.g. /pricing when signup came from checkout)
-  const nextPath = params.get('next')?.startsWith('/') ? params.get('next') : null
+  // "//host" is excluded — it is protocol-relative and navigates OFF-site
+  const nextPath = params.get('next')?.startsWith('/') && !params.get('next')?.startsWith('//') ? params.get('next') : null
   const [code, setCode] = useState('')
   const [error, setError] = useState<string | null>(null)
   // Dev fallback: signup forwards the code here when the server runs with
@@ -60,8 +61,10 @@ function VerifyForm() {
     setError(null)
     setBusy(true)
     try {
-      await api.post<{ alreadyVerified?: boolean }>('/api/auth/verify-email', { email, code })
-      router.replace(nextPath ?? '/app')
+      const res = await api.post<{ alreadyVerified?: boolean }>('/api/auth/verify-email', { email, code })
+      // alreadyVerified: the API no longer signs the user in without a valid
+      // code — send them to /login like any other signed-out visitor.
+      router.replace(res.alreadyVerified ? '/login' : (nextPath ?? '/app'))
       router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Verification failed.')

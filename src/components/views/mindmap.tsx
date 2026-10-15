@@ -3,6 +3,7 @@
 import { FaDownload, FaExpand, FaFileCode, FaMagnifyingGlassMinus, FaMagnifyingGlassPlus, FaPalette, FaPenNib, FaPlus, FaShareNodes, FaSpinner, FaTrashCan, FaWandMagicSparkles, FaXmark } from 'react-icons/fa6'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '@/lib/client'
+import { safeExternalUrl } from '@/lib/safe-url'
 import type { Mindmap, MindmapNode } from '@/lib/types'
 import { useApi } from '@/lib/client'
 import { Button } from '@/components/ui/button'
@@ -203,7 +204,10 @@ export function MindmapView() {
     if (node.linkType === 'document' && node.linkId) {
       openReader(node.linkId)
     } else if (node.linkType === 'url' && node.linkUrl) {
-      window.open(node.linkUrl, '_blank')
+      // only plain http(s) — user-entered node links must not be able to
+      // smuggle javascript:/data: URLs into window.open
+      const href = safeExternalUrl(node.linkUrl)
+      if (href) window.open(href, '_blank', 'noopener,noreferrer')
     }
   }
 

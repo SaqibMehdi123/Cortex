@@ -23,6 +23,15 @@ import { sendReceiptEmail } from '@/lib/receipt'
 // cortex-<id>-y-<ts>). Safepay local payments are typically one-off
 // purchases rather than auto-renewing subscriptions; re-subscription happens
 // when the buyer returns to /pricing.
+//
+// Replay hardening: the HMAC covers only (t, tracker) — every OTHER field
+// (status, amount, email) rides unsigned — and Safepay offers no per-webhook
+// idempotency key. Two compensating controls close the gap:
+//   1. freshness — a webhook whose t is > 5 min old is rejected, so a
+//      captured payload cannot be replayed later;
+//   2. idempotency — a tracker whose Payment row is already 'paid' is never
+//      processed again, so even a within-window replay cannot stack extra
+//      Pro days on top of the first delivery.
 
 export const dynamic = 'force-dynamic'
 
@@ -64,11 +73,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  // Freshness window: t is Safepay's unix-seconds timestamp of the event. The
+  // signed region is only (t, tracker), so anything older than 5 minutes is
+  // refused — a replayed (t, tracker, hash) triple from an observed webhook
+  // stops working after the window closes.
+  const ts = Number(payload.t)
+  if (!Number.isFinite(ts) || Math.abs(Date.now() / 1000 - ts) > 300) {
+    console.error('safepay webhook: stale or invalid timestamp — payload ignored', { tracker: payload.tracker ?? null })
+    return NextResponse.json({ error: 'Stale webhook' }, { status: 400 })
+  }
+
   try {
     const tracker = String(payload.tracker)
     const payment = await db.payment.findUnique({
       where: { provider_providerInvoiceId: { provider: 'safepay', providerInvoiceId: tracker } },
-      select: { userId: true },
+      select: { userId: true, status: true },
     })
     const userId = payment?.userId ?? (await findUserIdByTrackerOrEmail(payload))
 
@@ -92,6 +111,14 @@ export async function POST(req: NextRequest) {
         update: { status: 'failed' },
       })
       return NextResponse.json({ ok: true, handled: 'failed_payment' })
+    }
+
+    // Idempotency gate: a tracker already marked paid has already granted its
+    // Pro days. Re-deliveries/replays must NOT extend the plan again (the
+    // expiry math below is cumulative, so a second run would add another
+    // month on top). Only a fresh Payment row proceeds past this point.
+    if (payment?.status === 'paid') {
+      return NextResponse.json({ ok: true, handled: 'already_processed' })
     }
 
     await db.payment.upsert({

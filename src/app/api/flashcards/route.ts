@@ -106,6 +106,14 @@ export async function POST(req: NextRequest) {
       if (!document) return NextResponse.json({ error: 'Document not found' }, { status: 400 })
       safeDocumentId = document.id
     }
+    // same ownership rule for highlight links — a foreign highlightId would
+    // pin a card to another user's highlight (data-integrity leak)
+    let safeHighlightId: string | null = null
+    if (highlightId) {
+      const highlight = await db.highlight.findFirst({ where: { id: highlightId, userId: user.id } })
+      if (!highlight) return NextResponse.json({ error: 'Highlight not found' }, { status: 400 })
+      safeHighlightId = highlight.id
+    }
 
     const card = await db.flashcard.create({
       data: {
@@ -113,7 +121,7 @@ export async function POST(req: NextRequest) {
         front: front.trim(),
         back: back.trim(),
         documentId: safeDocumentId,
-        highlightId: highlightId || null,
+        highlightId: safeHighlightId,
       },
     })
     return NextResponse.json({ card }, { status: 201 })

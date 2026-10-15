@@ -149,8 +149,10 @@ async function callProvider(target: ProviderTarget, params: AiCompletionParams, 
     signal: AbortSignal.timeout(timeoutMs),
   })
   if (!res.ok) {
-    const detail = await res.text().catch(() => '')
-    throw new AiUpstreamError(res.status, detail.slice(0, 300))
+    const detail = (await res.text().catch(() => '')).slice(0, 300)
+    // Provider bodies surface to clients via the routes' 502 handler — strip
+    // anything credential-shaped (long tokens/signatures) before it travels.
+    throw new AiUpstreamError(res.status, detail.replace(/[\w-]{24,}/g, '[redacted]'))
   }
   return (await res.json()) as AiCompletionResult
 }

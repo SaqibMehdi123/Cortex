@@ -62,6 +62,18 @@ export function sanitizeParsedCv(input: ParsedCV): ParsedCV {
     const t = v.trim()
     return t ? t.slice(0, max) : null
   }
+  // URL-shaped fields: only http(s) survives — the confirmation card renders
+  // these as anchors, so scheme allow-listing here is the XSS gate.
+  const safeLink = (v: unknown): string | null => {
+    const t = str(v, 300)
+    if (!t || !/^https?:\/\//i.test(t)) return null
+    try {
+      const u = new URL(t)
+      return u.protocol === 'https:' || u.protocol === 'http:' ? u.toString() : null
+    } catch {
+      return null
+    }
+  }
   const strArr = (v: unknown, max: number, cap = 120): string[] => {
     if (!Array.isArray(v)) return []
     const out: string[] = []
@@ -104,9 +116,12 @@ export function sanitizeParsedCv(input: ParsedCV): ParsedCV {
     experience,
     education,
     links: {
-      linkedin: str(input.links?.linkedin, 300),
-      github: str(input.links?.github, 300),
-      portfolio: str(input.links?.portfolio, 300),
+      // CV links come out of an LLM reading user-supplied (possibly
+      // third-party) documents — keep only plain http(s) URLs so nothing
+      // javascript:-shaped ever reaches the confirmation card's anchors.
+      linkedin: safeLink(input.links?.linkedin),
+      github: safeLink(input.links?.github),
+      portfolio: safeLink(input.links?.portfolio),
     },
     phone: str(input.phone, 40),
     location: str(input.location, 160),

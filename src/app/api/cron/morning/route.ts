@@ -17,9 +17,9 @@ import { sendEmail } from '@/lib/mailer'
 //
 // force=1 only applies together with user= (a forced blast to every account
 // would spam the whole user base). Auth: CRON_SECRET (Vercel injects
-// "Authorization: Bearer $CRON_SECRET" when the env var is set). Without the
-// env var, the scheduler's x-vercel-cron header is accepted as a fallback —
-// set CRON_SECRET to harden.
+// "Authorization: Bearer $CRON_SECRET" when the env var is set). Production
+// FAILS CLOSED without it — the scheduler header is not an identity proof.
+// In dev, unauthenticated calls are allowed for local testing.
 //
 // dryRun=1 builds every due briefing but sends nothing — shows exactly who
 // would get what. Accounts with nothing due are skipped silently (no empty
@@ -33,7 +33,6 @@ export async function GET(req: NextRequest) {
   const secret = (process.env.CRON_SECRET || '').trim()
   const auth = authorizeMorningCron({
     authHeader: req.headers.get('authorization'),
-    vercelCronHeader: req.headers.get('x-vercel-cron'),
     keyParam: searchParams.get('key'),
     secret: secret || null,
     isProd: process.env.NODE_ENV === 'production',
@@ -41,8 +40,8 @@ export async function GET(req: NextRequest) {
   if (!auth.ok) {
     return NextResponse.json({ error: 'Unauthorized', reason: auth.reason }, { status: auth.status })
   }
-  if (auth.reason === 'vercel_header_fallback') {
-    console.warn('cron/morning: CRON_SECRET is not set — falling back to the spoofable x-vercel-cron header. Set CRON_SECRET in Vercel → Settings → Environment Variables.')
+  if (auth.reason === 'dev') {
+    console.warn('cron/morning: CRON_SECRET is not set and this is a dev runtime — cron endpoints are open. Set CRON_SECRET in production.')
   }
 
   const dryRun = searchParams.get('dryRun') === '1'

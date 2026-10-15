@@ -5,7 +5,7 @@ import { Readable } from 'stream'
 import type { ReadableStream as NodeWebReadableStream } from 'stream/web'
 import { db } from '@/lib/db'
 import { getSessionUser, unauthorized } from '@/lib/auth-server'
-import { parseStorageRef, presignR2Download } from '@/lib/storage'
+import { parseStorageRef, presignR2Download, ownsR2Key } from '@/lib/storage'
 
 // GET /api/documents/[id]/file — stream the ORIGINAL uploaded PDF back to the
 // browser so it can be rendered by the PDF viewer (pdf.js canvas renderer).
@@ -50,6 +50,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     // ── Cloudflare R2: redirect to a presigned download ──────────────────
     if (ref.kind === 'r2') {
+      // Defense in depth: the row is already owner-scoped in the DB, but the
+      // presign below would happily mint a GET for ANY bucket key the row
+      // happens to hold — so pin the key to the caller's own pdf/<uid>/
+      // prefix. Import-time validation (from-blob) guarantees this for new
+      // rows; this check keeps any legacy/odd row from becoming a download
+      // oracle for another user's object.
+      if (!ownsR2Key(user.id, ref.key)) {
+        return NextResponse.json({ error: 'Storage reference does not belong to this account' }, { status: 403 })
+      }
       try {
         const signedUrl = await presignR2Download(ref.key, doc.fileName)
 

@@ -504,6 +504,10 @@ model User {
   name          String
   passwordHash  String // pbkdf2$iterations$salt$hash (Web Crypto, no native deps)
   emailVerified Boolean  @default(false) // new signups verify via a 6-digit email code
+  // Session revocation lever — embedded in session tokens and checked on
+  // every getSessionUser(); bumping it kills all outstanding cookies (done on
+  // password reset so a stolen session cannot outlive the credential swap).
+  tokenVersion  Int      @default(0)
   lastNewsFetchAt DateTime? // last successful RSS pull — drives auto-refresh (empty/stale > 3h triggers a background fetch)
   lastPapersFetchAt DateTime? // same hybrid auto-sync contract, for the papers feed
   lastJobsFetchAt DateTime? // same hybrid auto-sync contract, for the jobs discover board

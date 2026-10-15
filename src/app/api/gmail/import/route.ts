@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getAccessToken, googleGet } from '@/lib/google'
 import { getSessionUser, unauthorized } from '@/lib/auth-server'
+import { guardUsage, isActivePro, limitMessage, usageFields } from '@/lib/entitlements'
 
 export const maxDuration = 120
 
@@ -28,6 +29,13 @@ export async function POST() {
   try {
     const user = await getSessionUser()
     if (!user) return unauthorized()
+
+    // Metered like every other AI action (one agent action per import run) —
+    // the triage step below is a real LLM call over 25 emails.
+    const verdict = await guardUsage(user.id, 'agent', isActivePro(user))
+    if (!verdict.allowed) {
+      return NextResponse.json({ error: limitMessage('agent', verdict.limit), ...usageFields('agent', verdict) }, { status: 402 })
+    }
 
     const token = await getAccessToken(user.id)
     if (!token) {

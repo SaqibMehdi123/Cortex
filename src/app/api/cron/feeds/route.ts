@@ -15,9 +15,9 @@ import { fetchAllScholarshipRows } from '@/lib/scholarship-sync'
 //   curl "…&dryRun=1"   ← pull + classify only, write nothing
 //
 // Auth: identical contract to /api/cron/morning — CRON_SECRET (Vercel injects
-// "Authorization: Bearer $CRON_SECRET" when the env var is set); without it,
-// the scheduler's x-vercel-cron header is accepted as a fallback. SET
-// CRON_SECRET to harden.
+// "Authorization: Bearer $CRON_SECRET" when the env var is set). Production
+// FAILS CLOSED without it — the scheduler header is not an identity proof.
+// In dev, unauthenticated calls are allowed for local testing.
 //
 // Architecture: the four RSS feeds are parsed ONCE (not per user — one pull,
 // N accounts), classified (level / kind / funding / country) and globally
@@ -42,7 +42,6 @@ export async function GET(req: NextRequest) {
   const secret = (process.env.CRON_SECRET || '').trim()
   const auth = authorizeCron({
     authHeader: req.headers.get('authorization'),
-    vercelCronHeader: req.headers.get('x-vercel-cron'),
     keyParam: searchParams.get('key'),
     secret: secret || null,
     isProd: process.env.NODE_ENV === 'production',
@@ -50,8 +49,8 @@ export async function GET(req: NextRequest) {
   if (!auth.ok) {
     return NextResponse.json({ error: 'Unauthorized', reason: auth.reason }, { status: auth.status })
   }
-  if (auth.reason === 'vercel_header_fallback') {
-    console.warn('cron/feeds: CRON_SECRET is not set — falling back to the spoofable x-vercel-cron header. Set CRON_SECRET in Vercel → Settings → Environment Variables.')
+  if (auth.reason === 'dev') {
+    console.warn('cron/feeds: CRON_SECRET is not set and this is a dev runtime — cron endpoints are open. Set CRON_SECRET in production.')
   }
 
   const dryRun = searchParams.get('dryRun') === '1'

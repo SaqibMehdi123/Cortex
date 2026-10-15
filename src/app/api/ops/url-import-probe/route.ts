@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { safeFetch } from '@/lib/safe-fetch'
 import { putBuffer, deleteByRef, storageMode } from '@/lib/storage'
 import { loadPdfParse } from '@/lib/pdf-extract'
+import { clientIp, rateLimit } from '@/lib/rate-limit'
 
 // GET /api/ops/url-import-probe — end-to-end check of the exact pipeline the
 // Library "Import from URL" runs, executed in the LIVE runtime (Vercel
@@ -40,7 +41,17 @@ function safeDetail(e: unknown): string {
     .slice(0, 220)
 }
 
-export async function GET() {
+export async function GET(req: Request) {
+  // The in-memory lastRunAt gate is global-but-per-instance; this per-IP limiter
+  // stops a distributed caller from making every warm instance re-download
+  // ~2 MB + run pdf.js + touch R2 in a loop.
+  const rl = rateLimit(`url-probe:${clientIp(req.headers)}`, { limit: 5, windowMs: 60_000 })
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { ok: false, busy: true, retryInMs: rl.retryAfter * 1000, note: 'probe ran recently — try again in a minute' },
+      { status: 429, headers: noStore },
+    )
+  }
   const now = Date.now()
   if (now - lastRunAt < RATE_LIMIT_MS) {
     return NextResponse.json(

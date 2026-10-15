@@ -6,6 +6,7 @@ import { aiConfigured, isAiUpstreamError } from '@/lib/ai'
 import { extractPdfText } from '@/lib/pdf-extract'
 import { parseCvText, CvParseError } from '@/lib/agent/profile'
 import { extractDocxText, getResumeBuffer, putResumeFile, resumeExtFor, RESUME_MAX_BYTES } from '@/lib/agent/resume-storage'
+import { ownsR2Key } from '@/lib/storage'
 import { writeAgentMessage, writeAgentUserMessage } from '@/lib/agent/threads'
 import type { ProfileConfirmationCard, ParsedCV } from '@/lib/agent/types'
 
@@ -51,19 +52,6 @@ export async function POST(req: NextRequest) {
     const user = await getSessionUser()
     if (!user) return unauthorized()
 
-    if (!aiConfigured()) {
-      return NextResponse.json(
-        { error: 'AI is not configured on this deployment — set OPENAI_API_KEY (and OPENAI_BASE_URL for non-OpenAI providers), then redeploy' },
-        { status: 503 }
-      )
-    }
-
-    // One metered agent action per parse.
-    const verdict = await guardUsage(user.id, 'agent', isActivePro(user))
-    if (!verdict.allowed) {
-      return NextResponse.json({ error: limitMessage('agent', verdict.limit), ...usageFields('agent', verdict) }, { status: 402 })
-    }
-
     // ── Ingest the file (multipart or already-uploaded ref) ──────────────
     const contentType = req.headers.get('content-type') || ''
     let bytes: Buffer
@@ -86,6 +74,13 @@ export async function POST(req: NextRequest) {
     } else {
       const body = (await req.json().catch(() => null)) as { fileRef?: string; fileName?: string; mimeType?: string; size?: number } | null
       if (!body?.fileRef) return NextResponse.json({ error: 'fileRef is required' }, { status: 400 })
+      // Ownership check — a client-supplied r2:// fileRef may only name an
+      // object inside the caller's own prefix (both upload paths key CVs as
+      // pdf/<uid>/…). Anything else would let a caller parse another user's
+      // stored CV and read its contents in the confirmation card.
+      if (body.fileRef.startsWith('r2://') && !ownsR2Key(user.id, body.fileRef.slice(5))) {
+        return NextResponse.json({ error: 'Storage reference does not belong to this account' }, { status: 403 })
+      }
       fileName = (body.fileName || 'cv.pdf').replace(/[\r\n"\\]/g, '').slice(0, 200)
       mimeType = body.mimeType || 'application/pdf'
       if (typeof body.size === 'number' && body.size > RESUME_MAX_BYTES) {
@@ -100,6 +95,21 @@ export async function POST(req: NextRequest) {
     const ext = resumeExtFor(mimeType, fileName)
     if (!ext) {
       return NextResponse.json({ error: 'Only PDF and DOCX CVs are supported right now' }, { status: 400 })
+    }
+
+    // AI configuration + metering are checked AFTER the cheap input/ownership
+    // validations (so an unconfigured AI never masks a 403 for a foreign ref)
+    // but BEFORE the expensive extraction/LLM work.
+    if (!aiConfigured()) {
+      return NextResponse.json(
+        { error: 'AI is not configured on this deployment — set OPENAI_API_KEY (and OPENAI_BASE_URL for non-OpenAI providers), then redeploy' },
+        { status: 503 }
+      )
+    }
+    // One metered agent action per parse.
+    const verdict = await guardUsage(user.id, 'agent', isActivePro(user))
+    if (!verdict.allowed) {
+      return NextResponse.json({ error: limitMessage('agent', verdict.limit), ...usageFields('agent', verdict) }, { status: 402 })
     }
 
     // ── Extract text ─────────────────────────────────────────────────────

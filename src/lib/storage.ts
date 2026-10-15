@@ -156,6 +156,20 @@ export function makeStorageKey(userId: string, fileName: string): string {
   return `pdf/${userId}/${crypto.randomUUID()}/${safeName}`
 }
 
+/**
+ * Ownership assertion for r2:// refs received from a CLIENT and then read
+ * server-side (PDF import, CV parse, document download). parseStorageRef
+ * validates a key's FORMAT, but format alone would let a caller name ANY
+ * object in the bucket — including another user's `pdf/<their-uid>/…` file —
+ * and have the server fetch, parse and echo its contents back. Every upload
+ * path derives the key from the session user (makeStorageKey), so a genuine
+ * ref always lives inside the caller's own prefix; anything else is refused
+ * before a single byte is read.
+ */
+export function ownsR2Key(userId: string, key: string): boolean {
+  return key.startsWith(`pdf/${userId}/`)
+}
+
 /** Presigned browser → R2 PUT (1 hour). The bucket itself stays private. */
 export async function presignR2Upload(key: string, contentType = 'application/pdf'): Promise<string> {
   const cmd = new PutObjectCommand({ Bucket: r2Bucket(), Key: key, ContentType: contentType })

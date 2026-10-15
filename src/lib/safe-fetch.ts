@@ -127,6 +127,16 @@ async function resolvesToPublicHost(hostname: string): Promise<boolean> {
   }
 }
 
+/**
+ * Validate a URL against the same policy safeFetch enforces per hop — for
+ * callers that need to check BEFORE doing anything with the URL (e.g.
+ * persisting it as a custom feed source, or handing it to a fetcher that
+ * does its own transport). Throws SafeFetchError with a generic message.
+ */
+export async function assertSafeUrl(rawUrl: string): Promise<URL> {
+  return assertSafeTarget(rawUrl)
+}
+
 async function assertSafeTarget(rawUrl: string): Promise<URL> {
   let url: URL
   try {

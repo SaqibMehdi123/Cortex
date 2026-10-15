@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
     }
 
     const res = NextResponse.json({ user: { id: user.id, name: user.name, email: user.email } })
-    res.cookies.set(SESSION_COOKIE, await createSessionToken(user.id), SESSION_COOKIE_OPTIONS)
+    res.cookies.set(SESSION_COOKIE, await createSessionToken(user.id, user.tokenVersion), SESSION_COOKIE_OPTIONS)
     return res
   } catch (e) {
     console.error('POST /api/auth/login error', e)

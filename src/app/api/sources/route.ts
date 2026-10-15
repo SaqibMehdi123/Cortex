@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getSessionUser, unauthorized } from '@/lib/auth-server'
+import { assertSafeUrl, SafeFetchError } from '@/lib/safe-fetch'
 
 // GET /api/sources — the signed-in user's custom news sources
 export async function GET() {
@@ -17,6 +18,12 @@ export async function GET() {
 }
 
 // POST /api/sources — add custom source (blog / newsletter / X account)
+//
+// The URL is validated against the same SSRF policy as every other
+// server-side fetch (src/lib/safe-fetch): http(s) only, no embedded
+// credentials, no loopback/private/link-local/metadata targets — this URL is
+// fetched by the daily news pull, so an unvalidated entry would turn the
+// server into an internal-network scanner (169.254.169.254, 10.x, .internal…).
 export async function POST(req: NextRequest) {
   try {
     const user = await getSessionUser()
@@ -26,6 +33,12 @@ export async function POST(req: NextRequest) {
     const { name, url, type } = body
     if (!name?.trim() || !url?.trim()) {
       return NextResponse.json({ error: 'Name and URL are required' }, { status: 400 })
+    }
+    try {
+      await assertSafeUrl(String(url).trim())
+    } catch (e) {
+      const msg = e instanceof SafeFetchError ? e.message : 'That URL is not allowed'
+      return NextResponse.json({ error: msg }, { status: 400 })
     }
     const source = await db.customSource.create({
       data: {

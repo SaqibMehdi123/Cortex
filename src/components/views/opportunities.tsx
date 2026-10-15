@@ -3,6 +3,7 @@
 import { FaCalendarDay, FaEnvelopeCircleCheck, FaPlus, FaSpinner, FaTrashCan, FaUpRightFromSquare, FaWandMagicSparkles } from 'react-icons/fa6'
 import { useState } from 'react'
 import { api, useApi, fmtDate, daysUntil } from '@/lib/client'
+import { safeExternalUrl } from '@/lib/safe-url'
 import type { Opportunity } from '@/lib/types'
 import { PageHeader, EmptyState, LoadingBlock, ErrorBlock, Tone } from '@/components/shared'
 import { Button } from '@/components/ui/button'
@@ -193,9 +194,9 @@ export function OpportunitiesView() {
                     </SelectContent>
                   </Select>
                   <div className="flex items-center gap-1">
-                    {o.url && (
+                    {o.url && safeExternalUrl(o.url) && (
                       <Button variant="ghost" size="sm" className="h-8 w-8 p-0" asChild>
-                        <a href={o.url} target="_blank" rel="noreferrer" aria-label="Open link">
+                        <a href={safeExternalUrl(o.url)!} target="_blank" rel="noreferrer" aria-label="Open link">
                           <FaUpRightFromSquare className="h-3.5 w-3.5" />
                         </a>
                       </Button>

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAI, isAiUpstreamError } from '@/lib/ai'
 import { getSessionUser, unauthorized } from '@/lib/auth-server'
+import { guardUsage, isActivePro, limitMessage, usageFields } from '@/lib/entitlements'
 
 // Long AI generations must not hit the default serverless timeout (Vercel Hobby caps at 60 s).
 export const maxDuration = 60
@@ -10,6 +11,13 @@ export async function POST(req: NextRequest) {
   try {
     const user = await getSessionUser()
     if (!user) return unauthorized()
+
+    // Metered like every other AI action (one agent action per parse) — this
+    // route used to be the one LLM call a free user could loop for free.
+    const verdict = await guardUsage(user.id, 'agent', isActivePro(user))
+    if (!verdict.allowed) {
+      return NextResponse.json({ error: limitMessage('agent', verdict.limit), ...usageFields('agent', verdict) }, { status: 402 })
+    }
 
     const body = await req.json()
     const text = body?.text?.trim()

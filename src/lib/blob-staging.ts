@@ -16,6 +16,10 @@ import { del, list } from '@vercel/blob'
 
 export const STAGED_CHUNK_MAX_BYTES = 4.2 * 1024 * 1024 // under Vercel's 4.5 MB request cap
 export const STAGED_TOTAL_MAX_BYTES = 200 * 1024 * 1024 // same cap as the import route
+// Cumulative cap across ALL of a user's staging sessions. Without it, a
+// scripted caller could open unlimited begin() sessions and park garbage
+// chunks until the janitor (24 h grace) catches up — a storage-cost DoS.
+export const USER_STAGING_CAP_BYTES = 3 * STAGED_TOTAL_MAX_BYTES
 const STAGED_GRACE_MS = 24 * 60 * 60 * 1000 // abandoned staged chunks live 24 h
 const SWEEP_MAX_DELETE = 2_000 // safety valve for the opportunistic janitor
 
@@ -37,6 +41,22 @@ export function stagedIndex(pathname: string, prefix: string): number | null {
 
 export function isValidUploadId(uploadId: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uploadId)
+}
+
+/**
+ * Total bytes currently staged for one user across all upload sessions (one
+ * Blob list call — cheap relative to a ≥4 MB chunk POST). Used by the chunk
+ * route to enforce USER_STAGING_CAP_BYTES.
+ */
+export async function userStagedBytes(userId: string): Promise<number> {
+  let total = 0
+  let cursor: string | undefined
+  do {
+    const page = await list({ prefix: `staging/${userId}/`, limit: 1000, cursor })
+    for (const blob of page.blobs) total += blob.size
+    cursor = page.hasMore ? page.cursor : undefined
+  } while (cursor)
+  return total
 }
 
 export async function deleteStagedBlobs(urls: string[]): Promise<void> {

@@ -14,7 +14,19 @@ function getSecret(): string {
   // Set AUTH_SECRET in production. The fallback keeps local development
   // frictionless — a lost laptop with a Cortex dev server on it is not a
   // threat model, but anyone deploying should pick a real secret.
-  return process.env.AUTH_SECRET || 'cortex-local-dev-secret-change-me'
+  //
+  // Fail closed in production: with the well-known fallback string, anyone
+  // could compute HMAC(userId.exp) offline and mint a valid session cookie
+  // for any user whose id they learn — a total authentication bypass. A
+  // misconfigured deployment must refuse to sign/verify rather than run on
+  // the public fallback (every request 500s until the operator sets the
+  // env var, which is exactly the visibility a deployment mistake deserves).
+  const secret = process.env.AUTH_SECRET
+  if (secret) return secret
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('AUTH_SECRET is not set — refusing to run session crypto on a public fallback secret in production. Set AUTH_SECRET in the deployment environment.')
+  }
+  return 'cortex-local-dev-secret-change-me'
 }
 
 const enc = new TextEncoder()
@@ -99,14 +111,23 @@ export const CODE_MAX_ATTEMPTS = 5
 export const CODE_RESEND_COOLDOWN_SECONDS = 60
 
 // ─── Session tokens ──────────────────────────────────────────────────
+//
+// Tokens are stateless `${userId}.${exp}.${tokenVersion}` HMAC-signed blobs.
+// tokenVersion is the revocation lever: bumping the user's column instantly
+// invalidates every outstanding cookie (done on password reset), while the
+// edge middleware keeps verifying the HMAC without a DB round-trip — the
+// version is enforced in getSessionUser() (Node runtime, has the db client),
+// which is the second line of defense every session-scoped route passes
+// through anyway. Tokens minted before tokenVersion existed carry only two
+// segments and read as version 0, matching the column default.
 
-export async function createSessionToken(userId: string): Promise<string> {
+export async function createSessionToken(userId: string, tokenVersion = 0): Promise<string> {
   const exp = Date.now() + SESSION_MAX_AGE * 1000
-  const payload = `${userId}.${exp}`
+  const payload = `${userId}.${exp}.${tokenVersion}`
   return `${payload}.${await hmac(payload)}`
 }
 
-export async function verifySessionToken(token: string | undefined | null): Promise<{ userId: string } | null> {
+export async function verifySessionToken(token: string | undefined | null): Promise<{ userId: string; tokenVersion: number } | null> {
   if (!token) return null
   const idx = token.lastIndexOf('.')
   if (idx < 0) return null
@@ -114,10 +135,14 @@ export async function verifySessionToken(token: string | undefined | null): Prom
   const sig = token.slice(idx + 1)
   const expected = await hmac(payload)
   if (!timingSafeEqual(sig, expected)) return null
-  const [userId, expRaw] = payload.split('.')
+  const parts = payload.split('.')
+  if (parts.length < 2) return null
+  const [userId, expRaw, verRaw] = parts
   const exp = Number(expRaw)
   if (!userId || !Number.isFinite(exp) || exp < Date.now()) return null
-  return { userId }
+  const tokenVersion = verRaw === undefined ? 0 : Number(verRaw)
+  if (!Number.isInteger(tokenVersion) || tokenVersion < 0) return null
+  return { userId, tokenVersion }
 }
 
 export const SESSION_COOKIE_OPTIONS = {

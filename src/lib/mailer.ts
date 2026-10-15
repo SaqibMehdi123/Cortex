@@ -114,8 +114,16 @@ export function mailReplyTo(): string {
   return (process.env.MAIL_REPLY_TO || SUPPORT_EMAIL).trim()
 }
 
-/** Explicit operator opt-in to show codes in the UI (local dev only). */
+/** Explicit operator opt-in to show codes in the UI (local dev only).
+ *
+ * Hard-disabled in production: the flag exists so a laptop without a mail
+ * provider can still complete signups — but if it ever leaked into a Vercel
+ * env config, every failed delivery would hand the LIVE verification/reset
+ * code back in the HTTP response, which is a password-reset bypass for any
+ * account. Production never returns codes in responses, period.
+ */
 export function devCodeAllowed(): boolean {
+  if (process.env.NODE_ENV === 'production') return false
   return process.env.AUTH_DEV_CODE_FALLBACK === 'true'
 }
 
@@ -134,12 +142,25 @@ export function emailResponseFields(result: SendCodeResult, code: string) {
   }
 }
 
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
 const codeEmailHtml = (name: string, code: string, kind: 'verify' | 'reset'): string => {
   const heading = kind === 'verify' ? 'Verify your email' : 'Reset your password'
+  // The display name is user input from signup — escape it so a crafted name
+  // (e.g. "<a href=…>") cannot inject HTML into a mail sent from the app's
+  // own verified sender (phishing-in-legitimate-email).
+  const safeName = escapeHtml(name) || 'there'
   const intro =
     kind === 'verify'
-      ? `Hi ${name || 'there'} — welcome to Cortex. Enter this code to verify your email address:`
-      : `Hi ${name || 'there'} — enter this code to reset your Cortex password:`
+      ? `Hi ${safeName} — welcome to Cortex. Enter this code to verify your email address:`
+      : `Hi ${safeName} — enter this code to reset your Cortex password:`
   // Responsive: same pattern as the morning briefing / receipt — inline base
   // styles, <style> block refines phones (smaller paddings, the 6-char code
   // with 0.35em tracking otherwise crowds a 320px viewport).

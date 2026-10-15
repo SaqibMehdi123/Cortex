@@ -97,7 +97,11 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const finalBlob = await put(name, Readable.toWeb(Readable.from(stagedBytes(found.map((f) => f.url)))) as unknown as ReadableStream<Uint8Array>, {
+    // Final object lands inside the uploader's own pdf/<uid>/ prefix — same
+    // namespace layout as the R2 path — so the import route's ownership check
+    // (pdf/<uid>/ prefix) also holds for blob-mode uploads, and the shared
+    // store root stays free of user-chosen names.
+    const finalBlob = await put(`pdf/${user.id}/${name}`, Readable.toWeb(Readable.from(stagedBytes(found.map((f) => f.url)))) as unknown as ReadableStream<Uint8Array>, {
       access: 'public',
       addRandomSuffix: true,
       contentType: 'application/pdf',

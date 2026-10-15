@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server'
+import crypto from 'node:crypto'
 import { db } from '@/lib/db'
 // ─── Google OAuth 2.0 + Gmail + Calendar helpers ─────────────────────
 // Credentials come from env: GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET.
@@ -23,6 +24,45 @@ export interface GoogleTokens {
   token_type?: string
 }
 
+// ─── Tokens at rest (AES-256-GCM) ─────────────────────────────────────────
+//
+// googleAuth holds a live Gmail-read + Calendar-write refresh token per user.
+// Stored plaintext, one DB leak = persistent mailbox access for every
+// connected account — so the JSON blob is encrypted with a key derived from
+// AUTH_SECRET before it ever touches the database. Values written before
+// this change are read via the legacy-plaintext fallback and silently
+// upgraded to ciphertext on the next refresh; AUTH_SECRET rotation simply
+// forces users through reconnect (fail-closed, nothing decrypts).
+
+const ENC_PREFIX = 'enc.v1:'
+
+function tokenCipherKey(): Buffer {
+  const secret = process.env.AUTH_SECRET || 'cortex-local-dev-secret-change-me'
+  return crypto.createHash('sha256').update(`cortex-google-tokens:${secret}`).digest()
+}
+
+export function encryptGoogleTokens(json: string): string {
+  const iv = crypto.randomBytes(12)
+  const cipher = crypto.createCipheriv('aes-256-gcm', tokenCipherKey(), iv)
+  const data = Buffer.concat([cipher.update(json, 'utf8'), cipher.final()])
+  const tag = cipher.getAuthTag()
+  return ENC_PREFIX + Buffer.concat([iv, tag, data]).toString('base64')
+}
+
+/** Returns the token JSON string, or null when the blob cannot be opened. */
+function decryptGoogleTokens(raw: string): string | null {
+  if (!raw.startsWith(ENC_PREFIX)) return raw // legacy plaintext — upgraded on next write
+  try {
+    const buf = Buffer.from(raw.slice(ENC_PREFIX.length), 'base64')
+    const decipher = crypto.createDecipheriv('aes-256-gcm', tokenCipherKey(), buf.subarray(0, 12))
+    decipher.setAuthTag(buf.subarray(12, 28))
+    return Buffer.concat([decipher.update(buf.subarray(28)), decipher.final()]).toString('utf8')
+  } catch (e) {
+    console.error('google token decrypt failed (reconnect required)', e)
+    return null
+  }
+}
+
 export function googleConfigured(): boolean {
   return Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET)
 }
@@ -45,7 +85,8 @@ export async function getUserSetting(userId: string) {
 function parseTokens(raw: string | null): GoogleTokens | null {
   if (!raw) return null
   try {
-    return JSON.parse(raw) as GoogleTokens
+    const json = decryptGoogleTokens(raw)
+    return json ? (JSON.parse(json) as GoogleTokens) : null
   } catch {
     return null
   }
@@ -86,7 +127,7 @@ export async function getAccessToken(userId: string): Promise<string | null> {
       expiry_date: Date.now() + (refreshed.expires_in ?? 3600) * 1000,
       refresh_token: refreshed.refresh_token ?? tokens.refresh_token,
     }
-    await db.setting.update({ where: { userId }, data: { googleAuth: JSON.stringify(merged) } })
+    await db.setting.update({ where: { userId }, data: { googleAuth: encryptGoogleTokens(JSON.stringify(merged)) } })
     return merged.access_token
   } catch (e) {
     console.error('google token refresh failed', e)

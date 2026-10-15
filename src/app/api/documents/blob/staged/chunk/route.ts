@@ -5,8 +5,11 @@ import { put } from '@vercel/blob'
 import { getSessionUser, unauthorized } from '@/lib/auth-server'
 import {
   STAGED_CHUNK_MAX_BYTES,
+  STAGED_TOTAL_MAX_BYTES,
+  USER_STAGING_CAP_BYTES,
   stagedPathname,
   isValidUploadId,
+  userStagedBytes,
 } from '@/lib/blob-staging'
 
 export const runtime = 'nodejs'
@@ -22,7 +25,9 @@ export const maxDuration = 60
 // the final order is restored from the zero-padded index in the pathname.
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-const MAX_CHUNK_COUNT = 10_000
+// A session cannot declare more chunks than the largest allowed PDF needs —
+// without this, `total=10000` would authorize parking ~42 GB under one id.
+const MAX_TOTAL_CHUNKS = Math.ceil(STAGED_TOTAL_MAX_BYTES / STAGED_CHUNK_MAX_BYTES) + 1
 
 export async function POST(req: NextRequest) {
   try {
@@ -40,10 +45,10 @@ export async function POST(req: NextRequest) {
     if (!UUID_RE.test(uploadId)) {
       return NextResponse.json({ error: 'Invalid upload session' }, { status: 400 })
     }
-    if (!Number.isInteger(index) || index < 0 || index >= MAX_CHUNK_COUNT) {
+    if (!Number.isInteger(index) || index < 0 || index >= MAX_TOTAL_CHUNKS) {
       return NextResponse.json({ error: 'Invalid chunk index' }, { status: 400 })
     }
-    if (!Number.isInteger(total) || total <= 0 || total > MAX_CHUNK_COUNT || index >= total) {
+    if (!Number.isInteger(total) || total <= 0 || total > MAX_TOTAL_CHUNKS || index >= total) {
       return NextResponse.json({ error: 'Invalid chunk count' }, { status: 400 })
     }
 
@@ -66,6 +71,17 @@ export async function POST(req: NextRequest) {
     }
     if (received === 0) {
       return NextResponse.json({ error: 'No chunk data' }, { status: 400 })
+    }
+
+    // Per-user cumulative staging budget — blocks the begin×N / flood-chunks
+    // storage-cost DoS (each session is separately bounded by the chunk-count
+    // cap; this bounds all of an account's sessions together).
+    const stagedSoFar = await userStagedBytes(user.id).catch(() => 0)
+    if (stagedSoFar + received > USER_STAGING_CAP_BYTES) {
+      return NextResponse.json(
+        { error: 'Too much staged upload data — finish or cancel an upload first' },
+        { status: 429 }
+      )
     }
 
     const blob = await put(stagedPathname(user.id, uploadId, index), Buffer.concat(chunks), {

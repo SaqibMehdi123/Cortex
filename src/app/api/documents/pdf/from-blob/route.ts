@@ -3,7 +3,7 @@ import { head } from '@vercel/blob'
 import { db } from '@/lib/db'
 import { getSessionUser, unauthorized } from '@/lib/auth-server'
 import { cleanPdfText, extractPdfText, INLINE_EXTRACT_MAX_BYTES } from '@/lib/pdf-extract'
-import { parseStorageRef, r2GetBuffer, r2GetRange, r2Head } from '@/lib/storage'
+import { parseStorageRef, r2GetBuffer, r2GetRange, r2Head, ownsR2Key } from '@/lib/storage'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -52,6 +52,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing storage reference' }, { status: 400 })
     }
     const parsedRef = parseStorageRef(rawRef)
+
+    // Ownership check — a client-supplied r2:// ref may only name an object
+    // inside the caller's own prefix (every upload path keys files as
+    // pdf/<uid>/…). Without this, a caller who learns another user's key
+    // could import the victim's PDF and read its extracted text here.
+    if (parsedRef.kind === 'r2' && !ownsR2Key(user.id, parsedRef.key)) {
+      return NextResponse.json({ error: 'Storage reference does not belong to this account' }, { status: 403 })
+    }
 
     // Existence + size, per backend — without downloading the file.
     let size: number | null = null

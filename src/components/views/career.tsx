@@ -3,6 +3,7 @@
 import { FaBookmark, FaBriefcase, FaClock, FaEnvelope, FaFileLines, FaGraduationCap, FaGripVertical, FaInbox, FaLandmark, FaLocationDot, FaMagnifyingGlass, FaPlus, FaRegBookmark, FaRotate, FaSpinner, FaTowerBroadcast, FaTrashCan, FaTriangleExclamation, FaUpRightFromSquare, FaWandMagicSparkles, FaXmark } from 'react-icons/fa6'
 import { useEffect, useMemo, useState } from 'react'
 import { api, fmtDate, daysUntil, useApi } from '@/lib/client'
+import { safeExternalUrl } from '@/lib/safe-url'
 import type { Opportunity, JobListing, ListingIndex, ListingFetchResult, Scholarship, ScholarshipIndex, ScholarshipFetchResult } from '@/lib/types'
 import { timeAgo } from '@/lib/timeago'
 import { Button } from '@/components/ui/button'
@@ -176,7 +177,11 @@ function listingDomain(url: string | null | undefined): string | null {
 function CompanyLogo({ company, url, logoUrl }: { company: string; url: string; logoUrl?: string | null }) {
   const [failed, setFailed] = useState(false)
   const domain = useMemo(() => listingDomain(url), [url])
-  const src = logoUrl || (domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=64` : null)
+  // feed-supplied logos are attacker-influenced — https-only, else fall back
+  // to the favicon/avatar path (a javascript:/data: src is inert in modern
+  // browsers but a hostile http: URL would still beacon or mixed-content)
+  const safeLogo = logoUrl && /^https:\/\//.test(logoUrl) ? logoUrl : null
+  const src = safeLogo || (domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=64` : null)
   if (!src || failed) return companyAvatar(company)
   return (
     <img
@@ -954,8 +959,8 @@ function DiscoverTab() {
                     {l.publishedAt && <span className="shrink-0">· {timeAgo(l.publishedAt)}</span>}
                   </span>
                   <a
-                    href={l.url}
-                    target="_blank"
+                    href={safeExternalUrl(l.url) ?? undefined}
+                    target={safeExternalUrl(l.url) ? '_blank' : undefined}
                     rel="noopener noreferrer"
                     className="flex shrink-0 items-center gap-1 font-medium text-primary hover:underline"
                   >

@@ -309,7 +309,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, provider, interval, url })
   } catch (e) {
     console.error('POST /api/billing/checkout error', e)
-    const detail = e instanceof Error ? e.message : 'checkout_failed'
-    return NextResponse.json({ error: 'Could not start checkout. Try again.', detail }, { status: 502 })
+    // The raw exception text (SDK/network internals, provider URLs) stays in
+    // the server log only — the client gets the generic message.
+    return NextResponse.json({ error: 'Could not start checkout. Try again.' }, { status: 502 })
   }
 }

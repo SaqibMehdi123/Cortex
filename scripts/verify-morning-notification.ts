@@ -67,13 +67,13 @@ check('non-finite offset falls back to UTC', digestAlreadySentToday(new Date('20
 check('marker read on the USER calendar, not UTC (01:00 PKT send suppresses the 08:00 PKT run)', sent('2026-09-11T20:00:00Z', '2026-09-12T03:00:00Z') === true)
 
 console.log('authorizeMorningCron — auth matrix')
-check('correct bearer accepted', authorizeMorningCron({ authHeader: 'Bearer s3cret', vercelCronHeader: null, keyParam: null, secret: 's3cret', isProd: true }).ok)
-check('correct ?key= accepted', authorizeMorningCron({ authHeader: null, vercelCronHeader: null, keyParam: 's3cret', secret: 's3cret', isProd: true }).ok)
-check('wrong bearer rejected', authorizeMorningCron({ authHeader: 'Bearer nope', vercelCronHeader: '1', keyParam: null, secret: 's3cret', isProd: true }).ok === false)
-check('header fallback does NOT pass when a secret is configured', authorizeMorningCron({ authHeader: null, vercelCronHeader: '1', keyParam: null, secret: 's3cret', isProd: true }).status === 401)
-check('no secret + prod + vercel header → fallback allowed', authorizeMorningCron({ authHeader: null, vercelCronHeader: '1', keyParam: null, secret: null, isProd: true }).ok)
-check('no secret + prod + anonymous → rejected', authorizeMorningCron({ authHeader: null, vercelCronHeader: null, keyParam: null, secret: null, isProd: true }).ok === false)
-check('no secret + dev → allowed', authorizeMorningCron({ authHeader: null, vercelCronHeader: null, keyParam: null, secret: null, isProd: false }).ok)
+check('correct bearer accepted', authorizeMorningCron({ authHeader: 'Bearer s3cret', keyParam: null, secret: 's3cret', isProd: true }).ok)
+check('correct ?key= accepted in dev', authorizeMorningCron({ authHeader: null, keyParam: 's3cret', secret: 's3cret', isProd: false }).ok)
+check('?key= NOT accepted in production (secrets do not belong in URLs)', authorizeMorningCron({ authHeader: null, keyParam: 's3cret', secret: 's3cret', isProd: true }).ok === false)
+check('wrong bearer rejected', authorizeMorningCron({ authHeader: 'Bearer nope', keyParam: null, secret: 's3cret', isProd: true }).ok === false)
+check('no secret + prod + anonymous → rejected', authorizeMorningCron({ authHeader: null, keyParam: null, secret: null, isProd: true }).ok === false)
+check('no secret + prod → fails CLOSED (scheduler header is not an identity proof)', authorizeMorningCron({ authHeader: null, keyParam: null, secret: null, isProd: true }).status === 401)
+check('no secret + dev → allowed', authorizeMorningCron({ authHeader: null, keyParam: null, secret: null, isProd: false }).ok)
 
 console.log('email template — sections, escaping, subject')
 const synthetic = {

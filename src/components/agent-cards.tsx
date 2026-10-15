@@ -32,6 +32,7 @@ import type {
   PackageCard,
 } from '@/lib/agent/types'
 import { cn } from '@/lib/utils'
+import { safeExternalUrl } from '@/lib/safe-url'
 
 export function ProfileConfirmationCardView({
   card,
@@ -146,11 +147,17 @@ export function ProfileConfirmationCardView({
                 <FaLink className="h-3 w-3" />
                 {Object.entries(card.links ?? {})
                   .filter(([, v]) => Boolean(v))
-                  .map(([k, v]) => (
-                    <a key={k} href={v as string} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
-                      {k}
-                    </a>
-                  ))}
+                  .map(([k, v]) => {
+                    // CV-parsed links pass through the LLM — render only
+                    // plain http(s) URLs as anchors (a crafted CV could
+                    // otherwise drop a javascript: link into the thread).
+                    const href = safeExternalUrl(v)
+                    return href ? (
+                      <a key={k} href={href} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                        {k}
+                      </a>
+                    ) : null
+                  })}
               </p>
             )}
           </>
@@ -284,8 +291,8 @@ export function ShortlistCardView({ card, onPrepare }: { card: ShortlistCard; on
             <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">{item.why}</p>
             <div className="mt-2 flex items-center gap-2">
               <a
-                href={item.url}
-                target="_blank"
+                href={safeExternalUrl(item.url) ?? undefined}
+                target={safeExternalUrl(item.url) ? '_blank' : undefined}
                 rel="noopener noreferrer"
                 className="flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
               >
@@ -502,9 +509,9 @@ export function ApprovalCardView({ card, onDone }: { card: ApprovalCard; onDone?
           >
             <FaDownload className="h-3 w-3" /> Download package
           </a>
-          {card.url && (
+          {card.url && safeExternalUrl(card.url) && (
             <a
-              href={card.url}
+              href={safeExternalUrl(card.url)!}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium hover:bg-muted"
@@ -536,13 +543,13 @@ export function PackageCardView({ card }: { card: PackageCard }) {
       </p>
       <p className="mt-1 text-[11px] text-muted-foreground">{card.message}</p>
       <div className="mt-2 flex flex-wrap items-center gap-2">
-        {card.packageUrl && (
-          <a href={card.packageUrl} className="flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium hover:bg-muted">
+        {card.packageUrl && safeExternalUrl(card.packageUrl) && (
+          <a href={safeExternalUrl(card.packageUrl)!} className="flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium hover:bg-muted">
             <FaDownload className="h-3 w-3" /> Package
           </a>
         )}
-        {card.applyUrl && (
-          <a href={card.applyUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium hover:bg-muted">
+        {card.applyUrl && safeExternalUrl(card.applyUrl) && (
+          <a href={safeExternalUrl(card.applyUrl)!} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium hover:bg-muted">
             <FaArrowUpRightFromSquare className="h-3 w-3" /> Job posting
           </a>
         )}

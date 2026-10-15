@@ -22,8 +22,9 @@ function SignupForm() {
   const router = useRouter()
   const params = useSearchParams()
   // where to send the user after signup+verify — checkout flows from /pricing
-  // set this so the upgrade intent survives account creation
-  const nextPath = params.get('next')?.startsWith('/') ? params.get('next') : null
+  // set this so the upgrade intent survives account creation.
+  // "//host" is excluded — it is protocol-relative and navigates OFF-site.
+  const nextPath = params.get('next')?.startsWith('/') && !params.get('next')?.startsWith('//') ? params.get('next') : null
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')

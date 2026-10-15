@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { getSessionUser, unauthorized } from '@/lib/auth-server'
 import { beginSync, stampSync, abortSync } from '@/lib/sync-guard'
 import { classifyRoleFamily } from '@/lib/job-families'
+import { isSafeExternalUrl } from '@/lib/safe-url'
 
 // POST /api/opportunities/fetch — pull jobs, internships and research positions
 // from authentic, keyless public sources:
@@ -608,9 +609,15 @@ export async function POST(req: NextRequest) {
     if (all.length > 0) {
       // SQLite createMany has no skipDuplicates — dedupe here instead:
       // first within the batch, then against this user's stored listings.
+      // Ingest guard: posting/logo URLs come from third-party ATS APIs and
+      // feeds — only plain http(s) URLs are stored, so a hostile/compromised
+      // feed can never plant a javascript:/data: link that later renders in
+      // Discover cards or agent drafts.
       const batch = new Map<string, Listing>()
       for (const l of all) {
-        if (l.url && !batch.has(l.url)) batch.set(l.url, l)
+        if (!l.url || !isSafeExternalUrl(l.url)) continue
+        const logo = l.logoUrl && /^https:\/\//.test(l.logoUrl) ? l.logoUrl : null
+        if (!batch.has(l.url)) batch.set(l.url, { ...l, logoUrl: logo })
       }
       const existing = await db.jobListing.findMany({
         where: { userId: user.id, url: { in: [...batch.keys()] } },

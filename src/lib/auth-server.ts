@@ -6,7 +6,7 @@ import { db } from '@/lib/db'
 import { SESSION_COOKIE, verifySessionToken } from '@/lib/auth'
 
 export async function getSessionUser(): Promise<
-  { id: string; name: string; email: string; plan: string; planExpiresAt: Date | null } | null
+  { id: string; name: string; email: string; plan: string; planExpiresAt: Date | null; tokenVersion: number } | null
 > {
   const store = await cookies()
   const session = await verifySessionToken(store.get(SESSION_COOKIE)?.value)
@@ -15,7 +15,15 @@ export async function getSessionUser(): Promise<
     where: { id: session.userId },
     // plan/planExpiresAt feed the billing entitlements (src/lib/entitlements) —
     // every session-scoped route can resolve the plan with zero extra queries.
-    select: { id: true, name: true, email: true, plan: true, planExpiresAt: true },
+    // tokenVersion enforces server-side session revocation (bumped on password
+    // reset): a stolen cookie with a stale version is treated as signed out
+    // even though the edge middleware (no DB on the edge) still accepts its
+    // signature.
+    select: { id: true, name: true, email: true, plan: true, planExpiresAt: true, tokenVersion: true },
+  }).then((user) => {
+    if (!user) return null
+    if (user.tokenVersion !== session.tokenVersion) return null
+    return user
   })
 }
 
