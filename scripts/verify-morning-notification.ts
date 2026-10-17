@@ -16,6 +16,8 @@ import {
   briefingEmailHtml,
   briefingEmailText,
   briefingSubject,
+  overdueCutoffStart,
+  OVERDUE_LOOKBACK_DAYS,
   type Briefing,
 } from '../src/lib/morning-briefing'
 import { SITE_URL } from '../src/lib/site'
@@ -55,6 +57,19 @@ check('day label uses the user calendar', fmtDayLocal(new Date('2026-09-11T20:00
 check('fmtInDays 0', fmtInDays(0) === 'today')
 check('fmtInDays 1', fmtInDays(1) === 'tomorrow')
 check('fmtInDays 3', fmtInDays(3) === 'in 3 days')
+
+console.log('overdueCutoffStart — the mail only reports the last 2 days of arrears')
+// Local day = Sep 12 PKT (start 2026-09-11T19:00Z). The Overdue section must
+// cover due dates on the user's Sep 10 and Sep 11 and nothing older:
+// "overdue tasks of more than last 2 days" never reach the inbox again.
+check('lookback constant is 2 days', OVERDUE_LOOKBACK_DAYS === 2)
+check('cutoff == local midnight 2 days back (Sep 10 00:00 PKT)', overdueCutoffStart(w.start).toISOString() === '2026-09-09T19:00:00.000Z')
+check('due yesterday (Sep 11 PKT) → still in the mail', new Date('2026-09-10T20:00:00Z') >= overdueCutoffStart(w.start))
+check('due 2 days ago (Sep 10 PKT, 00:30) → still in the mail', new Date('2026-09-09T19:30:00Z') >= overdueCutoffStart(w.start))
+check('boundary: due exactly at the cutoff instant is included (gte)', new Date('2026-09-09T19:00:00Z').getTime() === overdueCutoffStart(w.start).getTime())
+check('due 3 days ago (Sep 9 PKT) → gone from the mail', new Date('2026-09-08T19:00:00Z') < overdueCutoffStart(w.start))
+check('cutoff rides the user calendar, not UTC (UTC day start would be 2026-09-10T00:00Z)', overdueCutoffStart(w.start).toISOString() !== '2026-09-10T00:00:00.000Z')
+check('UTC fallback: exactly 48h before the UTC day start', overdueCutoffStart(userDayWindow(0, new Date('2026-09-12T04:00:00Z')).start).toISOString() === '2026-09-10T00:00:00.000Z')
 
 console.log('digestAlreadySentToday — one send per local calendar day (08:00 PKT == 03:00Z)')
 const sent = (last: string | null | undefined, iso: string, offset = -300) =>

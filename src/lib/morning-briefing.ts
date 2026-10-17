@@ -5,7 +5,12 @@
 //
 //   • Due today      — open tasks whose dueDate falls inside the user's LOCAL
 //                      calendar day (same window maths as /api/dashboard)
-//   • Overdue        — open tasks due before today
+//   • Overdue        — open tasks that became due within the last 2 days
+//                      only (OVERDUE_LOOKBACK_DAYS). Older arrears are
+//                      deliberately dropped from the mail — "what's gone is
+//                      gone": a task overdue more than 2 days stops nagging
+//                      every morning. (The dashboard still shows the full
+//                      backlog; this limit is email-only.)
 //   • Reminders      — reminders active today (shared reminder-span rules:
 //                      recurrence + showDays windows + dismissal)
 //   • On the horizon — tasks due within the next 3 days plus opportunity and
@@ -29,6 +34,26 @@ import { SITE_NAME, SITE_URL, SUPPORT_EMAIL } from './site'
 import { recurrenceLabel, reminderActiveOn } from './reminder-span'
 
 const DAY_MS = 86_400_000
+
+/**
+ * How far back the briefing's Overdue section looks. A task whose dueDate is
+ * more than this many days before today never appears in the email again —
+ * the user explicitly asked to stop resurfacing old arrears ("overdue tasks
+ * of more than last 2 days should not be in the mail; before that, what's
+ * gone is gone"). Exported so scripts/verify-morning-notification.ts pins
+ * the window maths.
+ */
+export const OVERDUE_LOOKBACK_DAYS = 2
+
+/**
+ * Earliest dueDate the Overdue section still reports: local midnight
+ * (OVERDUE_LOOKBACK_DAYS) days before the given local midnight. Pure so the
+ * boundary can be unit-checked — a task due exactly this instant is day 2
+ * overdue and stays in the mail; anything earlier is gone.
+ */
+export function overdueCutoffStart(todayStart: Date): Date {
+  return new Date(todayStart.getTime() - OVERDUE_LOOKBACK_DAYS * DAY_MS)
+}
 
 // ── Pure day/time helpers ────────────────────────────────────────────────
 
@@ -384,6 +409,9 @@ async function collectForUser(userId: string, offsetMin: number, now: Date): Pro
   const in7 = new Date(now.getTime() + 7 * DAY_MS)
   const matchWindow = new Date(now.getTime() - 36 * 3_600_000)
 
+  // Overdue mail window: due before today, but not older than the 2-day
+  // lookback — older arrears are left out of the email entirely.
+  const overdueFrom = overdueCutoffStart(todayStart)
   const [dueTodayRows, overdueRows, reminderRows, horizonTaskRows, opportunities, goals, matchRows, draftsAwaiting] = await Promise.all([
     db.task.findMany({
       where: { userId, status: { not: 'done' }, dueDate: { gte: todayStart, lte: todayEnd } },
@@ -392,7 +420,7 @@ async function collectForUser(userId: string, offsetMin: number, now: Date): Pro
       include: { plan: { select: { title: true } } },
     }),
     db.task.findMany({
-      where: { userId, status: { not: 'done' }, dueDate: { lt: todayStart } },
+      where: { userId, status: { not: 'done' }, dueDate: { gte: overdueFrom, lt: todayStart } },
       orderBy: { dueDate: 'asc' },
       take: 15,
       include: { plan: { select: { title: true } } },
