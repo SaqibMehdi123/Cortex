@@ -1,7 +1,7 @@
 'use client'
 
 import { FaArrowTrendUp, FaBullseye, FaCalendarDay, FaCheck, FaChevronDown, FaChevronRight, FaCircleCheck, FaEllipsis, FaFire, FaPencil, FaPlus, FaRotateLeft, FaSpinner, FaTrashCan } from 'react-icons/fa6'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api, fmtDate, daysUntil } from '@/lib/client'
 import type { Goal, Milestone } from '@/lib/types'
 import { useApi } from '@/lib/client'
@@ -34,6 +34,23 @@ export function GoalsView() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [deletingGoal, setDeletingGoal] = useState<Goal | null>(null)
   const [deleteBusy, setDeleteBusy] = useState(false)
+  // Per-goal milestone scroller elements + last-seen milestone counts: a
+  // newly added milestone appends at the BOTTOM of the capped list (below
+  // its fold), so on count growth the scroller jumps to show it.
+  const scrollerRefs = useRef<Map<string, HTMLDivElement | null>>(new Map())
+  const prevCounts = useRef<Map<string, number>>(new Map())
+  useEffect(() => {
+    if (!data) return
+    for (const g of data.goals) {
+      const prev = prevCounts.current.get(g.id)
+      const now = g.milestones.length
+      prevCounts.current.set(g.id, now)
+      if (prev !== undefined && now > prev) {
+        const el = scrollerRefs.current.get(g.id)
+        if (el) el.scrollTop = el.scrollHeight
+      }
+    }
+  })
 
   async function toggleMilestone(goal: Goal, m: Milestone) {
     const done = !m.done
@@ -140,9 +157,23 @@ export function GoalsView() {
 
   const renderMilestones = (goal: Goal) => (
     <div className="anim-fade-up mt-3 space-y-1.5 border-t pt-3">
-      {goal.milestones.map((m) => (
-        <MilestoneRow key={m.id} m={m} onToggle={() => toggleMilestone(goal, m)} onDeleted={reload} />
-      ))}
+      {/* The list scrolls INSIDE the goal card (~4 rows visible) instead of
+          stretching the card — and with it the whole page — taller on every
+          added milestone. overscroll-contain stops the wheel from chaining
+          to the page scroll once the list end is reached; the small pr/nr
+          padding keeps the scrollbar from covering row text. The add input
+          stays pinned BELOW the scroller so new milestones never require
+          scrolling to reach. */}
+      {goal.milestones.length > 0 && (
+        <div
+          ref={(el) => { scrollerRefs.current.set(goal.id, el) }}
+          className="-mr-1 max-h-40 space-y-1.5 overflow-y-auto overscroll-contain pr-1"
+        >
+          {goal.milestones.map((m) => (
+            <MilestoneRow key={m.id} m={m} onToggle={() => toggleMilestone(goal, m)} onDeleted={reload} />
+          ))}
+        </div>
+      )}
       <AddMilestoneInline goalId={goal.id} onAdded={reload} />
     </div>
   )
