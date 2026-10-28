@@ -29,6 +29,13 @@ import { motion, AnimatePresence } from 'framer-motion'
 
 type PlanNode = Plan & { children: Plan[] }
 
+// Collapse-state persistence for the outline tree — the hide/show sub-items
+// toggle must survive page reloads, so the collapsed id set lives in
+// localStorage (IDs are DB ids, stable across sessions). Browser-wide by
+// design, same convention as reader.tsx's page markers; stale ids of since-
+// deleted plans/tasks are harmless (they simply never match again).
+const COLLAPSED_KEY = 'cortex:plans:collapsed'
+
 export function PlansView() {
   const { toast } = useToast()
   const setCaptureOpen = useUI((s) => s.setCaptureOpen)
@@ -47,6 +54,28 @@ export function PlansView() {
   const [addOpen, setAddOpen] = useState(false)
   const [templatesOpen, setTemplatesOpen] = useState(false)
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+
+  // Re-hydrate the saved collapse state once after mount. Reading localStorage
+  // during the render would throw on the server (Next SSRs client components'
+  // first paint) and would mismatch hydration — so the tree always renders
+  // expanded for that first paint and collapses the moment this lands.
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(COLLAPSED_KEY)
+      if (raw) setCollapsed(new Set(JSON.parse(raw) as string[]))
+    } catch {
+      /* corrupt or unavailable storage — start expanded */
+    }
+  }, [])
+  // Persist on every change. This also fires right after the hydration write
+  // above lands, writing back what was just read — idempotent.
+  useEffect(() => {
+    try {
+      localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...collapsed]))
+    } catch {
+      /* private mode / quota — collapsing just won't persist */
+    }
+  }, [collapsed])
   const [goalFor, setGoalFor] = useState<PlanNode | null>(null)
   const [editingTask, setEditingTask] = useState<Task | null>(null)
   const [editOpen, setEditOpen] = useState(false)
