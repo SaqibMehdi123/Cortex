@@ -197,10 +197,15 @@ export function TimePicker({
 
         {/* dial */}
         <div className="relative mx-auto aspect-square w-[196px] rounded-full border bg-muted/30">
-          {/* hand */}
+          {/* hand — a 0deg-rotated element points RIGHT (3 o'clock), but
+              handAngle is the clock angle counted from 12 (top), so the
+              transform must offset −90°. Without it the needle sat a quarter
+              turn ahead of the selected number (12 → pointed at 3, 3 → at 6,
+              …). Length matches the number ring (dialPos radiusPct = 38%) so
+              the tip lands on the selected chip; chips render above it. */}
           <div
-            className="absolute left-1/2 top-1/2 h-[1px] w-[26%] origin-left bg-primary"
-            style={{ transform: `rotate(${handAngle}deg)` }}
+            className="pointer-events-none absolute left-1/2 top-1/2 h-[1px] w-[38%] origin-left bg-primary"
+            style={{ transform: `rotate(${handAngle - 90}deg)` }}
             aria-hidden
           />
           <span className="absolute left-1/2 top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary" aria-hidden />
