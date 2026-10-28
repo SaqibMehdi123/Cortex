@@ -74,16 +74,30 @@ export function PlansView() {
     const right = b.toLocaleDateString('en-US', sameMonth ? { day: 'numeric' } : { month: 'short', day: 'numeric' })
     return `${left} – ${right}`
   }, [week])
-  // Step a whole week back/forward and carry the selected weekday along, so
-  // the day agenda and kanban immediately show the week you navigated to.
-  // Noon anchor: adding 7×24h at midnight can clip a day across DST.
+  // Relative tag over the pager's range — turns a bare date range into a
+  // position the eye can parse at a glance ("Last week" reads faster than
+  // "is Oct 19 before or after Oct 26?").
+  const relativeWeekLabel =
+    weekOffset === 0 ? 'This week'
+    : weekOffset === -1 ? 'Last week'
+    : weekOffset < 0 ? `${-weekOffset} weeks ago`
+    : weekOffset === 1 ? 'Next week'
+    : `In ${weekOffset} weeks`
+  const awayFromToday = weekOffset !== 0 || selectedDay !== todayISO()
+  // Step a whole week back/forward and land on the target week's EDGE day:
+  // going BACK enters the target week at its last day (Sunday — the day of
+  // that week closest to today, so from a Wednesday you land on the previous
+  // Sunday, not the previous Wednesday); going FORWARD enters at its first
+  // day (Monday — a planning pass starts at the week's beginning). The
+  // anchor derives from the current week's Monday (week[0]) so it is
+  // independent of whichever day happens to be selected.
   const shiftWeek = (dir: number) => {
+    const monday = new Date(week[0])
+    monday.setDate(monday.getDate() + dir * 7)
+    const anchor = new Date(monday)
+    if (dir < 0) anchor.setDate(anchor.getDate() + 6) // Sunday = last day
     setWeekOffset((o) => o + dir)
-    setSelectedDay((iso) => {
-      const d = new Date(`${iso}T12:00:00`)
-      d.setDate(d.getDate() + dir * 7)
-      return todayISO(d)
-    })
+    setSelectedDay(todayISO(anchor))
   }
   // Back to the current week + today.
   const goToday = () => {
@@ -269,24 +283,45 @@ export function PlansView() {
         </div>
       </div>
 
-      {/* Week strip — step back/forward between weeks to review any past day
-          (last Sunday included); drag a task onto a day to reschedule it. */}
+      {/* Week pager — one cohesive bar instead of a floating chevron pair:
+          chevrons at the edges, and a centered block that names WHERE you
+          are (relative tag + date range). When you're away from the current
+          week the block shows a "· ☀ Today" affordance and clicking it (or
+          the tag) snaps back to the current week + today in one tap.
+          Below it, the strip: drag a task onto a day to reschedule it. */}
       <div className="space-y-2">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1">
-            <Button variant="ghost" className="h-8 w-8 p-0" onClick={() => shiftWeek(-1)} aria-label="Previous week">
-              <FaChevronLeft className="h-4 w-4" />
-            </Button>
-            <span className="min-w-[104px] text-center text-xs font-semibold tabular-nums text-muted-foreground" aria-live="polite">{weekLabel}</span>
-            <Button variant="ghost" className="h-8 w-8 p-0" onClick={() => shiftWeek(1)} aria-label="Next week">
-              <FaChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
-          {(weekOffset !== 0 || selectedDay !== todayISO()) && (
-            <Button variant="outline" className="h-8 gap-1.5 px-2.5 text-xs" onClick={goToday}>
-              <FaSun className="h-3.5 w-3.5" /> Today
-            </Button>
-          )}
+        <div className="flex items-center gap-1 rounded-xl border bg-card px-2 py-1.5">
+          <Button variant="ghost" className="h-8 w-8 shrink-0 rounded-full p-0" onClick={() => shiftWeek(-1)} aria-label="Previous week">
+            <FaChevronLeft className="h-4 w-4" />
+          </Button>
+          <button
+            type="button"
+            onClick={goToday}
+            disabled={!awayFromToday}
+            className={cn(
+              'mx-1 flex min-w-0 flex-1 flex-col items-center rounded-lg px-2 py-0.5 leading-tight transition-colors',
+              awayFromToday ? 'hover:bg-muted' : 'cursor-default',
+            )}
+            aria-label={awayFromToday ? 'Back to the current week and today' : 'Viewing the current week'}
+          >
+            <span className={cn('text-[10px] font-bold uppercase tracking-widest', awayFromToday ? 'text-primary' : 'text-muted-foreground/60')} aria-live="polite">
+              {relativeWeekLabel}
+            </span>
+            <span className="flex items-center gap-1.5 text-xs font-semibold tabular-nums">
+              {weekLabel}
+              {awayFromToday && (
+                <>
+                  <span className="text-muted-foreground/50" aria-hidden>·</span>
+                  <span className="flex items-center gap-1 text-primary">
+                    <FaSun className="h-3 w-3" aria-hidden /> Today
+                  </span>
+                </>
+              )}
+            </span>
+          </button>
+          <Button variant="ghost" className="h-8 w-8 shrink-0 rounded-full p-0" onClick={() => shiftWeek(1)} aria-label="Next week">
+            <FaChevronRight className="h-4 w-4" />
+          </Button>
         </div>
         <div className="grid grid-cols-7 gap-1 sm:gap-2">
           {week.map((d) => {

@@ -73,13 +73,17 @@ export function TimePicker({
 }) {
   const [open, setOpen] = useState(false)
   const [mode, setMode] = useState<'hour' | 'minute'>('hour')
-  // selections live in dial terms until a complete time is composed
-  const [h12, setH12] = useState<number | null>(null)
-  const [ampm, setAmpm] = useState<Ampm>('AM')
-  const [min, setMin] = useState<number | null>(null)
+  // selections live in dial terms until a complete time is composed.
+  // Seeded lazily from the incoming value: lastValue below also starts as
+  // `value`, so the render-sync never fires on the FIRST render — without
+  // these initializers a form that mounts with a saved time (task edit)
+  // opened a dial at 12 / --:-- / AM, i.e. it forgot the previous time.
+  const [h12, setH12] = useState<number | null>(() => parseValue(value)?.h12 ?? null)
+  const [ampm, setAmpm] = useState<Ampm>(() => parseValue(value)?.ampm ?? 'AM')
+  const [min, setMin] = useState<number | null>(() => parseValue(value)?.min ?? null)
 
-  // re-sync internal state whenever the outer value changes — adjusted
-  // during render (React's documented pattern), not in an effect
+  // re-sync internal state whenever the outer value changes after mount —
+  // adjusted during render (React's documented pattern), not in an effect
   const [lastValue, setLastValue] = useState(value)
   if (value !== lastValue) {
     setLastValue(value)
