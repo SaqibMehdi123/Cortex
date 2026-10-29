@@ -253,8 +253,11 @@ export function SwipeTaskRow({
   const dragging = useRef(false)
 
   return (
-    <div className="relative overflow-hidden">
-      {/* action backgrounds */}
+    <div className="relative overflow-hidden rounded-lg">
+      {/* action backgrounds — only visible while the row is swiped aside.
+          The content layer below MUST stay opaque (border bg-card), or these
+          bleed through at rest as a permanent amber/green split behind every
+          task (regression shipped once — user flagged it with a screenshot). */}
       <div className="absolute inset-y-0 right-0 flex w-1/2 items-center justify-end bg-success/15 pr-4 text-success">
         <FaCheck className="h-5 w-5" />
       </div>
@@ -282,7 +285,7 @@ export function SwipeTaskRow({
             animate(x, 0, { type: 'spring', stiffness: 400, damping: 30 })
           }
         }}
-        className={cn('relative rounded-md transition-colors', hint === 'done' && 'bg-success/10 ring-1 ring-success/50', hint === 'snooze' && 'bg-warning/10 ring-1 ring-warning/50')}
+        className={cn('relative rounded-lg border bg-card', hint === 'done' && 'ring-2 ring-success/50', hint === 'snooze' && 'ring-2 ring-warning/50')}
       >
         {children}
       </motion.div>

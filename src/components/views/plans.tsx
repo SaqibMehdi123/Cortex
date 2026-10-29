@@ -53,6 +53,9 @@ export function PlansView() {
   const [weekOffset, setWeekOffset] = useState(0)
   const [addOpen, setAddOpen] = useState(false)
   const [templatesOpen, setTemplatesOpen] = useState(false)
+  // ISO date of the week-strip day currently hovered by a dragged task —
+  // paints a ring on the drop target so "drag to reschedule" is discoverable.
+  const [dragOverDay, setDragOverDay] = useState<string | null>(null)
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
 
   // Re-hydrate the saved collapse state once after mount. Reading localStorage
@@ -312,14 +315,16 @@ export function PlansView() {
         </div>
       </div>
 
-      {/* Week pager — one cohesive bar instead of a floating chevron pair:
-          chevrons at the edges, and a centered block that names WHERE you
-          are (relative tag + date range). When you're away from the current
-          week the block shows a "· ☀ Today" affordance and clicking it (or
-          the tag) snaps back to the current week + today in one tap.
-          Below it, the strip: drag a task onto a day to reschedule it. */}
-      <div className="space-y-2">
-        <div className="flex items-center gap-1 rounded-xl border bg-card px-2 py-1.5">
+      {/* Week navigator — ONE cohesive bar: nav row on top (chevrons + a
+          centered block that names WHERE you are: relative tag + date range,
+          with a "· ☀ Today" affordance when away from the current week),
+          a hairline divider, then the 7-day strip. Day states are ranked:
+          selected = solid filled pill (loudest), today = ring around the
+          number (classic calendar "you are here"), past days dimmed, so
+          today / selected / other days can never be confused. Cells also
+          accept dragged tasks to reschedule them (ring lights up on hover). */}
+      <div className="overflow-hidden rounded-xl border bg-card">
+        <div className="flex items-center gap-1 px-2 py-1.5">
           <Button variant="ghost" className="h-8 w-8 shrink-0 rounded-full p-0" onClick={() => shiftWeek(-1)} aria-label="Previous week">
             <FaChevronLeft className="h-4 w-4" />
           </Button>
@@ -352,19 +357,25 @@ export function PlansView() {
             <FaChevronRight className="h-4 w-4" />
           </Button>
         </div>
-        <div className="grid grid-cols-7 gap-1 sm:gap-2">
+        <div className="border-t" />
+        <div className="grid grid-cols-7 gap-0.5 p-1.5 sm:gap-1 sm:p-2">
           {week.map((d) => {
             // local calendar date (NOT toISOString — that slices the UTC date)
             const iso = todayISO(d)
             const isToday = iso === todayISO()
             const isSel = iso === selectedDay
+            // ISO strings compare lexicographically = chronologically
+            const isPast = iso < todayISO()
             return (
               <button
                 key={iso}
                 onClick={() => setSelectedDay(iso)}
                 onDragOver={(e) => e.preventDefault()}
+                onDragEnter={() => setDragOverDay(iso)}
+                onDragLeave={() => setDragOverDay((cur) => (cur === iso ? null : cur))}
                 onDrop={(e) => {
                   e.preventDefault()
+                  setDragOverDay(null)
                   const taskId = e.dataTransfer.getData('text/task-id')
                   if (taskId) {
                     // 09:00 in the USER's timezone, as a real instant — a bare
@@ -376,16 +387,32 @@ export function PlansView() {
                       .catch(() => toast({ title: 'Reschedule failed', variant: 'destructive' }))
                   }
                 }}
+                aria-pressed={isSel}
+                aria-current={isToday ? 'date' : undefined}
                 className={cn(
-                  'flex min-h-[58px] flex-col items-center justify-center gap-0.5 rounded-xl border bg-card p-1 transition-colors sm:min-h-[72px] sm:p-1.5',
-                  isSel && 'border-primary bg-primary/5',
-                  isToday && !isSel && 'border-primary/40'
+                  'flex min-h-[56px] flex-col items-center justify-center gap-1 rounded-lg py-1.5 transition-colors sm:min-h-[64px]',
+                  isSel ? 'bg-primary text-primary-foreground hover:bg-primary/90' : 'hover:bg-muted/60',
+                  !isSel && isPast && 'opacity-45 hover:opacity-80',
+                  !isSel && dragOverDay === iso && 'ring-2 ring-primary ring-inset',
                 )}
               >
                 {/* narrow single letter on phones, short name from sm up */}
-                <span className="text-[10px] font-medium uppercase text-muted-foreground sm:hidden" aria-hidden>{d.toLocaleDateString('en-US', { weekday: 'narrow' })}</span>
-                <span className="hidden text-[10px] font-medium uppercase text-muted-foreground sm:inline">{d.toLocaleDateString('en-US', { weekday: 'short' })}</span>
-                <span className={cn('text-base font-bold sm:text-lg', isToday && 'text-primary')}>{d.getDate()}</span>
+                <span className={cn('text-[10px] font-medium uppercase tracking-wide sm:hidden', isSel ? 'text-primary-foreground/70' : 'text-muted-foreground')} aria-hidden>
+                  {d.toLocaleDateString('en-US', { weekday: 'narrow' })}
+                </span>
+                <span className={cn('hidden text-[10px] font-medium uppercase tracking-wide sm:inline', isSel ? 'text-primary-foreground/70' : 'text-muted-foreground')}>
+                  {d.toLocaleDateString('en-US', { weekday: 'short' })}
+                </span>
+                {/* today (when not selected) gets a ring around the number —
+                    reads as the calendar "you are here" mark without shouting */}
+                <span
+                  className={cn(
+                    'flex h-7 w-7 items-center justify-center rounded-full text-sm font-semibold tabular-nums sm:h-8 sm:w-8 sm:text-base',
+                    isToday && !isSel && 'border-2 border-primary text-primary',
+                  )}
+                >
+                  {d.getDate()}
+                </span>
               </button>
             )
           })}
