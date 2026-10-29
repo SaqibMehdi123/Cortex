@@ -25,7 +25,10 @@ if p.stack: errs.append(f"unclosed tags: {p.stack}")
 
 must_have = ["id=\"dirA\"", "id=\"dirB\"", "id=\"dirC\"",
              "#i-shield", "i-shield\"", "Pick A", "Pick B", "Pick C",
-             "toast", "scrollIntoView", "5e6ad2", "171717", "635bff"]
+             "toast", "scrollIntoView", "5e6ad2", "171717", "635bff",
+             "data-pane=\"goals\"", "data-pane=\"plans\"", "data-pane=\"insights\"",
+             "data-go=\"goals\"", "data-go=\"plans\"", "data-go=\"insights\"",
+             "data-view=\"board\"", "data-expand", "class=\"kb\"", "cgr"]
 for m in must_have:
     if m not in html: errs.append(f"missing: {m}")
 
