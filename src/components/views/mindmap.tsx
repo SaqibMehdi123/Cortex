@@ -615,7 +615,7 @@ function Header({ onCreate, onBlank, hasMaps }: { onCreate: () => void; onBlank:
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Mindmaps</h1>
+        <h1 className="text-2xl font-semibold tracking-[-0.02em]">Mindmaps</h1>
         <p className="text-sm text-muted-foreground">Generate with AI, or build your own from scratch.</p>
       </div>
       {hasMaps && (
@@ -755,7 +755,7 @@ function GenerateDialog({ open, onOpenChange, onCreated }: { open: boolean; onOp
               onClick={() => setMode(m)}
               className={cn(
                 'min-h-[36px] flex-1 rounded-lg border text-xs font-medium capitalize transition-colors',
-                mode === m ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted'
+                mode === m ? 'border-primary bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'
               )}
             >
               {m}

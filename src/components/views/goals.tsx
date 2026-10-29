@@ -1,13 +1,13 @@
 'use client'
 
-import { FaArrowTrendUp, FaBullseye, FaCalendarDay, FaCheck, FaChevronDown, FaChevronRight, FaCircleCheck, FaEllipsis, FaFire, FaPencil, FaPlus, FaRotateLeft, FaSpinner, FaTrashCan } from 'react-icons/fa6'
+import { FaBullseye, FaCheck, FaChevronDown, FaChevronRight, FaCircleCheck, FaEllipsis, FaFire, FaPencil, FaPlus, FaRotateLeft, FaSpinner, FaTrashCan } from 'react-icons/fa6'
 import { useEffect, useRef, useState } from 'react'
 import { api, fmtDate, daysUntil } from '@/lib/client'
 import type { Goal, Milestone } from '@/lib/types'
 import { useApi } from '@/lib/client'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
-import { Progress } from '@/components/ui/progress'
+import { colorHex, EmptyState, PriorityDot, PageHeader, StatCard, StatRow, Panel, Meter } from '@/components/shared'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
@@ -20,7 +20,6 @@ import {
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer } from 'recharts'
 import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
-import { colorHex, EmptyState, SkeletonCard, PriorityDot } from '@/components/shared'
 import { fireConfetti } from '@/lib/confetti'
 
 const CATEGORIES = ['career', 'learning', 'health', 'personal', 'project']
@@ -109,14 +108,42 @@ export function GoalsView() {
 
   if (loading || !data) {
     return (
-      <div className="grid gap-4 pb-8 lg:grid-cols-2">
-        {[1, 2, 3, 4].map((i) => <SkeletonCard key={i} className="h-56" />)}
+      <div className="space-y-5 pb-8">
+        <StatRow>
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="rounded-[10px] border bg-card px-4 py-3.5 shadow-soft">
+              <Skeleton className="h-3 w-20" />
+              <Skeleton className="mt-2.5 h-6 w-14" />
+            </div>
+          ))}
+        </StatRow>
+        <div className="overflow-hidden rounded-[10px] border bg-card shadow-soft">
+          <div className="border-b px-4 py-3"><Skeleton className="h-4 w-32" /></div>
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="flex items-center gap-4 border-t px-4 py-4 first:border-t-0">
+              <Skeleton className="h-4 w-44" />
+              <Skeleton className="h-1.5 flex-1" />
+              <Skeleton className="h-3 w-10" />
+            </div>
+          ))}
+        </div>
       </div>
     )
   }
 
   const active = data.goals.filter((g) => g.status === 'active')
   const completed = data.goals.filter((g) => g.status === 'completed')
+
+  // Stat-row figures — all derived from the already-loaded goals, no extra API call
+  const totalMs = active.reduce((a, g) => a + g.milestones.length, 0)
+  const doneMs = active.reduce((a, g) => a + g.milestones.filter((m) => m.done).length, 0)
+  const avgPct = active.length
+    ? Math.round(active.reduce((a, g) => {
+        const d = g.milestones.filter((m) => m.done).length
+        return a + (g.milestones.length ? (d / g.milestones.length) * 100 : 0)
+      }, 0) / active.length)
+    : 0
+  const atRisk = active.filter((g) => { const dl = daysUntil(g.deadline); return dl !== null && dl < 0 }).length
 
   const goalMenu = (goal: Goal) => (
     <DropdownMenu>
@@ -156,7 +183,7 @@ export function GoalsView() {
   )
 
   const renderMilestones = (goal: Goal) => (
-    <div className="anim-fade-up mt-3 space-y-1.5 border-t pt-3">
+    <div className="anim-fade-up space-y-1.5">
       {/* The list scrolls INSIDE the goal card (~4 rows visible) instead of
           stretching the card — and with it the whole page — taller on every
           added milestone. overscroll-contain stops the wheel from chaining
@@ -179,18 +206,30 @@ export function GoalsView() {
   )
 
   return (
-    <div className="anim-fade-up space-y-4 pb-8">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-[-0.02em] sm:text-[1.7rem]">Goals</h1>
-          <p className="text-sm text-muted-foreground">Milestones, streaks and velocity — progress you can see.</p>
-        </div>
-        {active.length > 0 && (
+    <div className="anim-fade-up space-y-5 pb-8">
+      <PageHeader
+        title="Goals"
+        description="Milestones, streaks and velocity — progress you can see."
+        actions={active.length > 0 ? (
           <Button onClick={() => setCreateOpen(true)}>
             <FaPlus className="mr-1.5 h-4 w-4" /> New goal
           </Button>
-        )}
-      </div>
+        ) : undefined}
+      />
+
+      {active.length > 0 && (
+        <StatRow>
+          <StatCard label="Active goals" value={active.length} delta={`${totalMs - doneMs} milestone${totalMs - doneMs === 1 ? '' : 's'} open`} />
+          <StatCard
+            label="Average progress"
+            value={`${avgPct}%`}
+            delta={totalMs > 0 ? `${doneMs} of ${totalMs} milestones done` : 'no milestones yet'}
+            tone={avgPct >= 50 ? 'up' : 'flat'}
+          />
+          <StatCard label="At risk" value={atRisk} delta={atRisk > 0 ? 'past deadline' : 'all on schedule'} tone={atRisk > 0 ? 'down' : 'up'} />
+          <StatCard label="Completed" value={completed.length} delta="all time" />
+        </StatRow>
+      )}
 
       {active.length === 0 ? (
         <EmptyState
@@ -198,136 +237,147 @@ export function GoalsView() {
           title={completed.length > 0 ? 'No active goals right now' : 'Set your first goal'}
           description={
             completed.length > 0
-              ? 'You completed everything — time to aim at something new. Break it into milestones and watch the progress ring build up.'
-              : 'Break a big ambition into milestones, check them off, and watch the progress ring and streak build up.'
+              ? 'You completed everything — time to aim at something new. Break it into milestones and watch the meter fill up.'
+              : 'Break a big ambition into milestones, check them off, and watch the meters and streaks build up.'
           }
           action={{ label: 'Create a goal', onClick: () => setCreateOpen(true) }}
         />
       ) : (
-        <div className="grid gap-4 lg:grid-cols-2">
-          {active.map((goal) => {
+        <Panel title="All active goals" count={active.length}>
+          {active.map((goal, idx) => {
             const done = goal.milestones.filter((m) => m.done).length
             const pct = goal.milestones.length ? Math.round((done / goal.milestones.length) * 100) : 0
             const dl = daysUntil(goal.deadline)
             const isOpen = expanded.has(goal.id)
-            const hex = colorHex(goal.color)
             const velData = (goal.velocity ?? []).map((v, i) => ({ week: `W${i + 1}`, completed: v }))
+            const due = goal.deadline
+              ? dl !== null && dl < 0
+                ? `${-dl}d overdue`
+                : dl !== null && dl <= 14
+                  ? `${dl}d left`
+                  : fmtDate(goal.deadline, { month: 'short', day: 'numeric' })
+              : null
 
             return (
-              <Card key={goal.id} className="transition-shadow hover:shadow-soft">
-                <CardContent className="p-5">
-                  <div className="flex items-start gap-3">
-                    <span className="mt-1 h-3 w-3 shrink-0 rounded-full" style={{ background: hex }} />
-                    <div className="min-w-0 flex-1">
-                      <p className="font-semibold leading-snug">{goal.title}</p>
-                      {goal.description && <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">{goal.description}</p>}
-                    </div>
+              <div key={goal.id} className={cn('px-4 py-3.5', idx > 0 && 'border-t')}>
+                {/* B-row anatomy: title → meter → mono figures → actions.
+                    Wraps to a stacked layout under sm; md+ adds the ms count
+                    so the row reads like the approved sample. */}
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2.5">
+                  <div className="flex w-full min-w-0 items-center gap-2 sm:w-[248px] sm:flex-none">
+                    <p className="min-w-0 flex-1 truncate text-[13.5px] font-medium leading-snug">{goal.title}</p>
                     {goal.streak > 0 && (
-                      <span className="flex shrink-0 items-center gap-1 rounded-full bg-warning/10 px-2 py-1 text-xs font-semibold text-warning">
-                        <FaFire className="h-3.5 w-3.5" /> {goal.streak}
+                      <span className="flex shrink-0 items-center gap-0.5 font-mono text-xs tabular-nums text-warning" title={`${goal.streak}-day streak`}>
+                        <FaFire className="h-3 w-3" />{goal.streak}
                       </span>
                     )}
+                  </div>
+                  <div className="flex min-w-[140px] flex-1 items-center gap-2.5">
+                    <Meter value={pct} className="flex-1" />
+                    <span className="w-10 shrink-0 text-right font-mono text-xs font-medium tabular-nums">{pct}%</span>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-4 font-mono text-xs tabular-nums text-muted-foreground">
+                    <span className="hidden md:inline">{done}/{goal.milestones.length} ms</span>
+                    {due && (
+                      <span className={cn(dl !== null && dl < 0 ? 'font-medium text-danger' : dl !== null && dl <= 14 ? 'text-warning' : '')}>
+                        {due}
+                      </span>
+                    )}
+                  </div>
+                  <div className="ml-auto flex shrink-0 items-center sm:ml-0">
                     {goalMenu(goal)}
-                    <button onClick={() => toggleExpand(goal.id)} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted" aria-label={isOpen ? 'Collapse' : 'Expand milestones'}>
+                    <button onClick={() => toggleExpand(goal.id)} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted" aria-label={isOpen ? 'Collapse' : 'Expand milestones'}>
                       {isOpen ? <FaChevronDown className="h-4 w-4" /> : <FaChevronRight className="h-4 w-4" />}
                     </button>
                   </div>
+                </div>
 
-                  <div className="mt-3 flex items-center gap-3">
-                    <Progress value={pct} className="h-2" style={{ ['--progress-bg' as string]: hex }} />
-                    <span className="shrink-0 font-mono text-xs font-semibold tabular-nums" style={{ color: hex }}>{pct}%</span>
-                  </div>
-
-                  <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                    <span className="tabular-nums">{done}/{goal.milestones.length} milestones</span>
-                    {goal.deadline && (
-                      <span className={cn('inline-flex items-center gap-1', dl !== null && dl < 0 && 'font-medium text-danger', dl !== null && dl >= 0 && dl <= 14 && 'text-warning')}>
-                        <FaCalendarDay className="h-3 w-3" />
-                        {dl !== null && dl < 0 ? `${-dl}d overdue` : dl !== null ? `${dl}d left` : fmtDate(goal.deadline)}
-                      </span>
+                {isOpen && (
+                  <div className="anim-fade-up mt-3 border-t pt-3">
+                    {goal.description && <p className="mb-2.5 text-xs leading-relaxed text-muted-foreground">{goal.description}</p>}
+                    {velData.length > 0 && (
+                      <div className="mb-2.5 flex items-center gap-3 text-foreground">
+                        <div className="h-10 min-w-0 flex-1">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={velData} margin={{ top: 2, right: 0, bottom: 0, left: 0 }}>
+                              <defs>
+                                <linearGradient id={`vel-${goal.id}`} x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="0%" stopColor="currentColor" stopOpacity={0.16} />
+                                  <stop offset="100%" stopColor="currentColor" stopOpacity={0} />
+                                </linearGradient>
+                              </defs>
+                              <XAxis dataKey="week" hide />
+                              <YAxis hide allowDecimals={false} />
+                              <Area type="monotone" dataKey="completed" stroke="currentColor" strokeWidth={1.5} fill={`url(#vel-${goal.id})`} />
+                            </AreaChart>
+                          </ResponsiveContainer>
+                        </div>
+                        <span className="shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground">
+                          {goal.velocity?.reduce((a, b) => a + b, 0) ?? 0} / 8wk
+                        </span>
+                      </div>
                     )}
-                    <span className="inline-flex items-center gap-1 tabular-nums">
-                      <FaArrowTrendUp className="h-3 w-3" /> {goal.velocity?.reduce((a, b) => a + b, 0) ?? 0} / 8wk
-                    </span>
+                    {/* milestone checklist — the capped in-card scroller lives here */}
+                    {renderMilestones(goal)}
                   </div>
-
-                  {/* mini velocity sparkline */}
-                  <div className="mt-3 h-14">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={velData} margin={{ top: 2, right: 0, bottom: 0, left: 0 }}>
-                        <defs>
-                          <linearGradient id={`vel-${goal.id}`} x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor={hex} stopOpacity={0.35} />
-                            <stop offset="100%" stopColor={hex} stopOpacity={0} />
-                          </linearGradient>
-                        </defs>
-                        <XAxis dataKey="week" hide />
-                        <YAxis hide allowDecimals={false} />
-                        <Area type="monotone" dataKey="completed" stroke={hex} strokeWidth={1.5} fill={`url(#vel-${goal.id})`} />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </div>
-
-                  {/* milestone checklist */}
-                  {isOpen && renderMilestones(goal)}
-                </CardContent>
-              </Card>
+                )}
+              </div>
             )
           })}
-        </div>
+        </Panel>
       )}
 
       {completed.length > 0 && (
-        <>
-          <h2 className="flex items-center gap-2 pt-3 text-sm font-semibold text-muted-foreground">
-            Completed
-          </h2>
-          <div className="grid gap-4 sm:grid-cols-2">
-            {completed.map((goal) => {
-              const done = goal.milestones.filter((m) => m.done).length
-              const pct = goal.milestones.length ? Math.round((done / goal.milestones.length) * 100) : 100
-              const isOpen = expanded.has(goal.id)
-              const hex = colorHex(goal.color)
+        <Panel title="Completed" count={completed.length}>
+          {completed.map((goal, idx) => {
+            const pct = goal.milestones.length ? Math.round((goal.milestones.filter((m) => m.done).length / goal.milestones.length) * 100) : 100
+            const isOpen = expanded.has(goal.id)
 
-              return (
-                <Card key={goal.id} className="border-success/30 bg-success/5 transition-shadow hover:shadow-soft">
-                  <CardContent className="p-5">
-                    <div className="flex items-start gap-3">
-                      <span className="mt-1 h-3 w-3 shrink-0 rounded-full" style={{ background: hex }} />
-                      <div className="min-w-0 flex-1">
-                        <p className="font-semibold leading-snug">{goal.title}</p>
-                        <p className="mt-0.5 text-xs text-muted-foreground">
-                          Completed{goal.completedAt ? ` ${fmtDate(goal.completedAt, { month: 'short', day: 'numeric' })}` : ''} · {goal.milestones.length} milestones
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => setStatus(goal, 'active')}
-                        className="flex h-7 shrink-0 items-center gap-1.5 rounded-lg border border-success/40 bg-background px-2 text-xs font-medium text-success transition-colors hover:bg-success/10"
-                        aria-label={`Reopen ${goal.title}`}
-                      >
-                        <FaRotateLeft className="h-3.5 w-3.5" /> Reopen
+            return (
+              <div key={goal.id} className={cn('px-4 py-3.5', idx > 0 && 'border-t')}>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2.5">
+                  <div className="flex w-full min-w-0 items-center gap-2.5 sm:w-[248px] sm:flex-none">
+                    <FaCircleCheck className="h-4 w-4 shrink-0 text-success" aria-hidden />
+                    <p className="min-w-0 flex-1 truncate text-[13.5px] font-medium leading-snug">{goal.title}</p>
+                  </div>
+                  <div className="flex min-w-[140px] flex-1 items-center gap-2.5">
+                    <Meter value={pct} className="flex-1" />
+                    <span className="w-10 shrink-0 text-right font-mono text-xs font-medium tabular-nums">{pct}%</span>
+                  </div>
+                  <span className="hidden shrink-0 font-mono text-xs tabular-nums text-muted-foreground md:inline">
+                    Done{goal.completedAt ? ` ${fmtDate(goal.completedAt, { month: 'short', day: 'numeric' })}` : ''} · {goal.milestones.length} ms
+                  </span>
+                  <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:ml-0">
+                    <button
+                      onClick={() => setStatus(goal, 'active')}
+                      className="flex h-7 shrink-0 items-center gap-1.5 rounded-md border px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                      aria-label={`Reopen ${goal.title}`}
+                    >
+                      <FaRotateLeft className="h-3 w-3" /> Reopen
+                    </button>
+                    {goalMenu(goal)}
+                    {goal.milestones.length > 0 && (
+                      <button onClick={() => toggleExpand(goal.id)} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted" aria-label={isOpen ? 'Collapse' : 'Expand milestones'}>
+                        {isOpen ? <FaChevronDown className="h-4 w-4" /> : <FaChevronRight className="h-4 w-4" />}
                       </button>
-                      {goalMenu(goal)}
-                      {goal.milestones.length > 0 && (
-                        <button onClick={() => toggleExpand(goal.id)} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted" aria-label={isOpen ? 'Collapse' : 'Expand milestones'}>
-                          {isOpen ? <FaChevronDown className="h-4 w-4" /> : <FaChevronRight className="h-4 w-4" />}
-                        </button>
-                      )}
-                    </div>
+                    )}
+                  </div>
+                </div>
 
-                    <div className="mt-3 flex items-center gap-3">
-                      <Progress value={pct} className="h-2" style={{ ['--progress-bg' as string]: hex }} />
-                      <span className="shrink-0 font-mono text-xs font-semibold tabular-nums" style={{ color: hex }}>{pct}%</span>
-                    </div>
+                {/* milestones stay fully editable — unchecking one reopens the goal */}
+                {isOpen && goal.milestones.length > 0 && (
+                  <div className="mt-3 border-t pt-3">{renderMilestones(goal)}</div>
+                )}
+              </div>
+            )
+          })}
+        </Panel>
+      )}
 
-                    {/* milestones stay fully editable — unchecking one reopens the goal */}
-                    {isOpen && goal.milestones.length > 0 && renderMilestones(goal)}
-                  </CardContent>
-                </Card>
-              )
-            })}
-          </div>
-        </>
+      {(active.length > 0 || completed.length > 0) && (
+        <p className="font-mono text-xs tabular-nums text-muted-foreground">
+          Showing {active.length} active · {completed.length} completed
+        </p>
       )}
 
       <CreateGoalDialog open={createOpen} onOpenChange={setCreateOpen} onCreated={() => reload()} />

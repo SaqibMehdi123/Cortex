@@ -1,11 +1,11 @@
 'use client'
 
-import { FaArrowTrendUp, FaBookOpen, FaBullseye, FaGraduationCap, FaLayerGroup, FaListCheck, FaStopwatch, FaTriangleExclamation } from 'react-icons/fa6'
+import { FaArrowTrendUp, FaBookOpen, FaListCheck, FaStopwatch, FaTriangleExclamation } from 'react-icons/fa6'
 import { useState } from 'react'
 import { useApi } from '@/lib/client'
 import type { AnalyticsData } from '@/lib/types'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { SkeletonCard, EmptyState } from '@/components/shared'
+import { SkeletonCard, EmptyState, StatCard, StatRow } from '@/components/shared'
 import { cn } from '@/lib/utils'
 import {
   AreaChart, Area, BarChart, Bar, LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip as ReTooltip, CartesianGrid,
@@ -63,27 +63,27 @@ export function AnalyticsView() {
     data.totals.docsFinished > 0
 
   const tiles = [
-    { label: 'Reading time', value: fmtMinutes(data.totals.readingMinutes), icon: <FaBookOpen className="h-4 w-4" />, color: 'text-primary' },
-    { label: 'Tasks completed', value: data.totals.tasksCompleted, icon: <FaListCheck className="h-4 w-4" />, color: 'text-success' },
-    { label: 'Focus time', value: fmtMinutes(data.totals.focusMinutes), icon: <FaStopwatch className="h-4 w-4" />, color: 'text-warning' },
-    { label: 'Cards reviewed', value: data.totals.flashcardsReviewed, icon: <FaLayerGroup className="h-4 w-4" />, color: 'text-teal-500' },
-    { label: 'Active goals', value: data.totals.activeGoals, icon: <FaBullseye className="h-4 w-4" />, color: 'text-violet-500' },
-    { label: 'Docs finished', value: data.totals.docsFinished, icon: <FaGraduationCap className="h-4 w-4" />, color: 'text-cyan-500' },
+    { label: 'Reading time', value: fmtMinutes(data.totals.readingMinutes) },
+    { label: 'Tasks completed', value: data.totals.tasksCompleted },
+    { label: 'Focus time', value: fmtMinutes(data.totals.focusMinutes) },
+    { label: 'Cards reviewed', value: data.totals.flashcardsReviewed },
+    { label: 'Active goals', value: data.totals.activeGoals },
+    { label: 'Docs finished', value: data.totals.docsFinished },
   ]
 
   return (
     <div className="anim-fade-up space-y-4 pb-8">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Analytics</h1>
+          <h1 className="text-2xl font-semibold tracking-[-0.02em]">Analytics</h1>
           <p className="text-sm text-muted-foreground">Reading, tasks, focus and goal velocity.</p>
         </div>
-        <div className="overflow-hidden rounded-lg border">
+        <div className="overflow-hidden rounded-md border">
           {(['week', 'month'] as const).map((r) => (
             <button
               key={r}
               onClick={() => setRange(r)}
-              className={cn('min-h-[36px] px-4 text-xs font-medium capitalize transition-colors', r === 'month' && 'border-l', range === r ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted')}
+              className={cn('min-h-[32px] px-4 text-xs font-medium capitalize transition-colors', r === 'month' && 'border-l', range === r ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted')}
             >
               {r}
             </button>
@@ -91,19 +91,12 @@ export function AnalyticsView() {
         </div>
       </div>
 
-      {/* stat tiles */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      {/* stat row — mono numerals, no icon noise */}
+      <StatRow cols={6}>
         {tiles.map((t) => (
-          <Card key={t.label} className="transition-shadow hover:shadow-soft">
-            <CardContent className="p-4">
-              <div className={cn('flex items-center gap-1.5 text-xs text-muted-foreground', t.color)}>
-                {t.icon} {t.label}
-              </div>
-              <p className="mt-1.5 text-xl font-bold">{t.value}</p>
-            </CardContent>
-          </Card>
+          <StatCard key={t.label} label={t.label} value={t.value} />
         ))}
-      </div>
+      </StatRow>
 
       {!hasAnyData ? (
         <EmptyState

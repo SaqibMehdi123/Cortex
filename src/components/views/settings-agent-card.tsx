@@ -170,7 +170,7 @@ export function AgentCard() {
                   onClick={() => setPrefs((p) => ({ ...p, remote: k }))}
                   className={cn(
                     'rounded-full border px-3 py-1 text-xs font-medium',
-                    (prefs.remote ?? 'any') === k ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted'
+                    (prefs.remote ?? 'any') === k ? 'border-primary bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'
                   )}
                 >
                   {k === 'remote' ? 'Remote only' : k === 'hybrid_onsite' ? 'Hybrid/onsite OK' : 'Any'}
@@ -187,7 +187,7 @@ export function AgentCard() {
                   onClick={() => toggleFamily(f.key)}
                   className={cn(
                     'rounded-full border px-3 py-1 text-xs font-medium',
-                    (prefs.roleFamilies ?? []).includes(f.key) ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted'
+                    (prefs.roleFamilies ?? []).includes(f.key) ? 'border-primary bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'
                   )}
                 >
                   {f.label}

@@ -156,7 +156,7 @@ export function FlashcardsView() {
     <div className="anim-fade-up space-y-4 pb-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
+          <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-[-0.02em]">
             <FaLayerGroup className="h-6 w-6 text-primary" /> Flashcards
           </h1>
           <p className="text-sm text-muted-foreground">Spaced repetition — highlights become memory.</p>
@@ -172,7 +172,7 @@ export function FlashcardsView() {
       <Card className={cn('border', due > 0 ? 'border-primary/30 bg-sidebar-accent/40' : 'bg-card')}>
         <CardContent className="flex flex-wrap items-center gap-4 p-5">
           <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-            <span className="text-2xl font-bold">{due}</span>
+            <span className="font-mono text-xl font-medium tracking-[-0.02em] tabular-nums">{due}</span>
           </div>
           <div className="min-w-0 flex-1">
             <p className="font-semibold">{due > 0 ? <>card{due === 1 ? '' : 's'} due today</> : 'All caught up!'}</p>

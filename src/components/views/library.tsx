@@ -238,21 +238,21 @@ export function LibraryView() {
     <div className="anim-fade-up space-y-4 pb-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Library</h1>
+          <h1 className="text-2xl font-semibold tracking-[-0.02em]">Library</h1>
           <p className="text-sm text-muted-foreground">Everything you&apos;re reading — papers, articles, books.</p>
         </div>
         <div className="flex items-center gap-2">
           <div className="hidden overflow-hidden rounded-lg border sm:flex">
             <button
               onClick={() => setLayout('grid')}
-              className={cn('flex h-9 w-9 items-center justify-center transition-colors', layout === 'grid' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted')}
+              className={cn('flex h-9 w-9 items-center justify-center transition-colors', layout === 'grid' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted')}
               aria-label="Grid view"
             >
               <FaBorderAll className="h-4 w-4" />
             </button>
             <button
               onClick={() => setLayout('list')}
-              className={cn('flex h-9 w-9 items-center justify-center transition-colors', layout === 'list' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted')}
+              className={cn('flex h-9 w-9 items-center justify-center transition-colors', layout === 'list' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted')}
               aria-label="List view"
             >
               <FaList className="h-4 w-4" />
@@ -429,7 +429,7 @@ export function LibraryView() {
                   onClick={() => setStatus(s)}
                   className={cn(
                     'min-h-[36px] rounded-full border px-3.5 text-xs font-medium capitalize transition-colors',
-                    status === s ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted'
+                    status === s ? 'border-primary bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'
                   )}
                 >
                   {s === 'queued' ? 'read later' : s}

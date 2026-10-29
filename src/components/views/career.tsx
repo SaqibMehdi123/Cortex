@@ -202,7 +202,7 @@ export function CareerView() {
   return (
     <div className="anim-fade-up space-y-4 pb-8">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Career</h1>
+        <h1 className="text-2xl font-semibold tracking-[-0.02em]">Career</h1>
         <p className="text-sm text-muted-foreground">Track applications, browse live listings and save scholarships.</p>
       </div>
 
@@ -524,10 +524,10 @@ function AddApplicationDialog({ open, onOpenChange, onCreated }: { open: boolean
         </DialogHeader>
 
         <div className="flex gap-1.5">
-          <button onClick={() => setMode('email')} className={cn('flex min-h-[36px] flex-1 items-center justify-center gap-1.5 rounded-lg border text-xs font-medium transition-colors', mode === 'email' ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted')}>
+          <button onClick={() => setMode('email')} className={cn('flex min-h-[36px] flex-1 items-center justify-center gap-1.5 rounded-lg border text-xs font-medium transition-colors', mode === 'email' ? 'border-primary bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted')}>
             <FaTriangleExclamation className="h-3.5 w-3.5" /> Parse an email
           </button>
-          <button onClick={() => setMode('manual')} className={cn('flex min-h-[36px] flex-1 items-center justify-center gap-1.5 rounded-lg border text-xs font-medium transition-colors', mode === 'manual' ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted')}>
+          <button onClick={() => setMode('manual')} className={cn('flex min-h-[36px] flex-1 items-center justify-center gap-1.5 rounded-lg border text-xs font-medium transition-colors', mode === 'manual' ? 'border-primary bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted')}>
             Manual entry
           </button>
         </div>
@@ -753,7 +753,7 @@ function DiscoverTab() {
               onClick={() => setType(t.key)}
               className={cn(
                 'rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
-                type === t.key ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted',
+                type === t.key ? 'border-primary bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted',
               )}
             >
               {t.label}
@@ -764,7 +764,7 @@ function DiscoverTab() {
             onClick={() => setRegion(region === 'pakistan' ? '' : 'pakistan')}
             className={cn(
               'flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
-              region === 'pakistan' ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted',
+              region === 'pakistan' ? 'border-primary bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted',
             )}
             aria-pressed={region === 'pakistan'}
           >
@@ -774,7 +774,7 @@ function DiscoverTab() {
             onClick={() => setSavedOnly(!savedOnly)}
             className={cn(
               'flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
-              savedOnly ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted',
+              savedOnly ? 'border-primary bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted',
             )}
           >
             <FaBookmark className="h-3.5 w-3.5" /> Saved
@@ -783,7 +783,7 @@ function DiscoverTab() {
             onClick={() => setShortlistedOnly(!shortlistedOnly)}
             className={cn(
               'flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
-              shortlistedOnly ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted',
+              shortlistedOnly ? 'border-primary bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted',
             )}
           >
             <FaWandMagicSparkles className="h-3.5 w-3.5" /> Shortlisted
@@ -847,7 +847,7 @@ function DiscoverTab() {
               onClick={() => setFamily('')}
               className={cn(
                 'rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
-                family === '' ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted',
+                family === '' ? 'border-primary bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted',
               )}
             >
               All roles
@@ -858,7 +858,7 @@ function DiscoverTab() {
                 onClick={() => setFamily(family === f.family ? '' : f.family)}
                 className={cn(
                   'rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
-                  family === f.family ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted',
+                  family === f.family ? 'border-primary bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted',
                 )}
               >
                 {FAMILY_LABELS[f.family] ?? f.family}
@@ -906,7 +906,7 @@ function DiscoverTab() {
                     disabled={busyId === l.id}
                     className={cn(
                       'flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border transition-colors',
-                      l.saved ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted',
+                      l.saved ? 'border-primary bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted',
                     )}
                     aria-label={l.saved ? 'Saved to pipeline' : 'Save to pipeline'}
                     title={l.saved ? 'Saved to pipeline' : 'Save to pipeline'}
@@ -1112,7 +1112,7 @@ function ScholarshipsTab() {
               onClick={() => setKind(k.key)}
               className={cn(
                 'rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
-                kind === k.key ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted',
+                kind === k.key ? 'border-primary bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted',
               )}
             >
               {k.label}
@@ -1126,7 +1126,7 @@ function ScholarshipsTab() {
               onClick={() => setLevel(l.key)}
               className={cn(
                 'rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
-                level === l.key ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted',
+                level === l.key ? 'border-primary bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted',
               )}
             >
               {l.label}
@@ -1137,7 +1137,7 @@ function ScholarshipsTab() {
             onClick={() => setSavedOnly(!savedOnly)}
             className={cn(
               'flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
-              savedOnly ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted',
+              savedOnly ? 'border-primary bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted',
             )}
           >
             <FaBookmark className="h-3.5 w-3.5" /> Saved
@@ -1192,7 +1192,7 @@ function ScholarshipsTab() {
                       disabled={busyId === s.id}
                       className={cn(
                         'flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border transition-colors',
-                        s.saved ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted',
+                        s.saved ? 'border-primary bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted',
                       )}
                       aria-label={s.saved ? 'Saved' : 'Save scholarship'}
                       title={s.saved ? 'Saved' : 'Save to shortlist'}

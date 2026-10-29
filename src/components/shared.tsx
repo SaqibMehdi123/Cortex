@@ -26,6 +26,97 @@ export function colorHex(color?: string | null) {
   return GOAL_COLORS[color ?? 'indigo'] ?? GOAL_COLORS.indigo
 }
 
+// ─── Vercel-mono structural primitives ─────────────────────────────
+// The B direction is a LAYOUT language, not just a palette: stat cards
+// with mono numerals, one flat panel of hairline rows, horizontal
+// meters. These primitives encode that so every view stays consistent.
+
+// Stat card: quiet label → large Geist Mono value → mono delta line.
+// tone: 'up' (green) | 'down' (red) | 'flat' (muted) — used sparingly,
+// color only ever carries status, never decoration.
+export function StatCard({
+  label,
+  value,
+  delta,
+  tone = 'flat',
+  onClick,
+}: {
+  label: string
+  value: ReactNode
+  delta?: ReactNode
+  tone?: 'up' | 'down' | 'flat'
+  onClick?: () => void
+}) {
+  const toneCls = tone === 'up' ? 'text-success' : tone === 'down' ? 'text-danger' : 'text-muted-foreground'
+  const Tag = onClick ? 'button' : 'div'
+  return (
+    <Tag
+      onClick={onClick}
+      className={cn(
+        'block w-full rounded-[10px] border bg-card px-4 py-3.5 text-left shadow-soft',
+        onClick && 'transition-colors hover:bg-muted/40'
+      )}
+    >
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="mt-1 font-mono text-[26px] font-medium leading-none tracking-[-0.03em] tabular-nums">{value}</div>
+      {delta !== undefined && <div className={cn('mt-1.5 font-mono text-xs tabular-nums', toneCls)}>{delta}</div>}
+    </Tag>
+  )
+}
+
+// Responsive row of stat cards: 2-up on mobile, N-up from sm up.
+export function StatRow({ children, cols = 4 }: { children: ReactNode; cols?: 3 | 4 | 6 }) {
+  const sm = cols === 3 ? 'sm:grid-cols-3' : cols === 4 ? 'sm:grid-cols-4' : 'sm:grid-cols-3 lg:grid-cols-6'
+  return <div className={cn('grid grid-cols-2 gap-3.5', sm)}>{children}</div>
+}
+
+// Flat panel: one bordered card, header row, children are hairline rows.
+// This replaces grids of chunky cards — the Vercel list register.
+export function Panel({
+  title,
+  count,
+  action,
+  children,
+  className,
+}: {
+  title: ReactNode
+  count?: ReactNode
+  action?: ReactNode
+  children: ReactNode
+  className?: string
+}) {
+  return (
+    <section className={cn('overflow-hidden rounded-[10px] border bg-card shadow-soft', className)}>
+      <header className="flex min-h-[46px] items-center gap-2 border-b px-4 py-2.5">
+        <h2 className="text-[13px] font-semibold tracking-[-0.01em]">{title}</h2>
+        {count !== undefined && <span className="font-mono text-xs tabular-nums text-muted-foreground">{count}</span>}
+        {action && <div className="ml-auto flex items-center gap-2">{action}</div>}
+      </header>
+      {children}
+    </section>
+  )
+}
+
+// Hairline row inside a Panel — every row after the first gets a top border.
+export function PanelRow({ children, className, first }: { children: ReactNode; className?: string; first?: boolean }) {
+  return (
+    <div className={cn('flex items-center gap-3 px-4 py-3 text-sm', !first && 'border-t', className)}>
+      {children}
+    </div>
+  )
+}
+
+// Horizontal meter — the B progress bar: thin track in border color,
+// near-black fill. `value` 0..100. Mono pct is rendered by the caller.
+export function Meter({ value, className }: { value: number; className?: string }) {
+  const pct = Math.min(100, Math.max(0, value))
+  return (
+    <div className={cn('h-[6px] w-full overflow-hidden rounded-[3px] bg-border', className)} role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
+      <div className="h-full rounded-[3px] bg-primary transition-[width] duration-500 ease-out" style={{ width: `${pct}%` }} />
+    </div>
+  )
+}
+
 // ─── Progress ring (SVG) ───────────────────────────────────────────
 export function ProgressRing({
   value,
@@ -162,7 +253,7 @@ export function SwipeTaskRow({
   const dragging = useRef(false)
 
   return (
-    <div className="relative overflow-hidden rounded-lg">
+    <div className="relative overflow-hidden">
       {/* action backgrounds */}
       <div className="absolute inset-y-0 right-0 flex w-1/2 items-center justify-end bg-success/15 pr-4 text-success">
         <FaCheck className="h-5 w-5" />
@@ -191,7 +282,7 @@ export function SwipeTaskRow({
             animate(x, 0, { type: 'spring', stiffness: 400, damping: 30 })
           }
         }}
-        className={cn('relative rounded-lg border bg-card', hint === 'done' && 'ring-2 ring-success/50', hint === 'snooze' && 'ring-2 ring-warning/50')}
+        className={cn('relative rounded-md transition-colors', hint === 'done' && 'bg-success/10 ring-1 ring-success/50', hint === 'snooze' && 'bg-warning/10 ring-1 ring-warning/50')}
       >
         {children}
       </motion.div>

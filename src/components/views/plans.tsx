@@ -286,17 +286,17 @@ export function PlansView() {
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Plans</h1>
+          <h1 className="text-2xl font-semibold tracking-[-0.02em]">Plans</h1>
           <p className="text-sm text-muted-foreground">Year → Quarter → Month → Week → Day, with deadlines, tasks and focus.</p>
         </div>
         {/* full-width row on mobile; labels collapse to icons — four labeled
             controls + the view toggle can't fit a 390px viewport in one line */}
         <div className="flex w-full items-center gap-2 sm:w-auto">
           <div className="flex overflow-hidden rounded-lg border">
-            <button onClick={() => setMode('outline')} className={cn('flex h-9 items-center gap-1.5 whitespace-nowrap px-3 text-xs font-medium transition-colors', mode === 'outline' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted')} aria-label="Outline view">
+            <button onClick={() => setMode('outline')} className={cn('flex h-9 items-center gap-1.5 whitespace-nowrap px-3 text-xs font-medium transition-colors', mode === 'outline' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted')} aria-label="Outline view">
               <FaList className="h-4 w-4" /> Outline
             </button>
-            <button onClick={() => setMode('kanban')} className={cn('flex h-9 items-center gap-1.5 whitespace-nowrap border-l px-3 text-xs font-medium transition-colors', mode === 'kanban' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted')} aria-label="Kanban view">
+            <button onClick={() => setMode('kanban')} className={cn('flex h-9 items-center gap-1.5 whitespace-nowrap border-l px-3 text-xs font-medium transition-colors', mode === 'kanban' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted')} aria-label="Kanban view">
               <FaTableColumns className="h-4 w-4" /> Kanban
             </button>
           </div>

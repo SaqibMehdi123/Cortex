@@ -193,7 +193,7 @@ function NewsTab() {
             onClick={() => setCategory(c.key)}
             className={cn(
               'min-h-[32px] rounded-full border px-3 text-xs font-medium transition-colors',
-              category === c.key ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted'
+              category === c.key ? 'border-primary bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'
             )}
           >
             {c.label}
@@ -204,7 +204,7 @@ function NewsTab() {
           onClick={() => setSavedOnly((v) => !v)}
           className={cn(
             'min-h-[32px] rounded-full border px-3 text-xs font-medium transition-colors',
-            savedOnly ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted'
+            savedOnly ? 'border-primary bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'
           )}
         >
           <FaBookmark className="mr-1 inline h-3.5 w-3.5" /> Saved
@@ -554,7 +554,7 @@ function PapersTab() {
             onClick={() => setRange(r.key)}
             className={cn(
               'min-h-[32px] rounded-full border px-3 text-xs font-medium transition-colors',
-              range === r.key ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted'
+              range === r.key ? 'border-primary bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'
             )}
           >
             {r.label}
@@ -565,7 +565,7 @@ function PapersTab() {
           onClick={() => setSavedOnly((v) => !v)}
           className={cn(
             'min-h-[32px] rounded-full border px-3 text-xs font-medium transition-colors',
-            savedOnly ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted'
+            savedOnly ? 'border-primary bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'
           )}
         >
           <FaBookmark className="mr-1 inline h-3.5 w-3.5" /> Saved

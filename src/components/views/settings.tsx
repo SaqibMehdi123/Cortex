@@ -51,7 +51,7 @@ export function SettingsView() {
   return (
     <div className="anim-fade-up mx-auto max-w-2xl space-y-4 pb-8">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
+        <h1 className="text-2xl font-semibold tracking-[-0.02em]">Settings</h1>
       </div>
 
       {me?.user && <AccountCard user={me.user} pro={billing?.pro === true} />}
@@ -251,7 +251,7 @@ function AppearanceCard({
               onClick={() => { setTheme(opt.key); save({ theme: opt.key }) }}
               className={cn(
                 'flex min-h-[64px] flex-col items-center justify-center gap-1.5 rounded-xl border text-xs font-medium transition-colors',
-                mounted && theme === opt.key ? 'border-primary bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted'
+                mounted && theme === opt.key ? 'border-primary bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'
               )}
             >
               {opt.icon} {opt.label}
