@@ -50,7 +50,7 @@ export default async function PricingPage() {
           <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
             Pricing
           </p>
-          <h1 className="mt-4 max-w-2xl font-display text-[clamp(2.3rem,5vw,3.4rem)] font-medium leading-[1.06] tracking-[-0.025em]">
+          <h1 className="mt-4 max-w-2xl text-[clamp(2.3rem,5vw,3.4rem)] font-semibold leading-[1.06] tracking-[-0.025em]">
             Free where it matters.{' '}
             <em className="italic text-[var(--chart-1)]">Pro where it compounds.</em>
           </h1>
@@ -76,7 +76,7 @@ export default async function PricingPage() {
               },
             ].map((c) => (
               <div key={c.t}>
-                <h2 className="font-display text-[16px] font-medium tracking-[-0.01em]">{c.t}</h2>
+                <h2 className="text-[16px] font-semibold tracking-[-0.01em]">{c.t}</h2>
                 <p className="mt-2 text-[13.5px] leading-relaxed text-muted-foreground">{c.d}</p>
               </div>
             ))}

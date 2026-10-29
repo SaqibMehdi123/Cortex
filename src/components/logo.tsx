@@ -42,11 +42,11 @@ export function CortexMark({ size = 26, className }: { size?: number; className?
 }
 
 /** Full lockup: mark + serif wordmark + pine dot. */
-export function CortexLogo({ size = 26, className, markClassName }: { size?: number; className?: string; markClassName?: string }) {
+export function CortexLogo({ size = 26, className, markClassName, wordClassName }: { size?: number; className?: string; markClassName?: string; wordClassName?: string }) {
   return (
     <span className={cn('inline-flex items-center gap-2', className)}>
       <CortexMark size={size} className={markClassName} />
-      <span className="font-display text-[1.35rem] leading-none">Cortex</span>
+      <span className={cn('font-display text-[1.35rem] leading-none', wordClassName)}>Cortex</span>
       <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" aria-hidden />
     </span>
   )

@@ -98,7 +98,7 @@ function VerifyForm() {
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center gap-2 text-center">
-          <CortexLogo size={30} className="text-foreground" />
+          <CortexLogo size={30} className="text-foreground" wordClassName="font-sans font-semibold tracking-[-0.02em]" />
           <p className="text-sm text-muted-foreground">One quick check, then you're in.</p>
         </div>
 
@@ -106,7 +106,7 @@ function VerifyForm() {
           <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
             <FaEnvelopeCircleCheck className="h-5 w-5 text-primary" />
           </div>
-          <h1 className="font-display text-xl">Check your email</h1>
+          <h1 className="text-xl font-semibold tracking-[-0.02em]">Check your email</h1>
           <p className="mt-0.5 text-xs text-muted-foreground">
             We sent a 6-digit code{emailOk ? <> to <span className="font-medium text-foreground">{email}</span></> : ''}. It expires in 10 minutes.
           </p>

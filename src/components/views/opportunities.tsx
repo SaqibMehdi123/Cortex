@@ -20,11 +20,11 @@ const TYPES = ['internship', 'job', 'scholarship', 'event', 'referral']
 const STATUSES = ['new', 'applied', 'interview', 'offer', 'rejected', 'archived']
 
 const STATUS_TONE: Record<string, string> = {
-  new: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300',
-  applied: 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300',
-  interview: 'bg-violet-100 text-violet-800 dark:bg-violet-950/60 dark:text-violet-300',
-  offer: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-950/60 dark:text-cyan-300',
-  rejected: 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300',
+  new: 'bg-success/10 text-success',
+  applied: 'bg-warning/10 text-warning',
+  interview: 'bg-link/10 text-link',
+  offer: 'bg-success/15 text-success',
+  rejected: 'bg-danger/10 text-danger',
   archived: 'bg-muted text-muted-foreground',
 }
 
@@ -172,7 +172,7 @@ export function OpportunitiesView() {
                   <p
                     className={cn(
                       'mt-2 flex items-center gap-1.5 text-xs font-medium',
-                      overdue ? 'text-rose-600 dark:text-rose-400' : soon ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'
+                      overdue ? 'text-danger font-medium' : soon ? 'text-warning' : 'text-muted-foreground'
                     )}
                   >
                     <FaCalendarDay className="h-3.5 w-3.5" />

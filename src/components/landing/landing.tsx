@@ -127,7 +127,7 @@ export function SectionHeader({
 
 export function Landing({ authed, firstName }: { authed: boolean; firstName: string | null }) {
   return (
-    <div className="flex min-h-screen flex-col overflow-x-clip bg-background text-foreground">
+    <div className="landing flex min-h-screen flex-col overflow-x-clip bg-background text-foreground">
       <LandingNav authed={authed} />
       <main className="flex-1">
         <LandingHero authed={authed} firstName={firstName} />

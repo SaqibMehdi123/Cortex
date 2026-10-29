@@ -162,14 +162,14 @@ export function PricingCards() {
               <span className="tool-tile inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border">
                 <FaSeedling aria-hidden className="h-[18px] w-[18px]" />
               </span>
-              <h2 className="font-display text-[20px] font-medium tracking-[-0.015em]">Free</h2>
+              <h2 className="text-[20px] font-semibold tracking-[-0.015em]">Free</h2>
             </div>
             <span className="tool-tag rounded-full border px-2.5 py-1 font-mono text-[9.5px] uppercase tracking-[0.14em]">
               Forever
             </span>
           </div>
 
-          <p className="mt-6 font-display text-[34px] font-medium tracking-[-0.02em]">
+          <p className="mt-6 font-mono text-[34px] font-medium tracking-[-0.02em]">
             $0
             <span className="ml-1.5 text-[14px] font-normal text-muted-foreground">/ month</span>
           </p>
@@ -191,7 +191,7 @@ export function PricingCards() {
               <span className="tool-tile inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border">
                 <FaCrown aria-hidden className="h-[18px] w-[18px]" />
               </span>
-              <h2 className="font-display text-[20px] font-medium tracking-[-0.015em]">Pro</h2>
+              <h2 className="text-[20px] font-semibold tracking-[-0.015em]">Pro</h2>
             </div>
             <span className="rounded-full bg-primary px-3 py-1 font-mono text-[10px] uppercase tracking-[0.16em] text-primary-foreground">
               Most value
@@ -220,7 +220,7 @@ export function PricingCards() {
             ))}
           </div>
 
-          <p aria-live="polite" className="mt-4 flex flex-wrap items-baseline gap-x-2 font-display text-[34px] font-medium tracking-[-0.02em]">
+          <p aria-live="polite" className="mt-4 flex flex-wrap items-baseline gap-x-2 font-mono text-[34px] font-medium tracking-[-0.02em]">
             {cycle === 'annual' ? '$50' : '$5'}
             <span className="text-[14px] font-normal text-muted-foreground">
               {cycle === 'annual' ? '/ year' : '/ month'}

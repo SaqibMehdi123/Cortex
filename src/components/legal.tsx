@@ -85,7 +85,7 @@ export function LegalShell({
           <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
             Last updated · {updated}
           </p>
-          <h1 className="mt-4 font-display text-[clamp(2.1rem,5vw,3rem)] font-medium leading-[1.08] tracking-[-0.025em]">
+          <h1 className="mt-4 text-[clamp(2.1rem,5vw,3rem)] font-semibold leading-[1.08] tracking-[-0.025em]">
             {title}
           </h1>
           <p className="mt-5 max-w-2xl text-[16px] leading-relaxed text-muted-foreground">{intro}</p>
@@ -114,7 +114,7 @@ export function LegalSection({
     <section id={`s-${n.replace(/\./g, '-')}`} className="scroll-mt-20 border-t border-border/70 pt-8 first:border-0 first:pt-0">
       <div className="flex items-baseline gap-3">
         <span className="font-mono text-[11px] tabular-nums text-muted-foreground">{n}</span>
-        <h2 className="font-display text-[21px] font-medium tracking-[-0.015em]">{title}</h2>
+        <h2 className="text-[21px] font-semibold tracking-[-0.015em]">{title}</h2>
       </div>
       <div className="mt-4 flex flex-col gap-3 pl-0 text-[14.5px] leading-relaxed text-foreground/85 sm:pl-7">
         {children}

@@ -9,16 +9,17 @@ import { motion, useMotionValue, animate } from 'framer-motion'
 import { toast } from '@/hooks/use-toast'
 import type { Task } from '@/lib/types'
 
-// ─── Goal color palette (muted, editorial — keys stay DB-compatible) ─
+// ─── Goal color palette (cool-neutral register for the mono skin — keys
+//     stay DB-compatible, only the hex values moved) ────────────────────
 export const GOAL_COLORS: Record<string, string> = {
-  indigo: '#5E6B73', // slate
-  teal: '#2F6B57', // pine
-  emerald: '#557A4E', // moss
-  amber: '#C08A2D', // ochre
-  rose: '#C25E3A', // terracotta
-  violet: '#7D5A6C', // plum
+  indigo: '#6E6F76', // graphite
+  teal: '#3B7A74', // harbor
+  emerald: '#299E60', // signal green
+  amber: '#B8860B', // dark gold
+  rose: '#D4442E', // signal red
+  violet: '#6E56CF', // muted iris
   cyan: '#4F7F7B', // eucalyptus
-  zinc: '#8A8375', // stone
+  zinc: '#8F8F8F', // neutral gray
 }
 
 export function colorHex(color?: string | null) {
@@ -30,7 +31,7 @@ export function ProgressRing({
   value,
   size = 64,
   stroke = 6,
-  color = '#2F6B57',
+  color = 'var(--chart-1)',
   label,
   sublabel,
 }: {
@@ -91,7 +92,7 @@ export function EmptyState({
         {icon}
       </div>
       <div>
-        <p className="font-display text-lg">{title}</p>
+        <p className="text-lg font-semibold tracking-[-0.01em]">{title}</p>
         <p className="mx-auto mt-1 max-w-sm text-sm leading-relaxed text-muted-foreground">{description}</p>
       </div>
       {(action || secondaryAction) && (
@@ -125,7 +126,7 @@ export function PageHeader({
   return (
     <div className="flex flex-wrap items-end justify-between gap-3">
       <div>
-        <h1 className="font-display text-2xl leading-tight sm:text-[1.7rem]">{title}</h1>
+        <h1 className="text-2xl font-semibold leading-tight tracking-[-0.02em] sm:text-[1.7rem]">{title}</h1>
         {description && <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}

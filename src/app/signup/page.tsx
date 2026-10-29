@@ -59,12 +59,12 @@ function SignupForm() {
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center gap-2 text-center">
-          <CortexLogo size={30} className="text-foreground" />
+          <CortexLogo size={30} className="text-foreground" wordClassName="font-sans font-semibold tracking-[-0.02em]" />
           <p className="text-sm text-muted-foreground">A calmer place to think, read and plan.</p>
         </div>
 
         <div className="rounded-2xl border bg-card p-6 shadow-soft">
-          <h1 className="font-display text-xl">Create your workspace</h1>
+          <h1 className="text-xl font-semibold tracking-[-0.02em]">Create your workspace</h1>
           <p className="mt-0.5 text-xs text-muted-foreground">Takes about twenty seconds.</p>
 
           <form onSubmit={submit} className="mt-5 space-y-4">

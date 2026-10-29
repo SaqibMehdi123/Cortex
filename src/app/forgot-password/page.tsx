@@ -115,7 +115,7 @@ function ForgotPasswordForm() {
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center gap-2 text-center">
-          <CortexLogo size={30} className="text-foreground" />
+          <CortexLogo size={30} className="text-foreground" wordClassName="font-sans font-semibold tracking-[-0.02em]" />
           <p className="text-sm text-muted-foreground">Get back into your workspace.</p>
         </div>
 
@@ -125,7 +125,7 @@ function ForgotPasswordForm() {
               <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
                 <FaKey className="h-5 w-5 text-primary" />
               </div>
-              <h1 className="font-display text-xl">Forgot your password?</h1>
+              <h1 className="text-xl font-semibold tracking-[-0.02em]">Forgot your password?</h1>
               <p className="mt-0.5 text-xs text-muted-foreground">
                 Enter your email and we'll send a 6-digit code to reset it.
               </p>
@@ -162,7 +162,7 @@ function ForgotPasswordForm() {
 
           {step === 'reset' && (
             <>
-              <h1 className="font-display text-xl">Enter the code</h1>
+              <h1 className="text-xl font-semibold tracking-[-0.02em]">Enter the code</h1>
               <p className="mt-0.5 text-xs text-muted-foreground">
                 We sent a 6-digit code to <span className="font-medium text-foreground">{email}</span>. It expires in 10 minutes.
               </p>
@@ -259,7 +259,7 @@ function ForgotPasswordForm() {
               <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500/10">
                 <FaCircleCheck className="h-5 w-5 text-emerald-600" />
               </div>
-              <h1 className="font-display text-xl">Password updated</h1>
+              <h1 className="text-xl font-semibold tracking-[-0.02em]">Password updated</h1>
               <p className="mt-0.5 text-xs text-muted-foreground">
                 Your password has been changed. Sign in with the new one.
               </p>

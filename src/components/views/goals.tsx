@@ -182,7 +182,7 @@ export function GoalsView() {
     <div className="anim-fade-up space-y-4 pb-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="font-display text-2xl tracking-tight sm:text-[1.7rem]">Goals</h1>
+          <h1 className="text-2xl font-semibold tracking-[-0.02em] sm:text-[1.7rem]">Goals</h1>
           <p className="text-sm text-muted-foreground">Milestones, streaks and velocity — progress you can see.</p>
         </div>
         {active.length > 0 && (
@@ -235,7 +235,7 @@ export function GoalsView() {
 
                   <div className="mt-3 flex items-center gap-3">
                     <Progress value={pct} className="h-2" style={{ ['--progress-bg' as string]: hex }} />
-                    <span className="shrink-0 text-xs font-semibold tabular-nums" style={{ color: hex }}>{pct}%</span>
+                    <span className="shrink-0 font-mono text-xs font-semibold tabular-nums" style={{ color: hex }}>{pct}%</span>
                   </div>
 
                   <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
@@ -317,7 +317,7 @@ export function GoalsView() {
 
                     <div className="mt-3 flex items-center gap-3">
                       <Progress value={pct} className="h-2" style={{ ['--progress-bg' as string]: hex }} />
-                      <span className="shrink-0 text-xs font-semibold tabular-nums" style={{ color: hex }}>{pct}%</span>
+                      <span className="shrink-0 font-mono text-xs font-semibold tabular-nums" style={{ color: hex }}>{pct}%</span>
                     </div>
 
                     {/* milestones stay fully editable — unchecking one reopens the goal */}
