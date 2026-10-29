@@ -1,16 +1,18 @@
 'use client'
 
-import { FaBolt, FaBell, FaBookOpen, FaBullseye, FaCalendarDay, FaChevronRight, FaClock, FaCloudSun, FaFire, FaMoon, FaNewspaper, FaSpinner, FaStopwatch, FaSun, FaTriangleExclamation } from 'react-icons/fa6'
+import { FaBolt, FaBell, FaBookOpen, FaBullseye, FaCalendarDay, FaChevronRight, FaClock, FaCloudSun, FaFire, FaLayerGroup, FaMoon, FaNewspaper, FaSpinner, FaStopwatch, FaSun, FaTriangleExclamation } from 'react-icons/fa6'
 import { useMemo, useState } from 'react'
 import { api, todayISO, fmtDate } from '@/lib/client'
 import { useUI } from '@/lib/nav-config'
 import type { DashboardData, Task, Reminder } from '@/lib/types'
 import { useApi } from '@/lib/client'
 import { recurrenceLabel } from '@/lib/reminder-span'
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { SwipeTaskRow, PriorityDot, EmptyState, SkeletonCard, StatCard, StatRow, Panel, Meter, colorHex } from '@/components/shared'
+import { ProgressRing, SwipeTaskRow, PriorityDot, EmptyState, SkeletonCard, colorHex } from '@/components/shared'
+import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Skeleton } from '@/components/ui/skeleton'
+import { Progress } from '@/components/ui/progress'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
 import { useAutoSync } from '@/hooks/use-auto-sync'
@@ -169,19 +171,13 @@ export function DashboardView() {
       )
     }
     return (
-      <div className="space-y-5">
-        <StatRow>
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="rounded-[10px] border bg-card px-4 py-3.5 shadow-soft">
-              <Skeleton className="h-3 w-20" />
-              <Skeleton className="mt-2.5 h-6 w-14" />
-            </div>
-          ))}
-        </StatRow>
-        <div className="grid gap-5 lg:grid-cols-2">
+      <div className="space-y-4">
+        <SkeletonCard className="h-28" />
+        <div className="grid gap-4 md:grid-cols-2">
           <SkeletonCard className="h-64" />
           <SkeletonCard className="h-64" />
         </div>
+        <SkeletonCard className="h-48" />
       </div>
     )
   }
@@ -193,79 +189,85 @@ export function DashboardView() {
       {/* Greeting */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <div className="flex items-center gap-2 font-mono text-xs text-muted-foreground">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
             {g.icon}
             {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
           </div>
-          <h1 className="mt-1 break-words text-2xl font-semibold tracking-[-0.02em]">
+          <h1 className="mt-1 break-words text-2xl font-bold tracking-tight">
             {g.text}, {data.greetingName}
           </h1>
         </div>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <FaClock className="h-3.5 w-3.5" /> {b.readMinutesToday}m read · {b.focusMinutesToday}m focused today
+        </div>
       </div>
 
-      {/* Stat row — the day's figures in mono numerals (replaces pill chips) */}
-      <StatRow>
-        <StatCard
-          label="Tasks today"
-          value={<span>{b.tasksDoneToday}<span className="text-lg text-muted-foreground">/{b.tasksTotalToday}</span></span>}
-          delta={b.tasksTotalToday > b.tasksDoneToday ? `${b.tasksTotalToday - b.tasksDoneToday} to go` : b.tasksTotalToday > 0 ? 'all done' : 'nothing scheduled'}
-          tone={b.tasksTotalToday > 0 && b.tasksDoneToday >= b.tasksTotalToday ? 'up' : 'flat'}
-        />
-        <StatCard label="Read today" value={<span>{b.readMinutesToday}<span className="text-lg text-muted-foreground">m</span></span>} delta="reading minutes" />
-        <StatCard label="Focused" value={<span>{b.focusMinutesToday}<span className="text-lg text-muted-foreground">m</span></span>} delta="focus minutes" />
-        <StatCard
-          label="Best streak"
-          value={<span>{b.streakBest}<span className="text-lg text-muted-foreground">d</span></span>}
-          delta={b.streakBest > 0 ? 'keep it alive' : 'start one today'}
-          tone={b.streakBest > 0 ? 'up' : 'flat'}
-        />
-      </StatRow>
-
-      {/* Copilot briefing — hairline rows instead of chips */}
-      <Panel
-        title="Daily briefing"
-        action={
-          <Button variant="ghost" size="sm" className="h-7 text-xs text-link hover:text-link" onClick={() => setCopilotOpen(true)}>
-            Ask Copilot <FaChevronRight className="h-3.5 w-3.5" />
-          </Button>
-        }
-      >
-        {b.nextBestTask ? (
-          <button onClick={() => setFocusTask({ id: b.nextBestTask!.id, title: b.nextBestTask!.title, goalId: b.nextBestTask!.goalId })} className="flex w-full items-start gap-3 border-t px-4 py-3 text-left transition-colors first:border-t-0 hover:bg-muted/40">
-            <FaBolt className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
-            <div className="min-w-0">
-              <p className="text-xs text-muted-foreground">Next best task</p>
-              <p className="mt-0.5 truncate text-sm font-medium">{b.nextBestTask.title}</p>
-            </div>
-            <span className="ml-auto shrink-0 self-center font-mono text-[10px] uppercase tracking-[0.06em] text-muted-foreground">focus</span>
-          </button>
-        ) : (
-          <div className="border-t px-4 py-3 text-sm text-muted-foreground first:border-t-0">
-            No nudges today — your plan is clear.
+      {/* Copilot briefing card */}
+      <Card className="gap-4 py-5 transition-shadow hover:shadow-soft">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-sm">
+            Daily briefing
+          </CardTitle>
+          <CardAction>
+            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setCopilotOpen(true)}>
+              Ask Copilot <FaChevronRight className="h-3.5 w-3.5" />
+            </Button>
+          </CardAction>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm">
+          <div className="flex flex-wrap gap-2">
+            {b.dueFlashcards > 0 && (
+              <button onClick={() => setView('flashcards')} className="flex items-center gap-1.5 rounded-full border bg-card px-3 py-1.5 text-xs font-medium transition-colors hover:bg-muted">
+                <FaLayerGroup className="h-3.5 w-3.5 text-primary" /> {b.dueFlashcards} flashcard{b.dueFlashcards === 1 ? '' : 's'} due
+              </button>
+            )}
+            {b.unreadNews > 0 && (
+              <button onClick={() => setView('news')} className="flex items-center gap-1.5 rounded-full border bg-card px-3 py-1.5 text-xs font-medium transition-colors hover:bg-muted">
+                <FaNewspaper className="h-3.5 w-3.5 text-primary" /> {b.unreadNews} unread storie{b.unreadNews === 1 ? 'y' : 's'}
+              </button>
+            )}
+            {b.streakBest > 0 && (
+              <span className="flex items-center gap-1.5 rounded-full border bg-card px-3 py-1.5 text-xs font-medium">
+                <FaFire className="h-3.5 w-3.5 text-warning" /> {b.streakBest}-day best streak
+              </span>
+            )}
+            <span className="flex items-center gap-1.5 rounded-full border bg-card px-3 py-1.5 text-xs font-medium">
+              <FaBolt className="h-3.5 w-3.5 text-primary" /> {b.tasksDoneToday}/{b.tasksTotalToday} tasks today
+            </span>
           </div>
-        )}
-        {b.atRiskGoals.map((gr) => (
-          <button key={gr.id} onClick={() => setView('goals')} className="flex w-full items-start gap-3 border-t px-4 py-3 text-left transition-colors hover:bg-danger/5">
-            <FaTriangleExclamation className="mt-0.5 h-4 w-4 shrink-0 text-danger" />
-            <div className="min-w-0">
-              <p className="break-words text-xs font-medium text-danger">At-risk goal: {gr.title}</p>
-              <p className="break-words text-xs text-muted-foreground">{gr.reason}</p>
+          {b.nextBestTask && (
+            <div className="flex items-start gap-2 rounded-lg bg-card p-3">
+              <FaBolt className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-muted-foreground">Next best task</p>
+                <p className="truncate font-medium">{b.nextBestTask.title}</p>
+              </div>
             </div>
-          </button>
-        ))}
-      </Panel>
+          )}
+          {b.atRiskGoals.map((gr) => (
+            <button key={gr.id} onClick={() => setView('goals')} className="flex w-full items-start gap-2 rounded-lg bg-danger/5 p-3 text-left transition-colors hover:bg-danger/10">
+              <FaTriangleExclamation className="mt-0.5 h-4 w-4 shrink-0 text-danger" />
+              <div className="min-w-0">
+                <p className="break-words text-xs font-medium text-danger">At-risk goal: {gr.title}</p>
+                <p className="break-words text-xs text-muted-foreground">{gr.reason}</p>
+              </div>
+            </button>
+          ))}
+        </CardContent>
+      </Card>
 
       <div className="grid gap-5 lg:grid-cols-2">
         {/* Today's timeline */}
-        <Panel
-          title="Today's timeline"
-          action={
-            <Button variant="ghost" size="sm" className="h-7 text-xs text-link hover:text-link" onClick={() => setView('plans')}>
-              Plans <FaChevronRight className="h-3.5 w-3.5" />
-            </Button>
-          }
-        >
-          <div className="space-y-2.5 px-4 py-3.5">
+        <Card className="gap-4 py-5 transition-shadow hover:shadow-soft">
+          <CardHeader>
+            <CardTitle className="text-sm">Today&apos;s timeline</CardTitle>
+            <CardAction>
+              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setView('plans')}>
+                Plans <FaChevronRight className="h-3.5 w-3.5" />
+              </Button>
+            </CardAction>
+          </CardHeader>
+          <CardContent className="space-y-2">
             {data.todayTasks.length === 0 && data.todayPlans.length === 0 && (data.todayReminders?.length ?? 0) === 0 ? (
               <div className="py-6 text-center">
                 <p className="text-sm text-muted-foreground">Nothing scheduled today. Enjoy the calm — or plan something.</p>
@@ -300,11 +302,11 @@ export function DashboardView() {
                 {/* plans active today — each with its own tasks nested beneath it */}
                 {timeline.shownPlans.map((section) => (
                   <div key={section.id} className="space-y-1.5">
-                    <div className="flex items-center gap-2 pt-1.5 text-[13px]">
-                      <FaCalendarDay className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    <div className="flex items-center gap-2.5 rounded-lg border bg-muted/40 px-3 py-2 text-sm">
+                      <FaCalendarDay className="h-4 w-4 shrink-0 text-primary" />
                       <span className="min-w-0 flex-1 truncate font-medium">{section.title}</span>
                       {section.tasks.length > 0 && (
-                        <span className="shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground">{section.tasks.length} task{section.tasks.length === 1 ? '' : 's'}</span>
+                        <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">{section.tasks.length} task{section.tasks.length === 1 ? '' : 's'}</span>
                       )}
                     </div>
                     {section.tasks.slice(0, 3).map((t) => (
@@ -325,10 +327,10 @@ export function DashboardView() {
                 {/* tasks from plans not active today — still under their plan */}
                 {timeline.extras.map((section) => (
                   <div key={section.id} className="space-y-1.5">
-                    <div className="flex items-center gap-2 pt-1.5 text-[13px] text-muted-foreground">
-                      <FaCalendarDay className="h-3.5 w-3.5 shrink-0" />
-                      <span className="min-w-0 flex-1 truncate font-medium">{section.title}</span>
-                      <span className="shrink-0 font-mono text-[10px] tabular-nums">{section.tasks.length} task{section.tasks.length === 1 ? '' : 's'}</span>
+                    <div className="flex items-center gap-2.5 rounded-lg border border-dashed px-3 py-2 text-sm">
+                      <FaCalendarDay className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <span className="min-w-0 flex-1 truncate font-medium text-muted-foreground">{section.title}</span>
+                      <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">{section.tasks.length} task{section.tasks.length === 1 ? '' : 's'}</span>
                     </div>
                     {section.tasks.slice(0, 3).map((t) => (
                       <div key={t.id} className="ml-5 sm:ml-7">
@@ -361,61 +363,61 @@ export function DashboardView() {
                 </p>
               </>
             )}
-          </div>
-        </Panel>
+          </CardContent>
+        </Card>
 
-        {/* Active goals — meter rows, not rings */}
-        <Panel
-          title="Active goals"
-          action={
-            <Button variant="ghost" size="sm" className="h-7 text-xs text-link hover:text-link" onClick={() => setView('goals')}>
-              Goals <FaChevronRight className="h-3.5 w-3.5" />
-            </Button>
-          }
-        >
-          {data.goals.length === 0 ? (
-            <div className="px-4 py-8">
+        {/* Progress rings */}
+        <Card className="gap-4 py-5 transition-shadow hover:shadow-soft">
+          <CardHeader>
+            <CardTitle className="text-sm">Active goals</CardTitle>
+            <CardAction>
+              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setView('goals')}>
+                Goals <FaChevronRight className="h-3.5 w-3.5" />
+              </Button>
+            </CardAction>
+          </CardHeader>
+          <CardContent>
+            {data.goals.length === 0 ? (
               <EmptyState
                 icon={<FaBullseye className="h-5 w-5" />}
                 title="No goals yet"
-                description="Set a goal with milestones and watch the meters fill as you progress."
+                description="Set a goal with milestones and watch the rings fill as you progress."
                 action={{ label: 'Create your first goal', onClick: () => setView('goals') }}
               />
-            </div>
-          ) : (
-            data.goals.map((goal, idx) => (
-              <button
-                key={goal.id}
-                onClick={() => setView('goals')}
-                className={cn('flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40', idx > 0 && 'border-t')}
-              >
-                <span className="flex w-[42%] min-w-0 shrink-0 items-center gap-1.5 sm:w-[220px]">
-                  {goal.streak > 0 && <FaFire className="h-3 w-3 shrink-0 text-warning" />}
-                  <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{goal.title}</span>
-                </span>
-                <span className="flex min-w-[100px] flex-1 items-center gap-2.5">
-                  <Meter value={goal.progress} className="flex-1" />
-                  <span className="w-9 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground">{goal.progress}%</span>
-                </span>
-              </button>
-            ))
-          )}
-        </Panel>
+            ) : (
+              <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-3 xl:grid-cols-4">
+                {data.goals.map((goal) => (
+                  <button key={goal.id} onClick={() => setView('goals')} className="group rounded-xl p-1 transition-transform active:scale-95">
+                    <ProgressRing
+                      value={goal.progress}
+                      color={colorHex(goal.color)}
+                      sublabel={
+                        <span className="inline-flex items-center gap-1">
+                          {goal.streak > 0 && <FaFire className="h-3 w-3 text-warning" />}
+                          {goal.title}
+                        </span>
+                      }
+                    />
+                  </button>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* News digest */}
-        <Panel
-          title={
-            <span className="flex items-center gap-2">
-              <FaNewspaper className="h-3.5 w-3.5 text-muted-foreground" /> News &amp; Papers
-            </span>
-          }
-          action={
-            <Button variant="ghost" size="sm" className="h-7 text-xs text-link hover:text-link" onClick={() => setView('news')}>
-              Open <FaChevronRight className="h-3.5 w-3.5" />
-            </Button>
-          }
-        >
-          <div className="px-4 py-2">
+        <Card className="gap-4 py-5 transition-shadow hover:shadow-soft">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <FaNewspaper className="h-4 w-4 text-primary" /> News &amp; Papers
+            </CardTitle>
+            <CardAction>
+              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setView('news')}>
+                Open <FaChevronRight className="h-3.5 w-3.5" />
+              </Button>
+            </CardAction>
+          </CardHeader>
+          <CardContent className="space-y-2.5">
             {data.newsDigest.length === 0 ? (
               <div className="flex flex-col items-center gap-2 py-6 text-center">
                 <p className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
@@ -435,13 +437,13 @@ export function DashboardView() {
                   href={n.url}
                   target="_blank"
                   rel="noreferrer"
-                  className="group block border-t py-2.5 transition-colors first:border-t-0"
+                  className="group block rounded-xl border px-3 py-2.5 transition-colors hover:border-primary/30 hover:bg-muted/50"
                 >
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <span className="font-medium text-foreground">{n.source ?? 'Web'}</span>
-                    <span className="font-mono text-[10px] uppercase tracking-[0.06em]">{n.category}</span>
+                    <span className="font-semibold text-foreground">{n.source ?? 'Web'}</span>
+                    <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide">{n.category}</span>
                   </div>
-                  <p className="mt-1 line-clamp-1 text-sm font-medium [overflow-wrap:anywhere] group-hover:text-link">{n.title}</p>
+                  <p className="mt-1 line-clamp-1 text-sm font-medium [overflow-wrap:anywhere] group-hover:text-primary">{n.title}</p>
                   {n.summary && (
                     <div className="mt-1.5 space-y-1">
                       {n.summary
@@ -460,74 +462,78 @@ export function DashboardView() {
                 </a>
               ))
             )}
-          </div>
-        </Panel>
+          </CardContent>
+        </Card>
 
         {/* Deadlines */}
-        <Panel
-          title={
-            <span className="flex items-center gap-2">
-              <FaCalendarDay className="h-3.5 w-3.5 text-muted-foreground" /> Deadlines
-            </span>
-          }
-        >
-          {data.deadlines.length === 0 ? (
-            <p className="px-4 py-6 text-center text-sm text-muted-foreground">No deadlines in the next 7 days.</p>
-          ) : (
-            data.deadlines.map((d, idx) => (
-              <div key={d.kind + d.id} className={cn('flex items-center gap-3 px-4 py-3', idx > 0 && 'border-t')}>
-                <span
-                  className={cn(
-                    'h-2 w-2 shrink-0 rounded-full',
-                    d.daysLeft < 0 ? 'bg-danger' : d.daysLeft <= 2 ? 'bg-warning' : 'bg-success'
-                  )}
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{d.title}</p>
-                  <p className="break-words text-xs text-muted-foreground">{d.subtitle ?? (d.kind === 'task' ? 'Task' : d.kind === 'goal' ? 'Goal' : 'Application')}</p>
+        <Card className="gap-4 py-5 transition-shadow hover:shadow-soft">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <FaCalendarDay className="h-4 w-4 text-primary" /> Deadlines
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {data.deadlines.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">No deadlines in the next 7 days.</p>
+            ) : (
+              data.deadlines.map((d) => (
+                <div key={d.kind + d.id} className="flex items-center gap-3 rounded-lg border px-3 py-2.5">
+                  <span
+                    className={cn(
+                      'h-2 w-2 shrink-0 rounded-full',
+                      d.daysLeft < 0 ? 'bg-danger' : d.daysLeft <= 2 ? 'bg-warning' : 'bg-success'
+                    )}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{d.title}</p>
+                    <p className="break-words text-xs text-muted-foreground">{d.subtitle ?? (d.kind === 'task' ? 'Task' : d.kind === 'goal' ? 'Goal' : 'Application')}</p>
+                  </div>
+                  <Badge variant="outline" className={cn('shrink-0 text-[10px]', d.daysLeft < 0 && 'border-danger/50 text-danger', d.daysLeft >= 0 && d.daysLeft <= 2 && 'border-warning/50 text-warning')}>
+                    {d.daysLeft < 0 ? `${-d.daysLeft}d overdue` : d.daysLeft === 0 ? 'Due today' : `${d.daysLeft}d`}
+                  </Badge>
                 </div>
-                <span className={cn('shrink-0 font-mono text-xs tabular-nums', d.daysLeft < 0 ? 'font-medium text-danger' : d.daysLeft >= 0 && d.daysLeft <= 2 ? 'text-warning' : 'text-muted-foreground')}>
-                  {d.daysLeft < 0 ? `${-d.daysLeft}d overdue` : d.daysLeft === 0 ? 'today' : `${d.daysLeft}d`}
-                </span>
-              </div>
-            ))
-          )}
-        </Panel>
+              ))
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       {/* Continue reading */}
       {data.continueReading.length > 0 && (
-        <Panel
-          title={
-            <span className="flex items-center gap-2">
-              <FaBookOpen className="h-3.5 w-3.5 text-muted-foreground" /> Continue reading
-            </span>
-          }
-          action={
-            <Button variant="ghost" size="sm" className="h-7 text-xs text-link hover:text-link" onClick={() => setView('library')}>
-              Library <FaChevronRight className="h-3.5 w-3.5" />
-            </Button>
-          }
-        >
-          {data.continueReading.map((doc, idx) => (
-            <button
-              key={doc.id}
-              onClick={() => openReader(doc.id)}
-              className={cn('flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40', idx > 0 && 'border-t')}
-            >
-              <div className="flex h-10 w-7 shrink-0 items-center justify-center rounded-[4px] border bg-secondary font-mono text-sm text-foreground/40">
-                {(doc.title.trim().charAt(0) || '·').toUpperCase()}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-[13px] font-medium">{doc.title}</p>
-                <div className="mt-1.5 flex items-center gap-2.5">
-                  <Meter value={doc.progress} className="max-w-[220px] flex-1" />
-                  <span className="shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground">{doc.progress}%</span>
-                </div>
-              </div>
-            </button>
-          ))}
-        </Panel>
+        <Card className="gap-4 py-5 transition-shadow hover:shadow-soft">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <FaBookOpen className="h-4 w-4 text-primary" /> Continue reading
+            </CardTitle>
+            <CardAction>
+              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setView('library')}>
+                Library <FaChevronRight className="h-3.5 w-3.5" />
+              </Button>
+            </CardAction>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {data.continueReading.map((doc) => (
+                <button
+                  key={doc.id}
+                  onClick={() => openReader(doc.id)}
+                  className="flex items-center gap-3 rounded-xl border p-3 text-left transition-all hover:shadow-soft active:scale-[0.99]"
+                >
+                  <div className="flex h-12 w-9 shrink-0 items-center justify-center rounded-md border bg-secondary font-mono text-lg text-foreground/40">
+                    {(doc.title.trim().charAt(0) || '·').toUpperCase()}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{doc.title}</p>
+                    <div className="mt-1.5 flex items-center gap-2">
+                      <Progress value={doc.progress} className="h-1.5 w-full" />
+                      <span className="shrink-0 text-[10px] text-muted-foreground">{doc.progress}%</span>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       )}
     </div>
   )
