@@ -26,6 +26,12 @@ export async function GET(req: NextRequest) {
     if (unassigned === '1') where.planId = null
 
     if (date) {
+      // Strict YYYY-MM-DD — NaN dates (e.g. "?date='; DROP TABLE User--")
+      // would flow into Date.UTC as NaN and the Prisma query would throw a
+      // raw 500. Client error → 400, before the query is built.
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return NextResponse.json({ error: 'Invalid date — use YYYY-MM-DD.' }, { status: 400 })
+      }
       const offsetMin = Number.isFinite(tzOffset) ? tzOffset : 0
       // Local midnight of `date` expressed as a UTC instant:
       // Date.UTC(date) + offsetMin*60_000 (offset is negative east of UTC).
