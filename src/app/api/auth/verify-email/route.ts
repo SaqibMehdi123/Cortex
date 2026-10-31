@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
   try {
     // Online-guess guard on top of the per-code attempt cap: 20 tries per IP
     // per 10 min covers a normal sign-in flow with room for retries.
-    const rl = rateLimit(`verify-email:${clientIp(req.headers)}`, { limit: 20, windowMs: 10 * 60_000 })
+    const rl = await rateLimit(`verify-email:${clientIp(req.headers)}`, { limit: 20, windowMs: 10 * 60_000 })
     if (!rl.allowed) {
       return NextResponse.json(
         { error: `Too many attempts. Please try again in ${rl.retryAfter}s.` },
@@ -43,7 +43,11 @@ export async function POST(req: NextRequest) {
 
     const user = await db.user.findUnique({ where: { email } })
     if (!user) {
-      return NextResponse.json({ error: 'No account found for this email.' }, { status: 404 })
+      // Do NOT confirm whether the address exists (forgot-password and
+      // resend-code already mask it). Answer exactly like the "no active
+      // code" path below, so probing this endpoint with arbitrary emails
+      // cannot separate registered from unregistered accounts.
+      return NextResponse.json({ error: 'No active code — request a new one.' }, { status: 401 })
     }
 
     if (user.emailVerified) {

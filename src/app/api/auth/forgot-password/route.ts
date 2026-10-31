@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
   try {
     // code-spam guard: 5 reset emails per IP per 10 min (same 200 shape — no
     // account-enumeration signal, the abuse just stops receiving emails)
-    const rl = rateLimit(`forgot:${clientIp(req.headers)}`, { limit: 5, windowMs: 10 * 60_000 })
+    const rl = await rateLimit(`forgot:${clientIp(req.headers)}`, { limit: 5, windowMs: 10 * 60_000 })
     if (!rl.allowed) {
       return NextResponse.json({ sent: true, throttled: true })
     }

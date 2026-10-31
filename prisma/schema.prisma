@@ -565,6 +565,25 @@ model VerificationCode {
   @@index([userId, purpose])
 }
 
+// ─── Durable rate limiting ─────────────────────────────────────────
+
+// One row per counted attempt for the security-critical endpoints (login,
+// verify-email, reset-password, resend-code, forgot-password, register, and
+// the public ops probes). The in-memory limiter in src/lib/rate-limit.ts is
+// per serverless instance — on Vercel, traffic spread over N warm functions
+// multiplies every ceiling by N, which a distributed password-spray defeats
+// outright (verified in the 2026-10 security audit: 12 rapid login attempts
+// hit 12 different instances and the 429 never fired). This table is the
+// authoritative counter shared by every instance. Old rows are swept
+// opportunistically by the limiter itself; there is no cron.
+model RateHit {
+  id     BigInt   @id @default(autoincrement())
+  bucket String // "login:<ip>:<email>" — same key format as the memory limiter
+  hitAt  DateTime @default(now())
+
+  @@index([bucket, hitAt])
+}
+
 // ─── Workspace settings ────────────────────────────────────────────
 
 // Per-user workspace preferences (one row per account).

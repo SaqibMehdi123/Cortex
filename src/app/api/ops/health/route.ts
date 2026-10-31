@@ -463,7 +463,7 @@ export async function GET(req: Request) {
   // per-IP: each hit fires live probes at several third-party APIs (mail
   // providers, Polar, AI /models), so an unbounded caller could burn provider
   // quotas and fingerprint the deployment at will.
-  const rl = rateLimit(`ops-health:${clientIp(new Headers(req.headers))}`, { limit: 10, windowMs: 60_000 })
+  const rl = await rateLimit(`ops-health:${clientIp(new Headers(req.headers))}`, { limit: 10, windowMs: 60_000 })
   if (!rl.allowed) {
     return NextResponse.json(
       { error: 'Too many health checks — slow down.' },

@@ -45,7 +45,7 @@ export async function GET(req: Request) {
   // The in-memory lastRunAt gate is global-but-per-instance; this per-IP limiter
   // stops a distributed caller from making every warm instance re-download
   // ~2 MB + run pdf.js + touch R2 in a loop.
-  const rl = rateLimit(`url-probe:${clientIp(req.headers)}`, { limit: 5, windowMs: 60_000 })
+  const rl = await rateLimit(`url-probe:${clientIp(req.headers)}`, { limit: 5, windowMs: 60_000 })
   if (!rl.allowed) {
     return NextResponse.json(
       { ok: false, busy: true, retryInMs: rl.retryAfter * 1000, note: 'probe ran recently — try again in a minute' },

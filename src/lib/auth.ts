@@ -91,6 +91,17 @@ export async function verifyPassword(password: string, stored: string): Promise<
   return timingSafeEqual(b64url(bits), expected)
 }
 
+// Timing-equalizer for "unknown account" login attempts: verifying a password
+// costs ~100 ms of PBKDF2 (210k iterations). Skipping that when the email has
+// no account makes the 401 measurably faster and lets an attacker enumerate
+// registered emails with a stopwatch. Login routes verify against this pre-
+// computed dummy hash instead, keeping the response time flat either way.
+let dummyHashPromise: Promise<string> | null = null
+export function dummyPasswordHash(): Promise<string> {
+  dummyHashPromise ??= hashPassword('cortex-timing-equalizer-account-does-not-exist')
+  return dummyHashPromise
+}
+
 // ─── Verification codes (email verification & password reset) ───────
 
 // Uniformly random 6-digit code (100000–999999) from the CSPRNG.

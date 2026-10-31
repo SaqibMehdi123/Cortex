@@ -17,7 +17,7 @@ import { clientIp, rateLimit } from '@/lib/rate-limit'
 export async function POST(req: NextRequest) {
   try {
     // Signup spam / email-bombing guard: 5 registrations per IP per 10 min.
-    const rl = rateLimit(`register:${clientIp(req.headers)}`, { limit: 5, windowMs: 10 * 60_000 })
+    const rl = await rateLimit(`register:${clientIp(req.headers)}`, { limit: 5, windowMs: 10 * 60_000 })
     if (!rl.allowed) {
       return NextResponse.json(
         { error: `Too many attempts. Please try again in ${rl.retryAfter}s.` },

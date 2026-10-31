@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
   try {
     // per-IP cap on code emails (the per-account 60s cooldown below is the
     // fine-grained control; this stops one IP spraying many accounts)
-    const ipRl = rateLimit(`resend-ip:${clientIp(req.headers)}`, { limit: 10, windowMs: 10 * 60_000 })
+    const ipRl = await rateLimit(`resend-ip:${clientIp(req.headers)}`, { limit: 10, windowMs: 10 * 60_000 })
     if (!ipRl.allowed) {
       return NextResponse.json(
         { error: `Too many requests. Please try again in ${ipRl.retryAfter}s.` },

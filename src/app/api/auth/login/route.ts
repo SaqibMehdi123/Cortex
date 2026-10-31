@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { createSessionToken, verifyPassword, SESSION_COOKIE, SESSION_COOKIE_OPTIONS } from '@/lib/auth'
+import { createSessionToken, verifyPassword, dummyPasswordHash, SESSION_COOKIE, SESSION_COOKIE_OPTIONS } from '@/lib/auth'
 import { clientIp, rateLimit } from '@/lib/rate-limit'
 
 // POST /api/auth/login — verify credentials and start a session.
@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const email = String(body.email ?? '').trim().toLowerCase()
     const password = String(body.password ?? '')
-    const rl = rateLimit(`login:${clientIp(req.headers)}:${email}`, { limit: 10, windowMs: 5 * 60_000 })
+    const rl = await rateLimit(`login:${clientIp(req.headers)}:${email}`, { limit: 10, windowMs: 5 * 60_000 })
     if (!rl.allowed) {
       return NextResponse.json(
         { error: `Too many sign-in attempts. Please try again in ${rl.retryAfter}s.` },
@@ -25,7 +25,18 @@ export async function POST(req: NextRequest) {
     }
 
     const user = await db.user.findUnique({ where: { email } })
-    if (!user || !(await verifyPassword(password, user.passwordHash))) {
+
+    // Timing-equalized credential check: an unknown account still pays the
+    // full PBKDF2 cost (via a dummy hash) so the 401 response time is flat
+    // whether or not the email exists — account existence cannot be read
+    // from a stopwatch. The message is identical for both cases.
+    let valid = false
+    if (user) {
+      valid = await verifyPassword(password, user.passwordHash)
+    } else {
+      await verifyPassword(password, await dummyPasswordHash())
+    }
+    if (!valid || !user) {
       return NextResponse.json({ error: 'Wrong email or password.' }, { status: 401 })
     }
 

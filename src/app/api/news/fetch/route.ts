@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
     // Hard ceiling independent of the auto-refresh cooldown: 6 full pulls per
     // hour per account (the daily cron pull + normal manual refreshes sit far
     // below this; it only bites scripted/abusive callers).
-    const rl = rateLimit(`news-fetch:${user.id}`, { limit: 6, windowMs: 60 * 60_000 })
+    const rl = await rateLimit(`news-fetch:${user.id}`, { limit: 6, windowMs: 60 * 60_000 })
     if (!rl.allowed) {
       return NextResponse.json(
         { error: `Too many fetches — try again in ${Math.ceil(rl.retryAfter / 60)} min.` },

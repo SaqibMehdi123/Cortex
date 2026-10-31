@@ -1,4 +1,4 @@
-// Quick sanity test for the in-memory rate limiter.
+// Quick sanity test for the rate limiter (memory + durable DB layers).
 import { rateLimit } from '../src/lib/rate-limit'
 
 async function main() {
@@ -10,21 +10,21 @@ async function main() {
 
   // 1) 10 allowed, 11th blocked
   let last = { allowed: true, retryAfter: 0 }
-  for (let i = 1; i <= 11; i++) last = rateLimit('test-a', { limit: 10, windowMs: 60_000 })
+  for (let i = 1; i <= 11; i++) last = await rateLimit('test-a', { limit: 10, windowMs: 60_000 })
   expect(last.allowed === false, '11th call within window is blocked')
   expect(last.retryAfter > 0 && last.retryAfter <= 60, `retryAfter is sane (${last.retryAfter}s)`)
 
   // 2) different key unaffected
-  const other = rateLimit('test-b', { limit: 10, windowMs: 60_000 })
+  const other = await rateLimit('test-b', { limit: 10, windowMs: 60_000 })
   expect(other.allowed, 'a different key is unaffected')
 
   // 3) window expiry lets the request through again
-  const expired = rateLimit('test-c', { limit: 1, windowMs: 5 })
+  const expired = await rateLimit('test-c', { limit: 1, windowMs: 5 })
   expect(expired.allowed, 'first call on fresh key allowed')
-  const blocked = rateLimit('test-c', { limit: 1, windowMs: 5 })
+  const blocked = await rateLimit('test-c', { limit: 1, windowMs: 5 })
   expect(!blocked.allowed, 'second call inside 5ms window blocked')
   await new Promise((r) => setTimeout(r, 20))
-  const afterWindow = rateLimit('test-c', { limit: 1, windowMs: 5 })
+  const afterWindow = await rateLimit('test-c', { limit: 1, windowMs: 5 })
   expect(afterWindow.allowed, 'call after window expiry allowed again')
 
   console.log(`\n${pass} passed, ${fail} failed`)

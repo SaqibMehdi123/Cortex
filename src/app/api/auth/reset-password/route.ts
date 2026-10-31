@@ -18,7 +18,7 @@ import { clientIp, rateLimit } from '@/lib/rate-limit'
 // IP-rate-limited (reachable without a session).
 export async function POST(req: NextRequest) {
   try {
-    const rl = rateLimit(`reset-password:${clientIp(req.headers)}`, { limit: 20, windowMs: 10 * 60_000 })
+    const rl = await rateLimit(`reset-password:${clientIp(req.headers)}`, { limit: 20, windowMs: 10 * 60_000 })
     if (!rl.allowed) {
       return NextResponse.json(
         { error: `Too many attempts. Please try again in ${rl.retryAfter}s.` },
@@ -40,7 +40,10 @@ export async function POST(req: NextRequest) {
 
     const user = await db.user.findUnique({ where: { email } })
     if (!user) {
-      return NextResponse.json({ error: 'No account found for this email.' }, { status: 404 })
+      // Mask account existence, same contract as forgot-password (which
+      // always answers sent:true): an unknown address gets the identical
+      // 401 "no active code" response as a known one without a pending code.
+      return NextResponse.json({ error: 'No active code — request a new one.' }, { status: 401 })
     }
 
     const record = await db.verificationCode.findFirst({
