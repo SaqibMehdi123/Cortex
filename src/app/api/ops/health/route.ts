@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import net from 'node:net'
+import { db } from '@/lib/db'
 import { activeMailProvider, configuredFromEmail } from '@/lib/mailer'
 import { r2Configured, r2ConnectionCheck } from '@/lib/storage'
 import { aiConfigured, aiProvider, AI_MODEL } from '@/lib/ai'
@@ -489,6 +490,24 @@ export async function GET(req: Request) {
         ? mail.portReachable === true
         : false
   const storageOk = r2.configured ? r2.connectionOk === true : blob.tokenPresent ? blob.tokenValid === true : true
+  // Database reachability + whether the RateHit table (durable rate limiting)
+  // actually exists — booleans only, same public-safe contract as the rest.
+  // A missing table means the build-time schema push (scripts/db-push.mjs)
+  // did not run, and every rate limiter is silently degrading to
+  // per-instance memory — the exact condition this surfaces.
+  let dbCheck: { reachable: boolean; rateHitTable: boolean } = { reachable: false, rateHitTable: false }
+  try {
+    await db.$queryRaw`SELECT 1`
+    dbCheck.reachable = true
+    try {
+      await db.rateHit.findFirst({ take: 1, select: { id: true } })
+      dbCheck.rateHitTable = true
+    } catch {
+      dbCheck.rateHitTable = false
+    }
+  } catch {
+    dbCheck.reachable = false
+  }
   return NextResponse.json(
     {
       ok: mailOk && storageOk,
@@ -498,6 +517,7 @@ export async function GET(req: Request) {
       r2,
       ai,
       billing,
+      db: dbCheck,
       checkedAt: new Date().toISOString(),
     },
     { headers: noStore }

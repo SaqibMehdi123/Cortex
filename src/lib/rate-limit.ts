@@ -106,7 +106,11 @@ export async function rateLimit(
     }
 
     return { allowed: true, retryAfter: 0 }
-  } catch {
+  } catch (e) {
+    // Visible in Vercel function logs — a permanently failing durable layer
+    // silently degrades every ceiling to per-instance, which is exactly the
+    // bug this layer exists to prevent. Must be loud in logs, quiet to users.
+    console.error('rateLimit: durable layer unavailable — failing open to memory layer', e)
     return mem // DB unavailable — fail open to the memory layer's verdict
   }
 }
