@@ -8,11 +8,24 @@ import { clientIp, rateLimit } from '@/lib/rate-limit'
 // code so the login page can offer "send a new code" instead of a dead end.
 export async function POST(req: NextRequest) {
   try {
-    // Password-spray guard: 10 attempts per (IP, email) per 5 min.
+    // Two-layer spray guard, both counters durable across serverless instances:
+    //   1. IP-level ceiling (100 / 5 min) — closes credential stuffing, where
+    //      one host tries ONE password against thousands of emails and never
+    //      trips any per-(IP, email) bucket. High enough that a shared NAT of
+    //      real humans (office / campus morning rush) does not false-positive.
+    //   2. (IP, email) bucket (10 / 5 min) — the classic password-spray guard.
     const body = await req.json()
     const email = String(body.email ?? '').trim().toLowerCase()
     const password = String(body.password ?? '')
-    const rl = await rateLimit(`login:${clientIp(req.headers)}:${email}`, { limit: 10, windowMs: 5 * 60_000 })
+    const ip = clientIp(req.headers)
+    const ipRl = await rateLimit(`login-ip:${ip}`, { limit: 100, windowMs: 5 * 60_000 })
+    if (!ipRl.allowed) {
+      return NextResponse.json(
+        { error: `Too many sign-in attempts. Please try again in ${ipRl.retryAfter}s.` },
+        { status: 429, headers: { 'Retry-After': String(ipRl.retryAfter) } }
+      )
+    }
+    const rl = await rateLimit(`login:${ip}:${email}`, { limit: 10, windowMs: 5 * 60_000 })
     if (!rl.allowed) {
       return NextResponse.json(
         { error: `Too many sign-in attempts. Please try again in ${rl.retryAfter}s.` },
