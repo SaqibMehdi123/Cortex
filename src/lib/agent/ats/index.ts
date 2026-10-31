@@ -2,8 +2,7 @@
 //
 // Greenhouse: public boards API exposes the application form questions
 // (?questions=true) and accepts a standard multipart POST per job — resume
-// file + question_<id> fields. Verified against public docs; probe outputs
-// live in scripts/t_greenhouse_*.out.
+// file + question_<id> fields. Verified against the public docs.
 //
 // Lever: the public posting JSON has no stable form-question schema, so v1
 // submits the standard multipart field set (name/email/phone/resume/cover

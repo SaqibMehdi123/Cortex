@@ -27,8 +27,8 @@
 // subject date is always right.)
 //
 // Everything except the two collect* functions at the bottom is pure — no DB
-// import — so scripts/verify-morning-notification.ts can unit-check the
-// windows, formatting, auth matrix and email template without a database.
+// import — so the windows, formatting and email template stay unit-checkable
+// without a database.
 
 import { SITE_NAME, SITE_URL, SUPPORT_EMAIL } from './site'
 import { recurrenceLabel, reminderActiveOn } from './reminder-span'
@@ -40,8 +40,7 @@ const DAY_MS = 86_400_000
  * more than this many days before today never appears in the email again —
  * the user explicitly asked to stop resurfacing old arrears ("overdue tasks
  * of more than last 2 days should not be in the mail; before that, what's
- * gone is gone"). Exported so scripts/verify-morning-notification.ts pins
- * the window maths.
+ * gone is gone"). Exported so the window maths stays pinned and testable.
  */
 export const OVERDUE_LOOKBACK_DAYS = 2
 
